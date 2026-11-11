@@ -837,3 +837,5 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 .chest-art:has(svg) { width: 60px; height: 54px; flex: none; }
 .chest-card .chest-art:has(svg) { width: 78px; height: 70px; margin: 0 auto 4px; }
 .co-cards:empty { pointer-events: none; }
+#fullscreen:not([hidden]) + #settings { margin-left: 6px; }
+#fullscreen { color: var(--text); font-weight: 900; }

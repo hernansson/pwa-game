@@ -102,6 +102,7 @@ document.querySelector('#app')!.innerHTML = `
     <div class="res gems" title="Gemas"><span class="ico">💠</span><b id="gems">0</b></div>
     <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small></button>
     <button id="install" class="install" hidden>Instalar</button>
+    <button class="gear" id="fullscreen" aria-label="Pantalla completa">⛶</button>
     <button class="gear" id="settings" aria-label="Ajustes">⚙️</button>
   </header>
 
@@ -790,6 +791,17 @@ $('#sheet-close').addEventListener('click', closeSheet);
 $('#sheet').addEventListener('click', (ev) => {
   if (ev.target === $('#sheet')) closeSheet();
 });
+// Pantalla completa (Android y computadora; en iPhone hay que agregarlo a la pantalla de inicio).
+{
+  const fsBtn = $('#fullscreen');
+  const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+  const can = !!(root.requestFullscreen || root.webkitRequestFullscreen) && !matchMedia('(display-mode: fullscreen)').matches;
+  fsBtn.hidden = !can;
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else (root.requestFullscreen?.() ?? root.webkitRequestFullscreen?.())?.catch?.(() => toast('Tu navegador no deja usar pantalla completa acá'));
+  });
+}
 $('#vip-btn').addEventListener('click', () => (openTab === 'vip' ? closeSheet() : openSheet('vip')));
 $('#settings').addEventListener('click', showSettings);
 
