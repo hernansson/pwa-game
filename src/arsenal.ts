@@ -44,92 +44,107 @@ export interface ArmDef {
 export const SKILL_LEVELS = [5, 10, 20, 40];
 export const MAX_ARM_LEVEL = 100;
 
-/** Lo que sube cada nivel, por familia. */
-export const LEVEL_STAT: Record<ArmFam, { key: keyof Mods; per: number; label: string }> = {
-  espada: { key: 'dmg', per: 0.03, label: 'daño' },
-  escudo: { key: 'shield', per: 0.03, label: 'escudo' },
-  rayo: { key: 'boostMult', per: 0.02, label: 'potencia' },
-  skin: { key: 'hp', per: 0.03, label: 'vida' },
+/**
+ * Lo que sube cada nivel, por familia. Están emparejados para que subir 10 niveles cualquier familia
+ * rinda parecido con el equipo completo puesto (medido con tools/verify.ts, ver BALANCE.md).
+ * El escudo y el rayo llevan un segundo stat porque solos valen muy poco.
+ */
+export interface LevelGain { key: keyof Mods; per: number; label: string }
+export const LEVEL_STAT: Record<ArmFam, LevelGain[]> = {
+  espada: [{ key: 'dmg', per: 0.025, label: 'daño' }],
+  escudo: [{ key: 'shield', per: 0.0125, label: 'escudo' }, { key: 'hp', per: 0.0035, label: 'vida' }],
+  rayo: [{ key: 'boostMult', per: 0.03, label: 'potencia' }, { key: 'dmg', per: 0.02, label: 'daño' }],
+  skin: [{ key: 'hp', per: 0.0055, label: 'vida' }],
 };
+
+const pctText = (v: number) => `+${(Math.round(v * 10000) / 100).toString().replace('.', ',')}%`;
+const join = (parts: string[]) => (parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : parts[0]);
+
+/** "+3% de daño", "+4% de escudo y +1,2% de vida": lo que suma cada nivel. */
+export function levelGainText(fam: ArmFam): string {
+  return join(LEVEL_STAT[fam].map((g) => `${pctText(g.per)} de ${g.label}`));
+}
 
 const s = (at: number, text: string, mod: Partial<Mods>): Skill => ({ at, text, mod });
 
+// Cada rareza vale un poco más que la anterior (rara ~+15–25% de poder con el equipo puesto, épica ~+30–40%),
+// pero sobre todo cambia el estilo. tools/report.ts muestra cuánto vale cada una; ver BALANCE.md.
 export const ARMS: ArmDef[] = [
   // Espadas
   { id: 'espada_recta', fam: 'espada', name: 'Espada recta', rarity: 'común', shape: 0, skills: [
     s(5, '+5% de crítico', { crit: 0.05 }),
-    s(10, '+10% de daño', { dmg: 0.1 }),
-    s(20, 'Los críticos pegan x2,5', { critMult: 0.5 }),
-    s(40, '+20% de daño', { dmg: 0.2 }),
+    s(10, '+7% de daño', { dmg: 0.07 }),
+    s(20, 'Los críticos pegan x2,5 y +10% de daño', { critMult: 0.5, dmg: 0.1 }),
+    s(40, '+13% de daño', { dmg: 0.13 }),
   ] },
   { id: 'cimitarra', fam: 'espada', name: 'Cimitarra', rarity: 'rara', shape: 1, skills: [
-    s(5, '+0,5 s para mantener el combo', { combo: 0.5 }),
-    s(10, '+8% de crítico', { crit: 0.08 }),
-    s(20, '+20% de daño', { dmg: 0.2 }),
-    s(40, '+1 s para mantener el combo', { combo: 1 }),
+    s(5, '+0,2 s para mantener el combo', { combo: 0.2 }),
+    s(10, '+9% de crítico', { crit: 0.09 }),
+    s(20, '+13% de daño', { dmg: 0.13 }),
+    s(40, '+0,5 s para mantener el combo', { combo: 0.5 }),
   ] },
   { id: 'mandoble', fam: 'espada', name: 'Mandoble', rarity: 'épica', shape: 2, skills: [
-    s(5, '+15% de daño', { dmg: 0.15 }),
-    s(10, 'Los críticos pegan x2,5', { critMult: 0.5 }),
-    s(20, '+25% de daño', { dmg: 0.25 }),
-    s(40, '+10% de crítico', { crit: 0.1 }),
+    s(5, '+7% de daño', { dmg: 0.07 }),
+    s(10, 'Los críticos pegan x2,5 y +9% de daño', { critMult: 0.5, dmg: 0.09 }),
+    s(20, '+0,3 s para mantener el combo y +8% de daño', { combo: 0.3, dmg: 0.08 }),
+    s(40, '+10% de crítico y los críticos pegan x3', { crit: 0.1, critMult: 0.5 }),
   ] },
   // Escudos
   { id: 'escudo_redondo', fam: 'escudo', name: 'Rodela', rarity: 'común', shape: 0, skills: [
     s(5, 'Empiezas el nivel con escudo (10% de la vida)', { startShield: 0.1 }),
     s(10, '-5% de daño recibido', { reduce: 0.05 }),
-    s(20, '+20% de escudo', { shield: 0.2 }),
-    s(40, 'Empiezas con más escudo (25% de la vida)', { startShield: 0.15 }),
+    s(20, '+33% de escudo', { shield: 0.33 }),
+    s(40, 'Empiezas con más escudo (25% de la vida) y +15% de escudo', { startShield: 0.15, shield: 0.15 }),
   ] },
   { id: 'escudo_cometa', fam: 'escudo', name: 'Escudo cometa', rarity: 'rara', shape: 1, skills: [
-    s(5, '-5% de daño recibido', { reduce: 0.05 }),
-    s(10, '+25% de escudo', { shield: 0.25 }),
+    s(5, '-4% de daño recibido', { reduce: 0.04 }),
+    s(10, '+27% de escudo', { shield: 0.27 }),
     s(20, '-8% de daño recibido', { reduce: 0.08 }),
-    s(40, '+40% de escudo', { shield: 0.4 }),
+    s(40, '+50% de escudo', { shield: 0.5 }),
   ] },
   { id: 'paves', fam: 'escudo', name: 'Pavés', rarity: 'épica', shape: 2, skills: [
-    s(5, 'Empiezas el nivel con escudo (20% de la vida)', { startShield: 0.2 }),
-    s(10, '-8% de daño recibido', { reduce: 0.08 }),
-    s(20, '+30% de escudo', { shield: 0.3 }),
-    s(40, '-12% de daño recibido', { reduce: 0.12 }),
+    s(5, 'Empiezas el nivel con escudo (15% de la vida)', { startShield: 0.15 }),
+    s(10, '-6% de daño recibido', { reduce: 0.06 }),
+    s(20, '+20% de escudo y empiezas con más (20% de la vida)', { shield: 0.2, startShield: 0.05 }),
+    s(40, '-8% de daño recibido', { reduce: 0.08 }),
   ] },
   // Rayos
   { id: 'chispa', fam: 'rayo', name: 'Chispa', rarity: 'común', shape: 0, skills: [
-    s(5, 'El potenciador dura +0,5 s', { boostSec: 0.5 }),
-    s(10, '+10% de potencia', { boostMult: 0.1 }),
-    s(20, 'El potenciador dura +1 s', { boostSec: 1 }),
-    s(40, '+20% de potencia', { boostMult: 0.2 }),
+    s(5, 'El potenciador dura +1 s', { boostSec: 1 }),
+    s(10, '+50% de potencia', { boostMult: 0.5 }),
+    s(20, 'El potenciador dura +1 s y +40% de potencia', { boostSec: 1, boostMult: 0.4 }),
+    s(40, '+100% de potencia', { boostMult: 1 }),
   ] },
   { id: 'doble_rayo', fam: 'rayo', name: 'Rayo doble', rarity: 'rara', shape: 1, skills: [
-    s(5, '+15% de potencia', { boostMult: 0.15 }),
-    s(10, 'El potenciador dura +0,5 s', { boostSec: 0.5 }),
-    s(20, '+25% de potencia', { boostMult: 0.25 }),
-    s(40, 'El potenciador dura +1 s', { boostSec: 1 }),
+    s(5, '+45% de potencia y +5% de daño', { boostMult: 0.45, dmg: 0.05 }),
+    s(10, 'El potenciador dura +1 s y +30% de potencia', { boostSec: 1, boostMult: 0.3 }),
+    s(20, '+100% de potencia y +8% de daño', { boostMult: 1, dmg: 0.08 }),
+    s(40, 'El potenciador dura +1 s y +90% de potencia', { boostSec: 1, boostMult: 0.9 }),
   ] },
   { id: 'tormenta', fam: 'rayo', name: 'Tormenta', rarity: 'épica', shape: 2, skills: [
-    s(5, 'El potenciador dura +1 s', { boostSec: 1 }),
-    s(10, '+20% de potencia', { boostMult: 0.2 }),
-    s(20, '+5% de crítico', { crit: 0.05 }),
-    s(40, '+40% de potencia', { boostMult: 0.4 }),
+    s(5, 'El potenciador dura +1 s y +15% de potencia', { boostSec: 1, boostMult: 0.15 }),
+    s(10, '+75% de potencia', { boostMult: 0.75 }),
+    s(20, '+5% de crítico y +85% de potencia', { crit: 0.05, boostMult: 0.85 }),
+    s(40, '+150% de potencia', { boostMult: 1.5 }),
   ] },
   // Skins del héroe
   { id: 'caballero', fam: 'skin', name: 'Caballero', rarity: 'común', shape: 0, skin: 'caballero', skills: [
-    s(5, '+5% de vida', { hp: 0.05 }),
-    s(10, 'Empiezas el nivel con escudo (10% de la vida)', { startShield: 0.1 }),
-    s(20, '+10% de vida', { hp: 0.1 }),
-    s(40, '-5% de daño recibido', { reduce: 0.05 }),
+    s(5, '+4% de vida', { hp: 0.04 }),
+    s(10, 'Empiezas el nivel con escudo (13% de la vida)', { startShield: 0.13 }),
+    s(20, '+8% de vida', { hp: 0.08 }),
+    s(40, '-5% de daño recibido y +4% de vida', { reduce: 0.05, hp: 0.04 }),
   ] },
   { id: 'samurai', fam: 'skin', name: 'Samurái Carmesí', rarity: 'rara', shape: 1, skin: 'samurai', skills: [
-    s(5, '+8% de daño', { dmg: 0.08 }),
-    s(10, '+5% de crítico', { crit: 0.05 }),
-    s(20, '+15% de daño', { dmg: 0.15 }),
-    s(40, 'Los críticos pegan x2,5', { critMult: 0.5 }),
+    s(5, '+6% de daño y +4% de vida', { dmg: 0.06, hp: 0.04 }),
+    s(10, '+5% de crítico y +6% de vida', { crit: 0.05, hp: 0.06 }),
+    s(20, '+8% de crítico', { crit: 0.08 }),
+    s(40, 'Los críticos pegan x2,5 y +0,3 s para mantener el combo', { critMult: 0.5, combo: 0.3 }),
   ] },
   { id: 'cyber', fam: 'skin', name: 'Ronin Neón', rarity: 'épica', shape: 2, skin: 'cyber', skills: [
-    s(5, 'El potenciador dura +0,5 s', { boostSec: 0.5 }),
-    s(10, '+10% de daño', { dmg: 0.1 }),
-    s(20, '+1 s para mantener el combo', { combo: 1 }),
-    s(40, '+20% de potencia', { boostMult: 0.2 }),
+    s(5, 'El potenciador dura +1 s y +2% de daño', { boostSec: 1, dmg: 0.02 }),
+    s(10, '+10% de daño y +6% de vida', { dmg: 0.1, hp: 0.06 }),
+    s(20, '+0,5 s para mantener el combo', { combo: 0.5 }),
+    s(40, '+60% de potencia y +12% de daño', { boostMult: 0.6, dmg: 0.12 }),
   ] },
 ];
 
@@ -178,15 +193,21 @@ export function upgradeGold(lvl: number): number {
  */
 export const RARITY_LEVEL_BONUS: Record<Rarity, number> = { común: 0, rara: 7, épica: 15, legendaria: 25 };
 
-/** Cuánto suma el stat de nivel de una variante (0,03 = +3%). */
-export function armStat(def: ArmDef, lvl: number): number {
-  return lvl <= 0 ? 0 : LEVEL_STAT[def.fam].per * (lvl - 1 + RARITY_LEVEL_BONUS[def.rarity]);
+/** Cuántos "niveles de stat" tiene una variante: su nivel más el arranque por rareza. */
+export function armStatLevels(def: ArmDef, lvl: number): number {
+  return lvl <= 0 ? 0 : lvl - 1 + RARITY_LEVEL_BONUS[def.rarity];
+}
+
+/** Lo que suman los niveles de una variante, en texto: "+45% de escudo y +13,2% de vida". */
+export function armStatText(def: ArmDef, lvl: number): string {
+  const n = armStatLevels(def, lvl);
+  return join(LEVEL_STAT[def.fam].map((g) => `${pctText(g.per * n)} de ${g.label}`));
 }
 
 /** Suma los modificadores de una variante a cierto nivel. */
 export function armMods(def: ArmDef, lvl: number, into: Mods = { ...NO_MODS }): Mods {
   if (lvl <= 0) return into;
-  into[LEVEL_STAT[def.fam].key] += armStat(def, lvl);
+  for (const g of LEVEL_STAT[def.fam]) into[g.key] += g.per * armStatLevels(def, lvl);
   for (const sk of def.skills) if (lvl >= sk.at) for (const k in sk.mod) into[k as keyof Mods] += sk.mod[k as keyof Mods]!;
   return into;
 }

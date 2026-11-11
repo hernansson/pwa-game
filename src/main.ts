@@ -33,7 +33,7 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { ARMS, ArmDef, ArmFam, CHESTS, LEVEL_STAT, MAX_ARM_LEVEL, RARITY_LEVEL_BONUS, armById, armStat, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, ArmDef, ArmFam, CHESTS, MAX_ARM_LEVEL, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
   exportCode,
@@ -1207,10 +1207,9 @@ function armButtons(def: ArmDef): string {
 
 function armSkills(def: ArmDef, more = true): string {
   const lvl = game.s.arsenal[def.id].lvl;
-  const stat = LEVEL_STAT[def.fam];
   return (
     def.skills.map((sk) => `<li class="${lvl >= sk.at ? 'got' : ''}"><b>Nv ${sk.at}</b><span>${sk.text}</span><i>${lvl >= sk.at ? '✓' : '🔒'}</i></li>`).join('') +
-    (more ? `<li class="more"><b>41+</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li>` : '')
+    (more ? `<li class="more"><b>41+</b><span>${levelGainText(def.fam)} por nivel</span></li>` : '')
   );
 }
 
@@ -1240,8 +1239,6 @@ function renderArsenal() {
   const def = armById(armSel[fam] ?? game.s.arms[fam]) ?? list[0];
   const st = game.s.arsenal[def.id];
   const locked = st.lvl === 0;
-  const stat = LEVEL_STAT[fam];
-  const total = Math.round(armStat(def, st.lvl) * 100);
   $('#sheet-body').innerHTML = `
     <div class="seg">${ARM_TABS.map(
       ([f, ico, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
@@ -1251,12 +1248,12 @@ function renderArsenal() {
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
-        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}<br><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel${RARITY_LEVEL_BONUS[def.rarity] ? ` · arranca como una básica nivel ${1 + RARITY_LEVEL_BONUS[def.rarity]}` : ''}</span></p>
+        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · ${armStatText(def, st.lvl)}`}<br><span>${levelGainText(fam)} por nivel${RARITY_LEVEL_BONUS[def.rarity] ? ` · arranca como una básica nivel ${1 + RARITY_LEVEL_BONUS[def.rarity]}` : ''}</span></p>
         <ul class="skills mini">${armSkills(def, false)}</ul>
       </div>
     </div>
     <div class="sc-btns btns">${armButtons(def)}</div>
-    <div class="sec-head var-head"><b>Variantes</b><small>cada nivel +${Math.round(stat.per * 100)}% de ${stat.label}</small></div>
+    <div class="sec-head var-head"><b>Variantes</b><small>cada nivel ${levelGainText(fam)}</small></div>
     ${ARM_CATS.map(([title, rars, premium]) => {
       const items = list.filter((x) => rars.includes(x.rarity));
       const tiles = items.map((x) => armTile(x, x.id === def.id)).join('') + (premium ? '<div class="tile soon"><span>👑</span><small>Pronto</small></div>'.repeat(Math.max(1, 5 - items.length)) : '');
@@ -1272,14 +1269,13 @@ function renderArsenal() {
  */
 function celebrate(def: ArmDef, kind: 'unlock' | 'up') {
   const lvl = game.s.arsenal[def.id].lvl;
-  const stat = LEVEL_STAT[def.fam];
   const skill = def.skills.find((sk) => sk.at === lvl);
   const el = document.createElement('div');
   const art = `<div class="cel-art">${armShowcase(def)}</div>`;
   if (kind === 'up' && !skill) {
     el.className = 'cel small';
     el.style.setProperty('--rar', RARITY_COLORS[def.rarity]);
-    el.innerHTML = `<div class="cel-card">${art}<div><small>${def.name}</small><b>Nivel ${lvl}</b><span>+${Math.round(stat.per * 100)}% de ${stat.label}</span></div></div>`;
+    el.innerHTML = `<div class="cel-card">${art}<div><small>${def.name}</small><b>Nivel ${lvl}</b><span>${levelGainText(def.fam)}</span></div></div>`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 1600);
     if (navigator.vibrate) navigator.vibrate(15);
@@ -1332,15 +1328,13 @@ function showArm(id: string) {
   const def = armById(id)!;
   const st = game.s.arsenal[id];
   const locked = st.lvl === 0;
-  const stat = LEVEL_STAT[def.fam];
-  const total = Math.round(armStat(def, st.lvl) * 100);
   const isSkin = def.fam === 'skin';
   showModal(`<div class="arm-detail" style="--rar:${RARITY_COLORS[def.rarity]}">
     <button class="x" data-close aria-label="Cerrar">✕</button>
     <div class="arm-big ${isSkin ? 'skin' : ''}">${armIcon(def)}</div>
     <small class="rar">${def.rarity.toUpperCase()} · ${FAM_TITLES[def.fam]}</small>
     <h2>${def.name}</h2>
-    <p class="muted">${locked ? 'Bloqueada' : `Nivel ${st.lvl} de ${MAX_ARM_LEVEL} · +${total}% de ${stat.label}`}</p>
+    <p class="muted">${locked ? 'Bloqueada' : `Nivel ${st.lvl} de ${MAX_ARM_LEVEL} · ${armStatText(def, st.lvl)}`}</p>
     <ul class="skills">${armSkills(def)}</ul>
     <div class="btns">${armButtons(def)}</div>
   </div>`);
