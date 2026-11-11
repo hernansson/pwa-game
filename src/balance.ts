@@ -6,11 +6,6 @@ export const LEVELS_PER_WORLD = 10;
 export const ENERGY_MAX = 30;
 export const ENERGY_COST = 5;
 export const ENERGY_REGEN_SECONDS = 5 * 60; // 1 de energía cada 5 minutos
-export const START_ROWS = 3; // filas llenas al empezar el nivel
-export const RESOLVE_STEP = 0.2; // segundos entre cada paso de una cadena
-export const COMBO_WINDOW = 4; // segundos para seguir sumando combo
-export const OVERFLOW_DAMAGE = 0.25; // parte de la vida que se pierde si el tablero desborda
-export const OVERFLOW_CLEAR_ROWS = 3; // filas de arriba que se vacían al desbordar
 export const BASE_DAMAGE = 7;
 
 /** Las piezas de los mundos avanzados pegan más fuerte. */
@@ -24,19 +19,19 @@ function earlyEase(level: number): number {
 }
 
 export function enemyHp(level: number, boss: boolean): number {
-  const base = 30 * Math.pow(1.3, level - 1) * earlyEase(level);
+  const base = 100 * Math.pow(1.33, level - 1) * earlyEase(level);
   return boss ? base * 4 : base;
 }
 
 /** Daño de cada golpe del enemigo. */
 export function enemyHit(level: number, boss: boolean): number {
-  const base = 8 * Math.pow(1.18, level - 1) * earlyEase(level);
+  const base = 14 * Math.pow(1.23, level - 1) * earlyEase(level);
   return boss ? base * 1.6 : base;
 }
 
 /** Segundos entre golpes del enemigo. */
 export function enemyAttackSeconds(boss: boolean): number {
-  return boss ? 3.4 : 4;
+  return boss ? 2.4 : 2.8;
 }
 
 export function enemyGold(level: number, boss: boolean): number {
@@ -49,9 +44,9 @@ export function pieceValue(lvl: number, size: number): number {
   return Math.pow(2, lvl - 2) * (1 + 0.5 * (size - 2));
 }
 
-/** Segundos sin jugar hasta que cae una pieza sola. */
-export function autoDropSeconds(calma: number): number {
-  return 2.4 * Math.pow(1.07, calma);
+/** Segundos que tienes entre fusiones para no perder el combo. */
+export function comboWindow(ritmo: number): number {
+  return 1.5 + ritmo * 0.1;
 }
 
 /** Probabilidad de que una pieza nueva llegue ya en nivel 2. */
@@ -106,12 +101,12 @@ export const UPGRADES: UpgradeDef[] = [
   },
   {
     id: 'calma',
-    name: 'Calma',
-    desc: (l) => `Si no juegas, cae una pieza sola cada ${autoDropSeconds(l).toFixed(1)} s`,
+    name: 'Ritmo',
+    desc: (l) => `Tienes ${comboWindow(l).toFixed(1)} s entre fusiones para mantener el combo`,
     baseCost: 40,
     growth: 1.8,
     max: 15,
-    icon: '🧘',
+    icon: '🔥',
   },
   {
     id: 'calidad',

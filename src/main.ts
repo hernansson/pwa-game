@@ -12,7 +12,7 @@ import {
   upgradeCost,
 } from './balance';
 import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, pieceSvg, skinById } from './art';
-import { COLS, FAMILIES, FAMILY_INFO, Family, ROWS, height } from './board';
+import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, nearestPair, rowsOf } from './board';
 import { ClearReport, Game, Loot, MergeResult } from './game';
 import {
   CHEST_GEMS,
@@ -40,7 +40,6 @@ import {
 } from './league';
 import { esc, fmt } from './format';
 import {
-  autoDropTime,
   exportCode,
   goldMultiplier,
   importCode,
@@ -123,16 +122,11 @@ document.querySelector('#app')!.innerHTML = `
   <section class="lower">
     <div class="map" id="map"></div>
     <div class="forge" id="forge" hidden>
-      <div class="next-row">
-        <div class="next-now"><small>Ahora</small><div class="next-piece" id="next-now"></div></div>
-        <div class="next-later"><small>Luego</small><div class="next-piece" id="next-later"></div></div>
-        <div class="legend" id="legend"></div>
-      </div>
+      <div class="legend" id="legend"></div>
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
-        <div class="cols" id="cols">${Array.from({ length: COLS }, (_, c) => `<button data-col="${c}" aria-label="Columna ${c + 1}"></button>`).join('')}</div>
-        <div class="auto-bar"><div id="auto-fill"></div></div>
       </div>
+      <p class="hint" id="hint">Toca una pieza y se junta con su igual. También puedes arrastrarla.</p>
     </div>
   </section>
 
@@ -366,16 +360,8 @@ function wireGame() {
       floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
     } else if (e.type === 'wave') {
       if (e.boss) toast('¡Llegó el jefe!');
-    } else if (e.type === 'place') {
-      lastPlaced = game.s.run?.focusId ?? 0;
-    } else if (e.type === 'reject') {
-      const b = $(`#cols [data-col="${e.col}"]`);
-      if (b) restartAnim(b, 'nope');
-    } else if (e.type === 'overflow') {
-      restartAnim($('#board'), 'overflow');
-      restartAnim($('#stage'), 'shake-big');
-      toast('¡Tablero lleno! Perdiste vida');
-      if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+    } else if (e.type === 'spawn') {
+      for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
       setTimeout(() => showResult(e.report), 1100);
     }
@@ -415,7 +401,7 @@ function showResult(r: ClearReport) {
   } else {
     showModal(
       `<div class="result lose"><div class="big-ico">💀</div><h2>Tu héroe cayó</h2>
-      <p>Elige mejor dónde soltar cada pieza para armar cadenas. Usa escudos y pociones cuando el enemigo aprieta, y sube tus talentos con el oro que juntaste.</p>
+      <p>Junta más rápido para hacer combo, sube piezas de nivel antes de usarlas y usa escudos y pociones cuando el enemigo aprieta. Con el oro puedes subir tus talentos.</p>
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="btns"><button data-leave>Inicio</button><button data-next="${r.level}" class="primary">Reintentar ⚡${ENERGY_COST}</button></div></div>`,
@@ -428,8 +414,8 @@ function showResult(r: ClearReport) {
 
 const piecesEl = $('#pieces');
 const pieceEls = new Map<number, HTMLElement>();
-let lastPlaced = 0;
-let nextKey = '';
+const fromTop = new Set<number>();
+let playedMerges = 0;
 
 $('#legend').innerHTML = FAMILIES.map(
   (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color)}<small>${legendWord(f)}</small></span>`,
@@ -441,10 +427,13 @@ function legendWord(f: Family) {
 function resetBoardView() {
   pieceEls.forEach((el) => el.remove());
   pieceEls.clear();
-  lastPlaced = 0;
-  nextKey = '';
+  fromTop.clear();
+  playedMerges = 0;
+  $('#hint').hidden = false;
 }
 
+let COLS = 5;
+let ROWS = 6;
 function cellPos(col: number, row: number) {
   return { left: (col * 100) / COLS + '%', bottom: (row * 100) / ROWS + '%' };
 }
@@ -463,7 +452,15 @@ function burstAt(col: number, row: number, color: string, big: boolean) {
 function renderBoard() {
   const run = game.s.run;
   if (!run) return;
+  if (colsOf(run.grid) !== COLS || rowsOf(run.grid) !== ROWS) {
+    COLS = colsOf(run.grid);
+    ROWS = rowsOf(run.grid);
+    const b = $('#board');
+    b.style.setProperty('--cols', String(COLS));
+    b.style.setProperty('--rows', String(ROWS));
+  }
   const alive = new Set<number>();
+  const spawnedInCol: number[] = Array(COLS).fill(0);
   for (let c = 0; c < COLS; c++) {
     for (let r = 0; r < ROWS; r++) {
       const p = run.grid[c][r];
@@ -474,21 +471,25 @@ function renderBoard() {
       if (!el) {
         el = document.createElement('div');
         el.className = 'pc';
+        el.dataset.col = String(c);
         el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color);
         el.style.left = pos.left;
-        if (p.id === lastPlaced) {
-          // Entra desde arriba y cae hasta su lugar.
-          el.style.bottom = '100%';
+        if (fromTop.has(p.id)) {
+          // Las piezas nuevas entran desde arriba del tablero y caen.
+          fromTop.delete(p.id);
+          el.style.bottom = 100 + (spawnedInCol[c]++ * 100) / ROWS + '%';
           el.classList.add('falling');
           piecesEl.appendChild(el);
           void el.offsetWidth;
         } else {
           el.style.bottom = pos.bottom;
-          if (run.drops > 0) el.classList.add('born');
+          if (run.merges > 0) el.classList.add('born');
           piecesEl.appendChild(el);
         }
         pieceEls.set(p.id, el);
       }
+      el.dataset.col = String(c);
+      el.dataset.row = String(r);
       if (el.style.left !== pos.left) el.style.left = pos.left;
       if (el.style.bottom !== pos.bottom) el.style.bottom = pos.bottom;
     }
@@ -497,43 +498,77 @@ function renderBoard() {
     if (alive.has(id)) return;
     pieceEls.delete(id);
     el.classList.add('gone');
-    setTimeout(() => el.remove(), 220);
+    setTimeout(() => el.remove(), 200);
   });
-  // Columnas casi llenas en rojo.
-  const cols = $('#cols').children;
-  for (let c = 0; c < COLS; c++) {
-    const h = height(run.grid, c);
-    cols[c].classList.toggle('danger', h >= ROWS - 1);
-    cols[c].classList.toggle('full', h >= ROWS);
-  }
-  $('#board').classList.toggle('busy', run.resolving);
-  const nk = run.next.map((p) => p.id).join(',');
-  if (nk !== nextKey) {
-    nextKey = nk;
-    const [a, b] = run.next;
-    $('#next-now').innerHTML = pieceSvg(a.fam, a.lvl, FAMILY_INFO[a.fam].color);
-    $('#next-later').innerHTML = pieceSvg(b.fam, b.lvl, FAMILY_INFO[b.fam].color);
-    restartAnim($('#next-now'), 'pop');
-  }
-  $('#auto-fill').style.width = (run.resolving ? 0 : Math.min(1, run.idle / autoDropTime(game.s)) * 100) + '%';
 }
 
-$('#cols').addEventListener('pointerdown', (ev) => {
-  const b = (ev.target as HTMLElement).closest('[data-col]') as HTMLElement | null;
-  if (!b) return;
+// Tocar una pieza la junta con la igual más cercana; arrastrarla la junta con la que sueltes.
+let drag: { from: Cell; el: HTMLElement; x: number; y: number; moved: boolean } | null = null;
+
+function cellFromPoint(x: number, y: number): Cell | null {
+  const r = piecesEl.getBoundingClientRect();
+  if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+  const col = Math.min(COLS - 1, Math.floor(((x - r.left) / r.width) * COLS));
+  const row = Math.min(ROWS - 1, Math.floor(((r.bottom - y) / r.height) * ROWS));
+  return { col, row };
+}
+
+function markMatches(from: Cell | null) {
+  const run = game.s.run;
+  const p = from && run ? run.grid[from.col][from.row] : null;
+  pieceEls.forEach((el) => {
+    const q = run?.grid[Number(el.dataset.col)]?.[Number(el.dataset.row)];
+    el.classList.toggle('match', !!p && !!q && q !== p && q.fam === p.fam && q.lvl === p.lvl);
+  });
+}
+
+function doMerge(from: Cell, to: Cell) {
+  if (!game.merge(from, to)) return false;
+  playedMerges++;
+  if (playedMerges >= 3) $('#hint').hidden = true;
+  return true;
+}
+
+piecesEl.addEventListener('pointerdown', (ev) => {
+  const from = cellFromPoint(ev.clientX, ev.clientY);
+  if (!from || !game.fighting) return;
+  const el = (ev.target as HTMLElement).closest('.pc') as HTMLElement | null;
+  if (!el) return;
   ev.preventDefault();
-  const col = Number(b.dataset.col);
-  // Si todavía se está resolviendo una cadena, el toque queda en espera un momento.
-  if (game.canDrop) game.dropAt(col);
-  else pending = { col, t: performance.now() };
+  drag = { from, el, x: ev.clientX, y: ev.clientY, moved: false };
+  el.classList.add('lifting');
+  markMatches(from);
 });
 
-let pending: { col: number; t: number } | null = null;
-function flushPending() {
-  if (!pending || !game.canDrop) return;
-  if (performance.now() - pending.t < 600) game.dropAt(pending.col);
-  pending = null;
+window.addEventListener('pointermove', (ev) => {
+  if (!drag) return;
+  const dx = ev.clientX - drag.x;
+  const dy = ev.clientY - drag.y;
+  if (Math.hypot(dx, dy) > 8) drag.moved = true;
+  if (drag.moved) drag.el.style.transform = `translate(${dx}px, ${dy}px) scale(1.12)`;
+});
+
+function endDrag(ev: PointerEvent) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  d.el.classList.remove('lifting');
+  d.el.style.transform = '';
+  markMatches(null);
+  if (ev.type === 'pointercancel') return;
+  if (d.moved) {
+    const to = cellFromPoint(ev.clientX, ev.clientY);
+    if (to && doMerge(d.from, to)) return;
+    if (to) restartAnim(d.el, 'nope');
+    return;
+  }
+  const run = game.s.run;
+  const pair = run && nearestPair(run.grid, d.from);
+  if (pair) doMerge(d.from, pair);
+  else restartAnim(d.el, 'nope');
 }
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
 
 // ---------- Paneles ----------
 
@@ -608,6 +643,7 @@ function renderHeroSheet() {
       <div><b>Cofre de equipo</b><p>Una pieza rara o mejor. También ganas equipo al superar niveles por primera vez.</p></div>
       <button data-chest class="${s.gems >= CHEST_GEMS ? 'can' : ''}">💠 ${CHEST_GEMS}</button>
     </div>
+    ${expandBox()}
     <div class="gem-shop"><b>¿Te faltan gemas?</b><p>Ganas gemas con las primeras victorias y con los premios de la liga.</p><button data-gemshop>Comprar gemas</button></div>
     <div class="name-row"><label>Nombre en la liga <input id="name-input" maxlength="14" value="${esc(s.playerName)}"></label></div>
     <div class="save-box">
@@ -616,6 +652,21 @@ function renderHeroSheet() {
       <div class="save-btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
     </div>
     <details class="danger"><summary>Opciones</summary><button data-reset>Borrar progreso</button></details>`;
+}
+
+function expandBox(): string {
+  const s = game.s;
+  const btn = (kind: 'rows' | 'cols', label: string) => {
+    const price = game.expandPrice(kind);
+    return price === null
+      ? `<button disabled>${label} ✓</button>`
+      : `<button data-expand="${kind}" class="${s.gems >= price ? 'can' : ''}">${label} <span>💠 ${price}</span></button>`;
+  };
+  return `<div class="expand-box">
+    <div class="expand-ico">▦</div>
+    <div class="expand-main"><b>Ampliar tablero</b><p>Ahora es de ${5 + s.board.cols}×${6 + s.board.rows}. Más piezas, más parejas para juntar rápido.</p>
+    <div class="expand-btns">${btn('rows', '+1 fila')}${btn('cols', '+1 columna')}</div></div>
+  </div>`;
 }
 
 function renderSheet(full: boolean) {
@@ -719,6 +770,21 @@ $('#sheet-body').addEventListener('click', (ev) => {
   if (equip) {
     game.equip(equip.dataset.equip!, equip.dataset.slot as Slot);
     track(game.s, `equip:${equip.dataset.equip}`);
+    const scroll = $('#sheet-body').scrollTop;
+    renderHeroSheet();
+    $('#sheet-body').scrollTop = scroll;
+    return;
+  }
+  const ex = t.closest('[data-expand]') as HTMLElement | null;
+  if (ex) {
+    const kind = ex.dataset.expand as 'rows' | 'cols';
+    const price = game.expandPrice(kind) ?? 0;
+    if (game.expand(kind)) {
+      toast(kind === 'rows' ? '¡Tablero con una fila más!' : '¡Tablero con una columna más!');
+    } else {
+      track(game.s, 'expand_nogems');
+      toast(`Te faltan ${price - game.s.gems} 💠`);
+    }
     const scroll = $('#sheet-body').scrollTop;
     renderHeroSheet();
     $('#sheet-body').scrollTop = scroll;
@@ -910,7 +976,6 @@ function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   game.tick(dt);
-  flushPending();
   renderTop();
   renderScreen();
   sheetClock += dt;
@@ -940,7 +1005,7 @@ if (rolloverLeague(game.s)) showLeagueResult();
 if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
-    <p>Recorre niveles cortos y vence al jefe del final. Toca una columna para soltar la pieza: <b>dos iguales que se tocan se fusionan</b> y actúan. Las espadas pegan, los escudos protegen, las pociones curan, los orbes frenan al enemigo y las monedas dan oro.</p><p>Si armas cadenas, haces combo.</p>
+    <p>Recorre niveles cortos y vence al jefe del final. <b>Toca una pieza y se junta con otra igual</b> (mismo dibujo y mismo número). Al juntarlas actúan y caen piezas nuevas al instante.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · 🔮 orbes frenan · 🪙 monedas dan oro. Si juntas rápido, haces combo.</p>
     <p>Gana equipo para tu héroe y hazlo cada vez más fuerte.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,

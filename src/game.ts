@@ -1,12 +1,7 @@
 import {
   BASE_DAMAGE,
-  COMBO_WINDOW,
   ENEMIES_PER_WAVE,
   ENERGY_COST,
-  OVERFLOW_CLEAR_ROWS,
-  OVERFLOW_DAMAGE,
-  RESOLVE_STEP,
-  START_ROWS,
   UpgradeId,
   WAVES_PER_LEVEL,
   comboMultiplier,
@@ -21,11 +16,11 @@ import {
   starsFor,
   upgradeCost,
 } from './balance';
-import { COLS, Family, MergeEvent, ROWS, boardFull, dropInto, findPiece, isFull, mergeStep, randomPiece, settle, startingGrid } from './board';
+import { BASE_COLS, BASE_ROWS, Cell, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, MergeEvent, hasPair, makePiece, mergePair, randomPiece, refill, startingGrid } from './board';
 import {
   GameState,
   Run,
-  autoDropTime,
+  comboTime,
   damageMultiplier,
   goldMultiplier,
   maxHp,
@@ -71,9 +66,7 @@ export type GameEvent =
   | { type: 'hurt'; dmg: number; blocked: number }
   | { type: 'kill'; gold: number; boss: boolean }
   | { type: 'wave'; wave: number; boss: boolean }
-  | { type: 'place'; col: number; auto: boolean }
-  | { type: 'reject'; col: number }
-  | { type: 'overflow'; dmg: number }
+  | { type: 'spawn'; ids: number[] }
   | { type: 'end'; report: ClearReport };
 
 type Listener = (e: GameEvent) => void;
@@ -130,12 +123,7 @@ export class Game {
       stun: 0,
       heroHp: maxHp(this.s),
       shield: 0,
-      grid: startingGrid(START_ROWS, pieceLevelTwoChance(this.s), this.rand),
-      next: [this.newPiece(), this.newPiece()],
-      idle: 0,
-      resolving: false,
-      resolveClock: 0,
-      focusId: 0,
+      grid: startingGrid(BASE_COLS + this.s.board.cols, BASE_ROWS + this.s.board.rows, pieceLevelTwoChance(this.s), this.rand),
       combo: 0,
       comboTimer: 0,
       maxCombo: 0,
@@ -155,64 +143,32 @@ export class Game {
     if (this.fighting) this.finish(false);
   }
 
-  /** Se puede soltar una pieza (no hay una cadena resolviéndose). */
-  get canDrop(): boolean {
+  /** Junta dos piezas iguales. Devuelve true si se fusionaron. */
+  merge(from: Cell, to: Cell): boolean {
     const run = this.s.run;
-    return !!run && !run.result && !run.resolving;
-  }
-
-  /** El jugador suelta la pieza actual en una columna. */
-  dropAt(col: number): boolean {
-    const run = this.s.run;
-    if (!run || !this.canDrop || col < 0 || col >= COLS) return false;
-    if (boardFull(run.grid)) {
-      this.overflow(run);
-      return false;
+    if (!run || run.result) return false;
+    const ev = mergePair(run.grid, from, to);
+    if (!ev) return false;
+    this.applyMerge(run, ev);
+    // Caen piezas nuevas al instante para seguir juntando.
+    const added = refill(run.grid, () => this.newPiece());
+    if (!hasPair(run.grid)) {
+      // Nunca dejar el tablero sin jugadas: copia una pieza en otra casilla.
+      const p = run.grid[0][0]!;
+      const q = makePiece(p.fam, p.lvl);
+      run.grid[run.grid.length - 1][run.grid[0].length - 1] = q;
+      added.push(q);
     }
-    if (isFull(run.grid, col)) {
-      this.emit({ type: 'reject', col });
-      return false;
-    }
-    this.place(run, col, false);
+    run.drops += added.length;
+    this.emit({ type: 'spawn', ids: added.map((p) => p.id) });
     return true;
-  }
-
-  private place(run: Run, col: number, auto: boolean) {
-    const piece = run.next.shift()!;
-    run.next.push(this.newPiece());
-    dropInto(run.grid, col, piece);
-    run.focusId = piece.id;
-    run.resolving = true;
-    run.resolveClock = RESOLVE_STEP * 0.7; // deja ver la caída antes de fusionar
-    run.idle = 0;
-    run.drops++;
-    this.emit({ type: 'place', col, auto });
-  }
-
-  /** Un paso de la cadena: fusiona lo que se toca y deja caer lo de arriba. */
-  private resolve(run: Run) {
-    const events = mergeStep(run.grid, findPiece(run.grid, run.focusId));
-    if (events.length) {
-      for (const ev of events) {
-        const p = run.grid[ev.col][ev.row];
-        if (p) run.focusId = p.id;
-        this.applyMerge(run, ev);
-        if (run.result) return;
-      }
-      settle(run.grid);
-      run.resolveClock = RESOLVE_STEP;
-    } else if (settle(run.grid)) {
-      run.resolveClock = RESOLVE_STEP;
-    } else {
-      run.resolving = false;
-    }
   }
 
   private applyMerge(run: Run, ev: MergeEvent) {
     this.s.stats.merges++;
     run.merges++;
     run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
-    run.comboTimer = COMBO_WINDOW;
+    run.comboTimer = comboTime(this.s);
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
     const crit = this.rand() < 0.08;
@@ -224,10 +180,10 @@ export class Game {
     else {
       r.dmg = hit * (fam === 'orbe' ? 0.4 : 0.25);
       if (fam === 'escudo') {
-        r.shield = Math.min(hp - run.shield, hp * 0.07 * v);
+        r.shield = Math.min(hp - run.shield, hp * 0.05 * v);
         run.shield += r.shield;
       } else if (fam === 'pocion') {
-        r.heal = Math.min(hp - run.heroHp, hp * 0.06 * v);
+        r.heal = Math.min(hp - run.heroHp, hp * 0.04 * v);
         run.heroHp += r.heal;
       } else if (fam === 'orbe') {
         r.stun = Math.min(6 - run.stun, 0.8 * v);
@@ -238,21 +194,11 @@ export class Game {
         this.s.gold += r.gold;
       }
     }
-    if (this.respawnDelay > 0) r.dmg = 0;
     this.emit({ type: 'merge', r });
     if (r.dmg > 0) {
       run.enemyHp -= r.dmg;
       if (run.enemyHp <= 0) this.kill(run);
     }
-  }
-
-  /** El tablero no tiene lugar: el héroe recibe un golpe fuerte y se vacía la parte de arriba. */
-  private overflow(run: Run) {
-    const dmg = maxHp(this.s) * OVERFLOW_DAMAGE;
-    for (let c = 0; c < COLS; c++) for (let r = ROWS - OVERFLOW_CLEAR_ROWS; r < ROWS; r++) run.grid[c][r] = null;
-    run.combo = 0;
-    this.emit({ type: 'overflow', dmg });
-    this.hurt(run, dmg, false);
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
@@ -274,22 +220,6 @@ export class Game {
     if (run.comboTimer > 0) {
       run.comboTimer -= dt;
       if (run.comboTimer <= 0) run.combo = 0;
-    }
-
-    if (run.resolving) {
-      run.resolveClock -= dt;
-      if (run.resolveClock <= 0) this.resolve(run);
-      if (run.result) return;
-    } else {
-      // Si no juegas, cae una pieza sola.
-      run.idle += dt;
-      if (run.idle >= autoDropTime(this.s)) {
-        run.idle = 0;
-        const open = Array.from({ length: COLS }, (_, c) => c).filter((c) => !isFull(run.grid, c));
-        if (!open.length) this.overflow(run);
-        else this.place(run, open[Math.floor(this.rand() * open.length)], true);
-        if (run.result) return;
-      }
     }
 
     if (this.respawnDelay > 0) {
@@ -398,6 +328,22 @@ export class Game {
   /** Cierra la pantalla de resultado y vuelve al mapa. */
   leave() {
     this.s.run = null;
+  }
+
+  /** Precio en gemas de la próxima ampliación del tablero, o null si ya está al máximo. */
+  expandPrice(kind: 'rows' | 'cols'): number | null {
+    const n = this.s.board[kind];
+    if (kind === 'rows') return n >= MAX_EXTRA_ROWS ? null : [60, 120][n];
+    return n >= MAX_EXTRA_COLS ? null : 150;
+  }
+
+  expand(kind: 'rows' | 'cols'): boolean {
+    const price = this.expandPrice(kind);
+    if (price === null || this.s.gems < price || this.s.run) return false;
+    this.s.gems -= price;
+    this.s.board[kind]++;
+    track(this.s, `expand:${kind}:${this.s.board[kind]}`);
+    return true;
   }
 
   canBuy(id: UpgradeId): boolean {

@@ -1,7 +1,9 @@
-// Tablero de piezas que caen: 5 columnas, las piezas iguales que se tocan se fusionan.
+// Tablero siempre lleno: juntas dos piezas iguales y caen piezas nuevas desde arriba.
 
-export const COLS = 5;
-export const ROWS = 7;
+export const BASE_COLS = 5;
+export const BASE_ROWS = 6;
+export const MAX_EXTRA_COLS = 1;
+export const MAX_EXTRA_ROWS = 2;
 export const MAX_LEVEL = 6;
 
 export type Family = 'espada' | 'escudo' | 'pocion' | 'orbe' | 'moneda';
@@ -21,8 +23,25 @@ export interface Piece {
   id: number; // para animaciones
 }
 
-/** grid[col][row], row 0 = abajo. null = vacío. */
+/** grid[col][row], row 0 = abajo. El tamaño puede crecer con las ampliaciones. */
 export type Grid = (Piece | null)[][];
+
+export interface Cell {
+  col: number;
+  row: number;
+}
+
+export interface MergeEvent {
+  fam: Family;
+  lvl: number; // nivel resultante
+  size: number; // cuántas piezas se juntaron
+  col: number;
+  row: number;
+  burst: boolean; // se juntaron piezas de nivel máximo: explotan
+}
+
+export const colsOf = (g: Grid) => g.length;
+export const rowsOf = (g: Grid) => g[0]?.length ?? 0;
 
 let nextId = 1;
 export function makePiece(fam: Family, lvl: number): Piece {
@@ -45,134 +64,76 @@ export function randomPiece(levelTwoChance: number, rand = Math.random): Piece {
   return makePiece(fam, lvl);
 }
 
-export function emptyGrid(): Grid {
-  return Array.from({ length: COLS }, () => Array(ROWS).fill(null));
-}
-
-export function height(grid: Grid, col: number): number {
-  const c = grid[col];
-  let h = 0;
-  while (h < ROWS && c[h]) h++;
-  return h;
-}
-
-export function isFull(grid: Grid, col: number): boolean {
-  return height(grid, col) >= ROWS;
-}
-
-/** Llena las filas de abajo sin dejar fusiones listas, para arrancar con el tablero cargado. */
-export function startingGrid(rows: number, levelTwoChance: number, rand = Math.random): Grid {
-  const g = emptyGrid();
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < COLS; col++) {
-      for (let tries = 0; tries < 30; tries++) {
-        const p = randomPiece(levelTwoChance, rand);
-        const left = col > 0 ? g[col - 1][row] : null;
-        const below = row > 0 ? g[col][row - 1] : null;
-        const clash = (q: Piece | null) => q && q.fam === p.fam && q.lvl === p.lvl;
-        if (!clash(left) && !clash(below)) {
-          g[col][row] = p;
-          break;
-        }
-      }
-    }
-  }
-  return g;
-}
-
-/** Suelta una pieza en una columna. Devuelve la fila donde quedó o -1 si está llena. */
-export function dropInto(grid: Grid, col: number, piece: Piece): number {
-  const h = height(grid, col);
-  if (h >= ROWS) return -1;
-  grid[col][h] = piece;
-  return h;
-}
-
-export interface MergeEvent {
-  fam: Family;
-  lvl: number; // nivel resultante
-  size: number; // cuántas piezas se juntaron
-  col: number;
-  row: number;
-  burst: boolean; // se juntaron piezas de nivel máximo: explotan
-}
-
-function key(c: number, r: number) {
-  return c * 100 + r;
+/** Tablero lleno de piezas al azar. */
+export function startingGrid(cols: number, rows: number, levelTwoChance: number, rand = Math.random): Grid {
+  return Array.from({ length: cols }, () => Array.from({ length: rows }, () => randomPiece(levelTwoChance, rand)));
 }
 
 /**
- * Busca grupos de 2 o más piezas iguales conectadas y los fusiona.
- * La pieza resultante queda en la posición más baja del grupo (preferente la `prefer`).
- * No aplica gravedad: eso se hace con `settle` para poder animar por pasos.
+ * Junta la pieza de `from` con la de `to` (misma familia y nivel, en cualquier lugar).
+ * La nueva queda en `to` y `from` queda vacía. Dos piezas de nivel máximo explotan.
  */
-export function mergeStep(grid: Grid, prefer?: { col: number; row: number }): MergeEvent[] {
-  const seen = new Set<number>();
-  const events: MergeEvent[] = [];
-  for (let c = 0; c < COLS; c++) {
-    for (let r = 0; r < ROWS; r++) {
-      const p = grid[c][r];
-      if (!p || seen.has(key(c, r))) continue;
-      const group: [number, number][] = [];
-      const stack: [number, number][] = [[c, r]];
-      seen.add(key(c, r));
-      while (stack.length) {
-        const [x, y] = stack.pop()!;
-        group.push([x, y]);
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || seen.has(key(nx, ny))) continue;
-          const q = grid[nx][ny];
-          if (q && q.fam === p.fam && q.lvl === p.lvl) {
-            seen.add(key(nx, ny));
-            stack.push([nx, ny]);
-          }
-        }
-      }
-      if (group.length < 2) continue;
-      // Dónde queda la pieza nueva.
-      let target = group[0];
-      const pref = prefer && group.find(([x, y]) => x === prefer.col && y === prefer.row);
-      if (pref) target = pref;
-      else for (const g of group) if (g[1] < target[1] || (g[1] === target[1] && g[0] < target[0])) target = g;
-      for (const [x, y] of group) grid[x][y] = null;
-      const burst = p.lvl >= MAX_LEVEL;
-      const lvl = Math.min(MAX_LEVEL, p.lvl + 1);
-      // Grupos de 4 o más saltan un nivel extra.
-      const finalLvl = burst ? MAX_LEVEL : Math.min(MAX_LEVEL, lvl + (group.length >= 4 ? 1 : 0));
-      if (!burst) grid[target[0]][target[1]] = makePiece(p.fam, finalLvl);
-      events.push({ fam: p.fam, lvl: finalLvl, size: group.length, col: target[0], row: target[1], burst });
-    }
-  }
-  return events;
+export function mergePair(grid: Grid, from: Cell, to: Cell): MergeEvent | null {
+  if (from.col === to.col && from.row === to.row) return null;
+  const a = grid[from.col]?.[from.row];
+  const b = grid[to.col]?.[to.row];
+  if (!a || !b || a.fam !== b.fam || a.lvl !== b.lvl) return null;
+  const burst = a.lvl >= MAX_LEVEL;
+  grid[from.col][from.row] = null;
+  grid[to.col][to.row] = burst ? null : makePiece(a.fam, a.lvl + 1);
+  return { fam: a.fam, lvl: burst ? MAX_LEVEL : a.lvl + 1, size: 2, col: to.col, row: to.row, burst };
 }
 
-/** Aplica gravedad: las piezas caen a los huecos. Devuelve true si algo se movió. */
-export function settle(grid: Grid): boolean {
-  let moved = false;
-  for (let c = 0; c < COLS; c++) {
+/** Aplica gravedad: las piezas caen a los huecos. */
+export function settle(grid: Grid): void {
+  const rows = rowsOf(grid);
+  for (let c = 0; c < grid.length; c++) {
     const col = grid[c].filter((p): p is Piece => !!p);
-    for (let r = 0; r < ROWS; r++) {
-      const p = col[r] ?? null;
-      if (grid[c][r] !== p) moved = true;
-      grid[c][r] = p;
-    }
+    for (let r = 0; r < rows; r++) grid[c][r] = col[r] ?? null;
   }
-  return moved;
 }
 
-/** Busca dónde está una pieza (sirve para seguirla mientras cae). */
-export function findPiece(grid: Grid, id: number): { col: number; row: number } | undefined {
-  for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) if (grid[c][r]?.id === id) return { col: c, row: r };
-  return undefined;
+/** Deja caer lo de arriba y rellena los huecos con piezas nuevas. Devuelve las piezas nuevas. */
+export function refill(grid: Grid, make: () => Piece): Piece[] {
+  settle(grid);
+  const added: Piece[] = [];
+  for (let c = 0; c < grid.length; c++)
+    for (let r = 0; r < grid[c].length; r++)
+      if (!grid[c][r]) {
+        const p = make();
+        grid[c][r] = p;
+        added.push(p);
+      }
+  return added;
 }
 
-export function boardFull(grid: Grid): boolean {
-  for (let c = 0; c < COLS; c++) if (!isFull(grid, c)) return false;
-  return true;
+/** La pieza igual más cercana a una casilla, o undefined si no hay. */
+export function nearestPair(grid: Grid, at: Cell): Cell | undefined {
+  const p = grid[at.col]?.[at.row];
+  if (!p) return undefined;
+  let best: Cell | undefined;
+  let bd = Infinity;
+  for (let c = 0; c < grid.length; c++)
+    for (let r = 0; r < grid[c].length; r++) {
+      const q = grid[c][r];
+      if (!q || q === p || q.fam !== p.fam || q.lvl !== p.lvl) continue;
+      const d = Math.abs(c - at.col) + Math.abs(r - at.row);
+      if (d < bd) {
+        bd = d;
+        best = { col: c, row: r };
+      }
+    }
+  return best;
 }
 
-export function totalPieces(grid: Grid): number {
-  return grid.reduce((a, c) => a + c.filter(Boolean).length, 0);
+export function hasPair(grid: Grid): boolean {
+  const seen = new Set<string>();
+  for (const col of grid)
+    for (const p of col) {
+      if (!p) continue;
+      const k = p.fam + p.lvl;
+      if (seen.has(k)) return true;
+      seen.add(k);
+    }
+  return false;
 }

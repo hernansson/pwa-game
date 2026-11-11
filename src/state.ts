@@ -3,11 +3,11 @@ import {
   ENERGY_REGEN_SECONDS,
   UPGRADES,
   UpgradeId,
-  autoDropSeconds,
+  comboWindow,
   heroMaxHp,
   levelTwoChance,
 } from './balance';
-import { Grid, Piece } from './board';
+import { Grid } from './board';
 import { LEGACY_SETS, STARTER, Slot, bonusOf, slotItem } from './items';
 
 export interface Run {
@@ -20,11 +20,6 @@ export interface Run {
   heroHp: number;
   shield: number; // vida extra de los escudos, absorbe golpes
   grid: Grid;
-  next: Piece[]; // la pieza que vas a soltar y la siguiente
-  idle: number; // segundos sin jugar
-  resolving: boolean; // hay una cadena de fusiones en curso
-  resolveClock: number;
-  focusId: number; // pieza recién soltada o fusionada: ahí queda la fusión
   combo: number;
   comboTimer: number;
   maxCombo: number;
@@ -45,6 +40,7 @@ export interface GameState {
   stars: Record<number, number>;
   upgrades: Record<UpgradeId, number>;
   run: Run | null;
+  board: { rows: number; cols: number }; // ampliaciones del tablero compradas
   items: string[]; // piezas de equipo que tiene
   equipped: Record<Slot, string>;
   skin?: string; // solo para migrar guardados viejos
@@ -87,6 +83,7 @@ export function newState(): GameState {
     stars: {},
     upgrades: { fuerza: 0, vida: 0, calma: 0, calidad: 0, codicia: 0 },
     run: null,
+    board: { rows: 0, cols: 0 },
     items: Object.values(STARTER),
     equipped: { ...STARTER },
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
@@ -136,7 +133,9 @@ export function migrate(raw: unknown): GameState {
   delete s.skin;
   delete s.ownedSkins;
   // Campos de versiones anteriores que ya no se usan.
-  for (const k of ['board', 'forged', 'souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
+  const b = old.board as unknown;
+  s.board = b && !Array.isArray(b) && typeof b === 'object' ? { rows: 0, cols: 0, ...(b as object) } : { rows: 0, cols: 0 };
+  for (const k of ['forged', 'souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
     delete (s as unknown as Record<string, unknown>)[k];
   }
   s.run = null;
@@ -237,8 +236,8 @@ export function maxHp(s: GameState): number {
   return heroMaxHp(s.upgrades.vida) * (1 + gearBonus(s, 'casco') + gearBonus(s, 'armadura'));
 }
 
-export function autoDropTime(s: GameState): number {
-  return autoDropSeconds(s.upgrades.calma);
+export function comboTime(s: GameState): number {
+  return comboWindow(s.upgrades.calma);
 }
 
 export function pieceLevelTwoChance(s: GameState): number {
