@@ -30,9 +30,11 @@ import {
   maxHp,
   pieceLevelTwoChance,
   regenEnergy,
+  arsenalMods,
   track,
   upgradeDef,
 } from './state';
+import { MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import { CHEST_GEMS, Item, LEVELS_PER_WORLD_ITEMS, duplicateGold, rollItem } from './items';
 
 export interface Loot {
@@ -51,6 +53,7 @@ export interface ClearReport {
   maxCombo: number;
   firstClear: boolean;
   loot: Loot | null;
+  shards: Record<string, number>; // fragmentos del Arsenal ganados
 }
 
 /** Lo que produjo una fusión, para mostrarlo en pantalla. */
@@ -121,6 +124,7 @@ export class Game {
   start(level: number): boolean {
     if (!this.canStart(level)) return false;
     this.s.energy -= ENERGY_COST;
+    this.modsCache = null;
     this.s.run = {
       level,
       wave: 0,
@@ -129,7 +133,7 @@ export class Game {
       enemyTimer: enemyAttackSeconds(false),
       stun: 0,
       heroHp: maxHp(this.s),
-      shield: 0,
+      shield: maxHp(this.s) * Math.min(1, arsenalMods(this.s).startShield),
       boost: 0,
       boostMult: 1,
       look: {},
@@ -191,15 +195,16 @@ export class Game {
     this.s.stats.merges++;
     run.merges++;
     run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
-    run.comboTimer = comboTime(this.s);
+    run.comboTimer = comboTime(this.s) + this.mods.combo;
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
-    const crit = this.rand() < 0.08;
+    const m = this.mods;
+    const crit = this.rand() < 0.08 + m.crit;
     // La mejor espada y el mejor escudo del nivel quedan en el héroe y dan un bonus fijo.
     if (ev.fam === 'espada') run.look.sword = Math.max(run.look.sword ?? 1, ev.lvl);
     if (ev.fam === 'escudo') run.look.shield = Math.max(run.look.shield ?? 1, ev.lvl);
     const boost = run.boost > 0 ? run.boostMult : 1;
-    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1) * boost;
+    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 + m.critMult : 1) * boost * (1 + m.dmg);
     const hp = maxHp(this.s);
     const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
     const fam: Family = ev.fam;
@@ -207,15 +212,15 @@ export class Game {
     else {
       r.dmg = hit * 0.25;
       if (fam === 'escudo') {
-        r.shield = Math.min(hp - run.shield, hp * 0.05 * v);
+        r.shield = Math.min(hp - run.shield, hp * 0.05 * v * (1 + m.shield));
         run.shield += r.shield;
       } else if (fam === 'pocion') {
-        r.heal = Math.min(hp - run.heroHp, hp * 0.04 * v);
+        r.heal = Math.min(hp - run.heroHp, hp * 0.04 * v * (1 + m.heal));
         run.heroHp += r.heal;
       } else if (fam === 'rayo') {
         // Potenciador: siempre dura lo mismo; el nivel sube cuánto multiplica.
-        r.boost = boostSeconds(ev.lvl);
-        r.boostMult = boostMultiplier(ev.lvl);
+        r.boost = boostSeconds(ev.lvl) + m.boostSec;
+        r.boostMult = 1 + (boostMultiplier(ev.lvl) - 1) * (1 + m.boostMult);
         run.boostMult = run.boost > 0 ? Math.max(run.boostMult, r.boostMult) : r.boostMult;
         run.boost = Math.max(run.boost, r.boost);
       }
@@ -228,7 +233,7 @@ export class Game {
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
-    if (blockable) dmg *= 1 - shieldReduction(run.look.shield);
+    if (blockable) dmg *= Math.max(0.2, 1 - shieldReduction(run.look.shield) - this.mods.reduce);
     const blocked = blockable ? Math.min(run.shield, dmg) : 0;
     run.shield -= blocked;
     run.heroHp -= dmg - blocked;
@@ -299,7 +304,8 @@ export class Game {
     let gems = 0;
     let points = 0;
     let firstClear = false;
-    let loot: Loot | null = null;
+    const loot: Loot | null = null;
+    let shards: Record<string, number> = {};
     if (win) {
       stars = starsFor(run.heroHp / maxHp(this.s));
       firstClear = !this.s.stars[run.level];
@@ -307,12 +313,11 @@ export class Game {
         gems = firstClearGems(run.level);
         this.s.gems += gems;
       }
-      // Equipo: siempre en la primera victoria, a veces al repetir.
-      if (firstClear || Math.random() < 0.15) {
-        const worldBoss = run.level % LEVELS_PER_WORLD_ITEMS === 0;
-        const min = firstClear && (worldBoss || run.level === 1) ? 'rara' : 'común';
-        loot = this.grant(rollItem(run.level / 25, min, firstClear ? this.s.items : []), run.level);
-      }
+      // Fragmentos del Arsenal: más en la primera victoria y en los jefes de mundo.
+      const worldBoss = run.level % LEVELS_PER_WORLD_ITEMS === 0;
+      const total = (firstClear ? 10 + run.level * 2 : 3 + stars + Math.floor(run.level / 3)) * (worldBoss ? 2 : 1);
+      shards = rollShards(total, this.rand);
+      for (const id in shards) this.s.arsenal[id].shards += shards[id];
       this.s.stars[run.level] = Math.max(this.s.stars[run.level] ?? 0, stars);
       this.s.unlocked = Math.max(this.s.unlocked, run.level + 1);
       points = leaguePointsForClear(run.level, stars);
@@ -325,7 +330,7 @@ export class Game {
     }
     this.emit({
       type: 'end',
-      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, loot },
+      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, loot, shards },
     });
   }
 
@@ -371,6 +376,41 @@ export class Game {
     this.s.gems -= price;
     this.s.board[kind]++;
     track(this.s, `expand:${kind}:${this.s.board[kind]}`);
+    return true;
+  }
+
+  /** Modificadores del Arsenal. Se recalculan al empezar cada nivel. */
+  private modsCache: Mods | null = null;
+  get mods(): Mods {
+    return (this.modsCache ??= arsenalMods(this.s));
+  }
+
+  /** Desbloquea o sube de nivel una variante. Devuelve qué pasó, o null si no alcanza. */
+  upgradeArm(id: string): 'unlock' | 'up' | null {
+    const def = armById(id);
+    const st = this.s.arsenal[id];
+    if (!def || !st || this.s.run) return null;
+    if (st.lvl === 0) {
+      if (st.shards < unlockShards(def.rarity)) return null;
+      st.shards -= unlockShards(def.rarity);
+      st.lvl = 1;
+      track(this.s, `arm_unlock:${id}`);
+      this.modsCache = null;
+      return 'unlock';
+    }
+    if (st.lvl >= MAX_ARM_LEVEL || st.shards < upgradeShards(st.lvl) || this.s.gold < upgradeGold(st.lvl)) return null;
+    st.shards -= upgradeShards(st.lvl);
+    this.s.gold -= upgradeGold(st.lvl);
+    st.lvl++;
+    this.modsCache = null;
+    return 'up';
+  }
+
+  equipArm(id: string): boolean {
+    const def = armById(id);
+    if (!def || !this.s.arsenal[id]?.lvl || this.s.run) return false;
+    this.s.arms[def.fam] = id;
+    this.modsCache = null;
     return true;
   }
 

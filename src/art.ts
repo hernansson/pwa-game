@@ -141,19 +141,16 @@ export function helmSvg(s: Skin): string {
 }
 
 export interface HeroFight {
-  shield?: number; // nivel del último escudo fusionado
+  shield?: number; // nivel del mejor escudo fusionado
   glow?: number; // nivel de la última poción: brillo cada vez más fuerte
+  swordShape?: number; // diseño de la espada equipada en el Arsenal
+  shieldShape?: number;
 }
 
-/** Escudo en el brazo de atrás; el color del marco sigue el nivel. */
-function heroShield(lvl: number): string {
-  const f = pieceFrame(lvl);
-  const s = 0.8 + Math.min(lvl, 10) * 0.04;
-  return `<g transform="translate(30 62) scale(${s}) translate(-30 -62)" class="hero-shield">
-    <path d="M30 44 L44 49 Q44 70 30 82 Q16 70 16 49Z" fill="${shieldColor(lvl)}" stroke="${f}" stroke-width="3.5" stroke-linejoin="round"/>
-    <path d="M30 50 L39 53 Q39 67 30 75Z" fill="#fff" opacity=".25"/>
-    <circle cx="30" cy="61" r="${3 + Math.min(lvl, 10) * 0.4}" fill="${f}" stroke="#0d0f16" stroke-width="1.2"/>
-  </g>`;
+/** Escudo en el brazo de atrás: el mismo dibujo que la pieza del tablero. */
+function heroShield(lvl: number, shape: number): string {
+  const sc = 0.62 + Math.min(lvl, 10) * 0.02;
+  return `<g transform="translate(30 62) scale(${sc}) translate(-32 -32)" class="hero-shield">${famIcon('escudo', shape, lvl, '#5c9bff')}</g>`;
 }
 
 /** Héroe mirando a la derecha, con el arma en la mano. En combate muestra escudo y brillo. */
@@ -177,19 +174,15 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
     <path d="M42 50 L58 50 L56 70 L44 70Z" fill="${skin.armorDark}" opacity=".7"/>
     <rect x="34" y="72" width="32" height="5" fill="${skin.trim}"/>
     ${helmSvg(skin)}
-    ${fight.shield ? heroShield(fight.shield) : ''}
+    ${fight.shield ? heroShield(fight.shield, fight.shieldShape ?? 0) : ''}
     <g class="hero-arm">
       <circle cx="64" cy="54" r="7" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
-      <g transform="translate(41 25) scale(.62)">${weaponInner(weaponLevel)}</g>
+      <g transform="translate(41 25) scale(.62)">${famIcon('espada', fight.swordShape ?? 0, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g>
       <circle cx="70" cy="58" r="5" fill="${skin.armor}" stroke="#0d0f16" stroke-width="2"/>
     </g>
   </svg>`;
 }
 
-function weaponInner(level: number): string {
-  // Reutiliza el dibujo del arma sin la etiqueta <svg> exterior.
-  return weaponSvg(level).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
-}
 
 const ENEMY_COLORS = ['#58c26b', '#d36bd8', '#e0884a', '#4fb3e8', '#c9c35a', '#e85a5a'];
 
@@ -251,8 +244,7 @@ export const APP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 </g></svg>`;
 
 /** Ícono chico de una pieza de equipo. */
-export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: Skin, tier: number): string {
-  if (slot === 'arma') return weaponSvg(tier, 48);
+export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa', look: Skin): string {
   if (slot === 'casco') return `<svg viewBox="22 2 56 44" aria-hidden="true">${helmSvg(look)}</svg>`;
   if (slot === 'armadura')
     return `<svg viewBox="28 40 44 44" aria-hidden="true">
@@ -270,37 +262,141 @@ export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: 
 /** Mismo orden de materiales que las espadas: hierro, bronce, plata, oro, esmeralda, zafiro, rubí, amatista, obsidiana, celestial. */
 export const PIECE_FRAMES = ['#7d8794', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#4f8dff', '#ff4d6a', '#b77bff', '#ff7a2f', '#a8fbff'];
 
-const PIECE_ICONS: Record<string, (c: string, d: string) => string> = {
-  espada: (c, d) => `<g transform="rotate(-40 32 32)">
+type Icon = (c: string, d: string, lvl: number, f: string) => string;
+
+/** Detalles que se suman con el nivel: así cada subida se nota, aunque sea poco. */
+function gem(x: number, y: number, r: number, f: string) {
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" stroke="#0d0f16" stroke-width="1.2"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.35}" fill="#fff" opacity=".7"/>`;
+}
+
+const SWORDS: Icon[] = [
+  // Espada recta
+  (c, d, l, f) => `<g transform="rotate(-40 32 32)">
+    ${l >= 9 ? `<path d="M32 2 L40 14 L40 42 L24 42 L24 14Z" fill="${f}" opacity=".35"/>` : ''}
     <path d="M32 7 L37 15 L37 40 L27 40 L27 15Z" fill="${c}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M32 9 L34.5 15 L34.5 39 L32 39Z" fill="#fff" opacity=".7"/>
-    <rect x="21" y="40" width="22" height="5" rx="2" fill="${d}"/>
+    ${l >= 7 ? `<path d="M32 16 V36" stroke="${f}" stroke-width="2" stroke-linecap="round"/>` : ''}
+    <rect x="${l >= 3 ? 18 : 21}" y="40" width="${l >= 3 ? 28 : 22}" height="5" rx="2" fill="${l >= 2 ? f : d}" stroke="${d}" stroke-width="1"/>
+    ${l >= 3 ? `<circle cx="18" cy="42.5" r="3" fill="${f}" stroke="${d}" stroke-width="1"/><circle cx="46" cy="42.5" r="3" fill="${f}" stroke="${d}" stroke-width="1"/>` : ''}
     <rect x="29.5" y="45" width="5" height="9" rx="1.5" fill="#6b4a2b" stroke="${d}" stroke-width="1"/>
+    ${l >= 5 ? gem(32, 42.5, 3.2, f) : ''}
     <circle cx="32" cy="56" r="3" fill="${c}" stroke="${d}" stroke-width="1"/></g>`,
-  escudo: (c, d) => `<path d="M32 9 L50 15 Q50 40 32 55 Q14 40 14 15Z" fill="${c}" stroke="${d}" stroke-width="2.5" stroke-linejoin="round"/>
+  // Cimitarra
+  (c, d, l, f) => `<g transform="rotate(-40 32 32)">
+    ${l >= 9 ? `<path d="M24 42 L24 16 Q26 2 44 0 Q38 14 40 26 L40 42Z" fill="${f}" opacity=".35"/>` : ''}
+    <path d="M27 40 L27 18 Q28 7 41 4 Q35 14 37 24 L37 40Z" fill="${c}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M29 38 L29 19 Q30 11 37 7 Q32 16 33 24 L33 38Z" fill="#fff" opacity=".55"/>
+    ${l >= 7 ? `<path d="M31 34 Q31 20 36 12" stroke="${f}" stroke-width="2" fill="none" stroke-linecap="round"/>` : ''}
+    <path d="M${l >= 3 ? 19 : 22} 41 Q32 ${l >= 3 ? 36 : 38} ${l >= 3 ? 45 : 42} 41 L${l >= 3 ? 45 : 42} 45 Q32 41 ${l >= 3 ? 19 : 22} 45Z" fill="${l >= 2 ? f : d}" stroke="${d}" stroke-width="1"/>
+    <rect x="29.5" y="45" width="5" height="9" rx="1.5" fill="#4a2b1b" stroke="${d}" stroke-width="1"/>
+    ${l >= 5 ? gem(32, 42, 3, f) : ''}
+    <path d="M29 55 L35 55 L32 60Z" fill="${c}" stroke="${d}" stroke-width="1"/></g>`,
+  // Mandoble
+  (c, d, l, f) => `<g transform="rotate(-40 32 32)">
+    ${l >= 9 ? `<path d="M32 0 L43 12 L43 42 L21 42 L21 12Z" fill="${f}" opacity=".35"/>` : ''}
+    <path d="M32 4 L40 12 L40 40 L24 40 L24 12Z" fill="${c}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 6 L37 12 L37 39 L32 39Z" fill="#fff" opacity=".6"/>
+    <path d="M32 13 V37" stroke="${d}" stroke-width="1.5" opacity=".5"/>
+    ${l >= 7 ? `<path d="M28 18 L36 18 M28 26 L36 26 M28 34 L36 34" stroke="${f}" stroke-width="1.6"/>` : ''}
+    <path d="M${l >= 3 ? 14 : 18} 40 L${l >= 3 ? 50 : 46} 40 L${l >= 3 ? 46 : 44} 46 L${l >= 3 ? 18 : 20} 46Z" fill="${l >= 2 ? f : d}" stroke="${d}" stroke-width="1"/>
+    <rect x="29" y="46" width="6" height="10" rx="1.5" fill="#3b2a20" stroke="${d}" stroke-width="1"/>
+    ${l >= 5 ? gem(32, 43, 3.5, f) : ''}
+    <circle cx="32" cy="58" r="3.5" fill="${c}" stroke="${d}" stroke-width="1"/></g>`,
+];
+
+const SHIELDS: Icon[] = [
+  // Rodela (redonda)
+  (c, d, l, f) => `${l >= 9 ? `<circle cx="32" cy="32" r="27" fill="${f}" opacity=".3"/>` : ''}
+    <circle cx="32" cy="32" r="22" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="3.5"/>
+    <circle cx="32" cy="32" r="15" fill="none" stroke="${d}" stroke-width="2" opacity=".5"/>
+    <path d="M20 22 Q26 14 36 13" stroke="#fff" stroke-width="3" fill="none" opacity=".35" stroke-linecap="round"/>
+    ${l >= 3 ? [0, 60, 120, 180, 240, 300].map((a) => `<circle cx="${32 + 18.5 * Math.cos((a * Math.PI) / 180)}" cy="${32 + 18.5 * Math.sin((a * Math.PI) / 180)}" r="1.8" fill="${f}"/>`).join('') : ''}
+    ${l >= 7 ? `<path d="M32 21 L35 29 L43 32 L35 35 L32 43 L29 35 L21 32 L29 29Z" fill="${f}" opacity=".85"/>` : ''}
+    ${l >= 5 ? gem(32, 32, 4.5, f) : `<circle cx="32" cy="32" r="5" fill="${d}"/>`}`,
+  // Escudo cometa
+  (c, d, l, f) => `${l >= 9 ? `<path d="M32 3 L55 11 Q55 42 32 61 Q9 42 9 11Z" fill="${f}" opacity=".3"/>` : ''}
+    <path d="M32 9 L50 15 Q50 40 32 55 Q14 40 14 15Z" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="3" stroke-linejoin="round"/>
     <path d="M32 15 L44 19 Q44 37 32 48Z" fill="#fff" opacity=".28"/>
-    <path d="M32 18 V46 M22 27 H42" stroke="${d}" stroke-width="2.5" opacity=".55"/>`,
-  pocion: (c, d) => `<rect x="27" y="8" width="10" height="6" rx="2" fill="#a0724a" stroke="${d}" stroke-width="1.5"/>
-    <path d="M28 14 H36 V22 Q48 27 48 39 Q48 54 32 54 Q16 54 16 39 Q16 27 28 22Z" fill="#e8f2ff" fill-opacity=".25" stroke="${d}" stroke-width="2.5"/>
+    <path d="M32 18 V46 M22 27 H42" stroke="${l >= 7 ? f : d}" stroke-width="2.5" opacity="${l >= 7 ? 1 : 0.55}"/>
+    ${l >= 3 ? `<circle cx="19" cy="18" r="1.8" fill="${f}"/><circle cx="45" cy="18" r="1.8" fill="${f}"/><circle cx="32" cy="50" r="1.8" fill="${f}"/>` : ''}
+    ${l >= 5 ? gem(32, 27, 4, f) : ''}`,
+  // Pavés (torre)
+  (c, d, l, f) => `${l >= 9 ? `<rect x="11" y="3" width="42" height="58" rx="8" fill="${f}" opacity=".3"/>` : ''}
+    <rect x="16" y="8" width="32" height="48" rx="6" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="3"/>
+    <rect x="20" y="12" width="10" height="40" rx="3" fill="#fff" opacity=".22"/>
+    <path d="M16 22 H48 M16 42 H48" stroke="${d}" stroke-width="2" opacity=".5"/>
+    ${l >= 3 ? [14, 50].map((y) => `<circle cx="20" cy="${y}" r="1.8" fill="${f}"/><circle cx="44" cy="${y}" r="1.8" fill="${f}"/>`).join('') : ''}
+    ${l >= 7 ? `<path d="M32 24 L38 32 L32 40 L26 32Z" fill="${f}"/>` : ''}
+    ${l >= 5 ? gem(32, 32, 4, f) : ''}`,
+];
+
+const POTIONS: Icon[] = [
+  // Frasco redondo
+  (c, d, l, f) => `${l >= 9 ? `<circle cx="32" cy="38" r="24" fill="${f}" opacity=".3"/>` : ''}
+    <rect x="27" y="8" width="10" height="6" rx="2" fill="${l >= 3 ? f : '#a0724a'}" stroke="${d}" stroke-width="1.5"/>
+    <path d="M28 14 H36 V22 Q48 27 48 39 Q48 54 32 54 Q16 54 16 39 Q16 27 28 22Z" fill="#e8f2ff" fill-opacity=".25" stroke="${l >= 2 ? f : d}" stroke-width="2.5"/>
     <path d="M18.5 37 Q32 33 45.5 37 Q46 52 32 52 Q18 52 18.5 37Z" fill="${c}"/>
+    ${l >= 5 ? `<circle cx="27" cy="44" r="2" fill="#fff" opacity=".7"/><circle cx="36" cy="47" r="1.5" fill="#fff" opacity=".7"/><circle cx="33" cy="40" r="1.2" fill="#fff" opacity=".7"/>` : ''}
+    ${l >= 7 ? `<path d="M22 24 Q32 30 42 24" stroke="${f}" stroke-width="2.5" fill="none"/>` : ''}
     <circle cx="25" cy="31" r="3" fill="#fff" opacity=".6"/>`,
-  orbe: (c, d) => `<ellipse cx="32" cy="50" rx="14" ry="5" fill="${d}" opacity=".6"/>
-    <circle cx="32" cy="30" r="19" fill="${c}" stroke="${d}" stroke-width="2.5"/>
-    <circle cx="32" cy="30" r="11" fill="#fff" opacity=".18"/>
-    <path d="M24 30 Q32 18 40 30 Q32 42 24 30Z" fill="#fff" opacity=".35"/>
-    <circle cx="25" cy="22" r="4" fill="#fff" opacity=".7"/>`,
-  rayo: (c, d) => `<circle cx="32" cy="32" r="21" fill="${c}" opacity=".18"/>
-    <path d="M37 6 L18 36 L30 36 L25 58 L46 26 L34 26 L40 6Z" fill="${c}" stroke="${d}" stroke-width="2.5" stroke-linejoin="round"/>
-    <path d="M36 10 L24 32 L31 32 L33 26Z" fill="#fff" opacity=".55"/>`,
-};
+  // Vial alto
+  (c, d, l, f) => `${l >= 9 ? `<rect x="17" y="2" width="30" height="60" rx="14" fill="${f}" opacity=".3"/>` : ''}
+    <rect x="26" y="5" width="12" height="6" rx="2" fill="${l >= 3 ? f : '#a0724a'}" stroke="${d}" stroke-width="1.5"/>
+    <path d="M27 11 H37 V16 Q42 18 42 24 V50 Q42 57 32 57 Q22 57 22 50 V24 Q22 18 27 16Z" fill="#e8f2ff" fill-opacity=".25" stroke="${l >= 2 ? f : d}" stroke-width="2.5"/>
+    <path d="M24.5 30 H39.5 V50 Q39.5 55 32 55 Q24.5 55 24.5 50Z" fill="${c}"/>
+    ${l >= 5 ? `<circle cx="29" cy="45" r="1.8" fill="#fff" opacity=".7"/><circle cx="35" cy="38" r="1.4" fill="#fff" opacity=".7"/><circle cx="31" cy="34" r="1" fill="#fff" opacity=".7"/>` : ''}
+    ${l >= 7 ? `<path d="M22 26 H42" stroke="${f}" stroke-width="2.5"/>` : ''}
+    <rect x="25.5" y="20" width="3" height="10" rx="1.5" fill="#fff" opacity=".55"/>`,
+  // Elixir corazón
+  (c, d, l, f) => `${l >= 9 ? `<path d="M32 60 Q4 40 10 24 Q16 10 32 22 Q48 10 54 24 Q60 40 32 60Z" fill="${f}" opacity=".3"/>` : ''}
+    <rect x="28" y="7" width="8" height="7" rx="2" fill="${l >= 3 ? f : '#a0724a'}" stroke="${d}" stroke-width="1.5"/>
+    <path d="M32 55 Q12 42 15 29 Q18 18 29 21 L29 14 H35 V21 Q46 18 49 29 Q52 42 32 55Z" fill="#e8f2ff" fill-opacity=".25" stroke="${l >= 2 ? f : d}" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M32 52 Q16 41 17.5 33 Q32 30 46.5 33 Q48 41 32 52Z" fill="${c}"/>
+    ${l >= 5 ? `<circle cx="27" cy="39" r="1.8" fill="#fff" opacity=".7"/><circle cx="37" cy="42" r="1.4" fill="#fff" opacity=".7"/>` : ''}
+    ${l >= 7 ? `<path d="M29 14 H35" stroke="${f}" stroke-width="3"/>` : ''}
+    <circle cx="22" cy="30" r="2.5" fill="#fff" opacity=".6"/>`,
+];
+
+const BOLTS: Icon[] = [
+  // Chispa
+  (c, d, l, f) => `<circle cx="32" cy="32" r="${19 + Math.min(l, 10) * 0.6}" fill="${l >= 9 ? f : c}" opacity="${l >= 9 ? 0.35 : 0.18}"/>
+    <path d="M37 6 L18 36 L30 36 L25 58 L46 26 L34 26 L40 6Z" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M36 10 L24 32 L31 32 L33 26Z" fill="#fff" opacity=".55"/>
+    ${l >= 3 ? `<circle cx="14" cy="18" r="2" fill="${f}"/><circle cx="51" cy="44" r="2" fill="${f}"/>` : ''}
+    ${l >= 5 ? `<path d="M10 40 L16 37 M48 14 L54 11" stroke="${f}" stroke-width="2.5" stroke-linecap="round"/>` : ''}
+    ${l >= 7 ? `<circle cx="32" cy="32" r="26" fill="none" stroke="${f}" stroke-width="1.5" stroke-dasharray="4 4"/>` : ''}`,
+  // Rayo doble
+  (c, d, l, f) => `<circle cx="32" cy="32" r="${19 + Math.min(l, 10) * 0.6}" fill="${l >= 9 ? f : c}" opacity="${l >= 9 ? 0.35 : 0.18}"/>
+    <path d="M28 6 L14 30 L23 30 L19 50 L34 24 L26 24 L31 6Z" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M42 12 L30 36 L38 36 L34 58 L50 30 L42 30 L46 12Z" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M41 16 L33 33 L37 33 L39 30Z" fill="#fff" opacity=".55"/>
+    ${l >= 3 ? `<circle cx="12" cy="44" r="2" fill="${f}"/><circle cx="54" cy="18" r="2" fill="${f}"/>` : ''}
+    ${l >= 5 ? `<path d="M8 20 L14 22 M50 50 L56 52" stroke="${f}" stroke-width="2.5" stroke-linecap="round"/>` : ''}
+    ${l >= 7 ? `<circle cx="32" cy="32" r="26" fill="none" stroke="${f}" stroke-width="1.5" stroke-dasharray="4 4"/>` : ''}`,
+  // Tormenta
+  (c, d, l, f) => `<circle cx="32" cy="32" r="${19 + Math.min(l, 10) * 0.6}" fill="${l >= 9 ? f : c}" opacity="${l >= 9 ? 0.35 : 0.18}"/>
+    <path d="M18 22 Q18 12 28 12 Q32 5 40 9 Q50 8 50 18 Q56 22 50 28 L18 28 Q12 26 18 22Z" fill="#cfd6e6" stroke="${l >= 2 ? f : d}" stroke-width="2"/>
+    <path d="M34 26 L24 42 L31 42 L27 58 L42 36 L35 36 L39 26Z" fill="${c}" stroke="${l >= 2 ? f : d}" stroke-width="2" stroke-linejoin="round"/>
+    ${l >= 3 ? `<path d="M20 34 L17 40 M46 34 L49 40" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>` : ''}
+    ${l >= 5 ? gem(40, 16, 3, f) : ''}
+    ${l >= 7 ? `<circle cx="32" cy="32" r="27" fill="none" stroke="${f}" stroke-width="1.5" stroke-dasharray="4 4"/>` : ''}`,
+];
+
+const ICONS: Record<string, Icon[]> = { espada: SWORDS, escudo: SHIELDS, pocion: POTIONS, rayo: BOLTS };
 
 const PIECE_DARK: Record<string, string> = {
   espada: '#2a3140',
   escudo: '#14306b',
   pocion: '#5a0f2a',
-  orbe: '#2e1360',
   rayo: '#6b4a00',
 };
+
+/** Solo el dibujo (sin marco), en una caja de 64×64. Sirve para el tablero y para el héroe. */
+export function famIcon(fam: string, shape: number, lvl: number, base: string): string {
+  const f = pieceFrame(lvl);
+  const icons = ICONS[fam] ?? SWORDS;
+  return icons[Math.max(0, Math.min(icons.length - 1, shape))](pieceColor(fam, lvl, base), PIECE_DARK[fam] ?? '#222', lvl, f);
+}
 
 export function pieceFrame(lvl: number): string {
   return PIECE_FRAMES[Math.max(1, Math.min(lvl, PIECE_FRAMES.length)) - 1];
@@ -318,7 +414,7 @@ function pieceColor(fam: string, lvl: number, base: string): string {
 }
 
 /** Pieza del tablero: el icono dice la familia y el marco y el número dicen el nivel. */
-export function pieceSvg(fam: string, lvl: number, color: string): string {
+export function pieceSvg(fam: string, lvl: number, color: string, shape = 0): string {
   const frame = pieceFrame(lvl);
   const d = PIECE_DARK[fam] ?? '#222';
   const scale = 0.78 + Math.min(lvl, 10) * 0.025;
@@ -329,7 +425,7 @@ export function pieceSvg(fam: string, lvl: number, color: string): string {
   return `<svg viewBox="0 0 64 64" aria-hidden="true">
     <rect x="2" y="2" width="60" height="60" rx="13" fill="${d}" stroke="${frame}" stroke-width="${lvl >= 4 ? 4 : 3}"/>
     <rect x="5" y="5" width="54" height="26" rx="10" fill="#fff" opacity=".07"/>
-    <g transform="translate(32 33) scale(${scale}) translate(-32 -33)">${PIECE_ICONS[fam]?.(pieceColor(fam, lvl, color), d) ?? ''}</g>
+    <g transform="translate(32 33) scale(${scale}) translate(-32 -33)">${famIcon(fam, shape, lvl, color)}</g>
     ${sparkle}
     <circle cx="13" cy="13" r="8.5" fill="${frame}" stroke="#0008" stroke-width="1.5"/>
     <text x="13" y="17.5" text-anchor="middle" font-size="12" font-weight="900" fill="#1a1020" font-family="system-ui,sans-serif">${lvl}</text>

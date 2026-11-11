@@ -8,7 +8,9 @@ import {
   LEVEL_TWO_CHANCE,
 } from './balance';
 import { Grid } from './board';
-import { LEGACY_SETS, STARTER, Slot, bonusOf, slotItem } from './items';
+import { LEGACY_SETS, OLD_WEAPONS, STARTER, Slot, bonusOf, slotItem } from './items';
+import { ARMS, Mods, NO_MODS, STARTER_ARMS, armById, armMods } from './arsenal';
+import { Family } from './board';
 
 export interface Run {
   level: number;
@@ -44,6 +46,8 @@ export interface GameState {
   upgrades: Record<UpgradeId, number>;
   run: Run | null;
   board: { rows: number; cols: number }; // ampliaciones del tablero compradas
+  arsenal: Record<string, { lvl: number; shards: number }>; // lvl 0 = bloqueada
+  arms: Record<Family, string>; // variante equipada de cada familia
   items: string[]; // piezas de equipo que tiene
   equipped: Record<Slot, string>;
   skin?: string; // solo para migrar guardados viejos
@@ -87,6 +91,8 @@ export function newState(): GameState {
     upgrades: { fuerza: 0, vida: 0, calma: 0, codicia: 0 },
     run: null,
     board: { rows: 0, cols: 0 },
+    arsenal: Object.fromEntries(ARMS.map((a) => [a.id, { lvl: Object.values(STARTER_ARMS).includes(a.id) ? 1 : 0, shards: 0 }])),
+    arms: { ...STARTER_ARMS },
     items: Object.values(STARTER),
     equipped: { ...STARTER },
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
@@ -135,6 +141,21 @@ export function migrate(raw: unknown): GameState {
     }
   }
   s.equipped = { ...STARTER, ...(s.equipped ?? {}) };
+  delete (s.equipped as Record<string, string>).arma;
+  // Arsenal: completa variantes nuevas y convierte las espadas viejas en fragmentos.
+  s.arsenal = { ...base.arsenal, ...(old.arsenal ?? {}) };
+  s.arms = { ...STARTER_ARMS, ...(old.arms ?? {}) };
+  for (const f of Object.keys(s.arms) as Family[]) if (!armById(s.arms[f]) || !s.arsenal[s.arms[f]]?.lvl) s.arms[f] = STARTER_ARMS[f];
+  if (!old.arsenal) {
+    const bonus = { común: 4, rara: 8, épica: 16, legendaria: 30 };
+    let extra = 0;
+    for (const id of s.items ?? []) if (OLD_WEAPONS[id]) extra += bonus[OLD_WEAPONS[id]];
+    if (extra) {
+      s.arsenal.cimitarra.shards += Math.ceil(extra / 2);
+      s.arsenal.mandoble.shards += Math.floor(extra / 2);
+    }
+  }
+  s.items = (s.items ?? []).filter((id) => !OLD_WEAPONS[id]);
   delete s.skin;
   delete s.ownedSkins;
   // Campos de versiones anteriores que ya no se usan.
@@ -230,7 +251,26 @@ function gearBonus(s: GameState, slot: Slot): number {
 }
 
 export function damageMultiplier(s: GameState): number {
-  return (1 + s.upgrades.fuerza * 0.15) * (1 + gearBonus(s, 'arma'));
+  return 1 + s.upgrades.fuerza * 0.15;
+}
+
+/** Suma lo que dan las variantes equipadas del Arsenal (nivel + habilidades). */
+export function arsenalMods(s: GameState): Mods {
+  const m = { ...NO_MODS };
+  for (const id of Object.values(s.arms)) {
+    const def = armById(id);
+    if (def) armMods(def, s.arsenal[id]?.lvl ?? 0, m);
+  }
+  return m;
+}
+
+export function armShape(s: GameState, fam: Family): number {
+  return armById(s.arms[fam])?.shape ?? 0;
+}
+
+/** Material que se ve en el inicio: sube un tono cada 10 niveles de la variante. */
+export function armTier(s: GameState, fam: Family): number {
+  return Math.min(10, 1 + Math.floor(((s.arsenal[s.arms[fam]]?.lvl ?? 1) - 1) / 10));
 }
 
 export function goldMultiplier(s: GameState): number {
@@ -251,7 +291,8 @@ export function pieceLevelTwoChance(_s: GameState): number {
 
 /** Número único para mostrar qué tan fuerte es el héroe. */
 export function power(s: GameState): number {
-  return Math.round(Math.sqrt(damageMultiplier(s) * (maxHp(s) / 100)) * 100);
+  const m = arsenalMods(s);
+  return Math.round(Math.sqrt(damageMultiplier(s) * (1 + m.dmg) * (maxHp(s) / 100) * (1 + m.shield / 2 + m.heal / 4)) * 100);
 }
 
 export function upgradeDef(id: UpgradeId) {

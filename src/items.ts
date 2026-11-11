@@ -2,14 +2,13 @@
 
 import { Skin } from './art';
 
-export type Slot = 'casco' | 'armadura' | 'capa' | 'arma';
+export type Slot = 'casco' | 'armadura' | 'capa';
 export type Rarity = 'común' | 'rara' | 'épica' | 'legendaria';
 
 export const SLOTS: { id: Slot; name: string; icon: string; stat: string }[] = [
   { id: 'casco', name: 'Casco', icon: '⛑️', stat: 'vida' },
   { id: 'armadura', name: 'Armadura', icon: '🛡️', stat: 'vida' },
   { id: 'capa', name: 'Capa', icon: '🧣', stat: 'oro' },
-  { id: 'arma', name: 'Arma', icon: '⚔️', stat: 'daño' },
 ];
 
 export const RARITIES: Rarity[] = ['común', 'rara', 'épica', 'legendaria'];
@@ -36,7 +35,6 @@ export interface Item {
   trim?: string;
   cape?: string;
   aura?: string | null;
-  tier?: number; // apariencia del arma (1..10)
 }
 
 export const ITEMS: Item[] = [
@@ -63,28 +61,24 @@ export const ITEMS: Item[] = [
   { id: 'capa_negra', slot: 'capa', name: 'Capa del ronin', rarity: 'épica', cape: '#24151c', aura: '#ff5a6e' },
   { id: 'capa_neon', slot: 'capa', name: 'Capa neón', rarity: 'legendaria', cape: '#ff2fb4', aura: '#29f0ff' },
   { id: 'capa_solar', slot: 'capa', name: 'Manto solar', rarity: 'legendaria', cape: '#ff9a2f', aura: '#ffd75a' },
-  // Armas
-  { id: 'espada_hierro', slot: 'arma', name: 'Espada de hierro', rarity: 'común', tier: 1 },
-  { id: 'espada_bronce', slot: 'arma', name: 'Espada de bronce', rarity: 'común', tier: 2 },
-  { id: 'espada_plata', slot: 'arma', name: 'Espada de plata', rarity: 'rara', tier: 3 },
-  { id: 'espada_esmeralda', slot: 'arma', name: 'Hoja esmeralda', rarity: 'rara', tier: 5 },
-  { id: 'espada_rubi', slot: 'arma', name: 'Hoja de rubí', rarity: 'épica', tier: 7 },
-  { id: 'espada_amatista', slot: 'arma', name: 'Hoja amatista', rarity: 'épica', tier: 8 },
-  { id: 'espada_obsidiana', slot: 'arma', name: 'Filo de obsidiana', rarity: 'legendaria', tier: 9 },
-  { id: 'espada_celestial', slot: 'arma', name: 'Filo celestial', rarity: 'legendaria', tier: 10 },
 ];
 
 export const STARTER: Record<Slot, string> = {
   casco: 'casco_hierro',
   armadura: 'cota_hierro',
   capa: 'capa_azul',
-  arma: 'espada_hierro',
 };
 
 /** Las skins de la primera versión se convierten en conjuntos de piezas. */
 export const LEGACY_SETS: Record<string, string[]> = {
   samurai: ['kabuto_carmesi', 'armadura_carmesi', 'capa_negra'],
   cyber: ['visor_neon', 'traje_neon', 'capa_neon'],
+};
+
+/** Espadas de la versión anterior: se convierten en fragmentos del Arsenal. */
+export const OLD_WEAPONS: Record<string, Rarity> = {
+  espada_hierro: 'común', espada_bronce: 'común', espada_plata: 'rara', espada_esmeralda: 'rara',
+  espada_rubi: 'épica', espada_amatista: 'épica', espada_obsidiana: 'legendaria', espada_celestial: 'legendaria',
 };
 
 export const CHEST_GEMS = 40;
@@ -134,9 +128,6 @@ export function lookFor(equipped: Record<Slot, string>): Skin {
   };
 }
 
-export function weaponTier(equipped: Record<Slot, string>): number {
-  return slotItem(equipped.arma, 'arma').tier ?? 1;
-}
 
 /**
  * Elige una pieza al azar. `luck` sube las probabilidades de rarezas altas

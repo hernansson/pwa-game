@@ -27,7 +27,6 @@ import {
   lookFor,
   slotItem,
   statText,
-  weaponTier,
 } from './items';
 import {
   DIVISIONS,
@@ -41,7 +40,10 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
+import { ARMS, ArmDef, LEVEL_STAT, MAX_ARM_LEVEL, armById, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
+  armShape,
+  armTier,
   exportCode,
   goldMultiplier,
   importCode,
@@ -75,7 +77,7 @@ function myLook(): Skin {
   return lookFor(game.s.equipped);
 }
 function myHero(): string {
-  return heroSvg(myLook(), weaponTier(game.s.equipped));
+  return heroSvg(myLook(), armTier(game.s, 'espada'), { swordShape: armShape(game.s, 'espada') });
 }
 
 // ---------- Estructura de la pantalla ----------
@@ -138,6 +140,7 @@ document.querySelector('#app')!.innerHTML = `
 
   <nav class="tabs" id="tabs">
     <button data-tab="heroe"><span>🛡️</span>Héroe</button>
+    <button data-tab="arsenal"><span>⚔️</span>Arsenal</button>
     <button data-tab="talentos"><span>✨</span>Talentos</button>
     <button data-tab="liga"><span>🏆</span>Liga</button>
     <button data-tab="eventos"><span>🐉</span>Eventos</button>
@@ -243,7 +246,7 @@ function renderHero() {
   const changed = heroKeyCache !== '';
   heroKeyCache = key;
   // En combate, la espada y el escudo son los de la última fusión; las pociones dan brillo.
-  $('#hero').innerHTML = heroSvg(myLook(), look.sword ?? weaponTier(game.s.equipped), { shield: look.shield });
+  $('#hero').innerHTML = heroSvg(myLook(), look.sword ?? 1, { shield: look.shield, swordShape: armShape(game.s, 'espada'), shieldShape: armShape(game.s, 'escudo') });
   if (changed) restartAnim($('#hero'), 'gear-up');
 }
 
@@ -461,14 +464,24 @@ $('#flee').addEventListener('click', () => {
 
 function lootCard(l: Loot): string {
   const it = l.item;
-  const tier = it.tier ?? 1;
   const look = lookFor({ ...game.s.equipped, [it.slot]: it.id });
   return `<div class="loot" style="--rar:${RARITY_COLORS[it.rarity]}">
-    <div class="loot-icon">${itemIconSvg(it.slot, look, tier)}</div>
+    <div class="loot-icon">${itemIconSvg(it.slot, look)}</div>
     <div><small>${it.rarity.toUpperCase()} · ${SLOTS.find((x) => x.id === it.slot)!.name}</small><b>${it.name}</b>
     <span>${l.duplicate ? `Repetida: +${fmt(l.gold)} 🪙` : statText(it)}</span></div>
     ${l.duplicate ? '' : `<button data-equip-new="${it.id}" data-slot="${it.slot}">Equipar</button>`}
   </div>`;
+}
+
+function shardList(sh: Record<string, number>): string {
+  const ids = Object.keys(sh);
+  if (!ids.length) return '';
+  return `<div class="shards-won"><small>Fragmentos para el Arsenal</small><div>${ids
+    .map((id) => {
+      const def = armById(id)!;
+      return `<span style="--rar:${RARITY_COLORS[def.rarity]}">${pieceSvg(def.fam, 1, FAMILY_INFO[def.fam].color, def.shape)}<b>+${sh[id]}</b><small>${def.name}</small></span>`;
+    })
+    .join('')}</div></div>`;
 }
 
 function showResult(r: ClearReport) {
@@ -476,7 +489,7 @@ function showResult(r: ClearReport) {
     const stars = [1, 2, 3].map((i) => `<span class="${i <= r.stars ? 'on' : ''}" style="animation-delay:${i * 0.15}s">★</span>`).join('');
     showModal(
       `<div class="result win"><div class="stars">${stars}</div><h2>¡Nivel ${r.level} superado!</h2>
-      ${r.loot ? lootCard(r.loot) : ''}
+      ${shardList(r.shards)}
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="stat-row"><span>Puntos de liga</span><b>+${fmt(r.points)}</b></div>
@@ -503,14 +516,18 @@ const pieceEls = new Map<number, HTMLElement>();
 const fromTop = new Set<number>();
 let playedMerges = 0;
 
-$('#legend').innerHTML = FAMILIES.map(
-  (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color)}<small>${legendWord(f)}</small></span>`,
-).join('');
+function renderLegend() {
+  $('#legend').innerHTML = FAMILIES.map(
+    (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color, armShape(game.s, f))}<small>${legendWord(f)}</small></span>`,
+  ).join('');
+}
+renderLegend();
 function legendWord(f: Family) {
   return { espada: 'daño', escudo: 'escudo', pocion: 'cura', rayo: 'poder' }[f];
 }
 
 function resetBoardView() {
+  renderLegend();
   pieceEls.forEach((el) => el.remove());
   pieceEls.clear();
   fromTop.clear();
@@ -559,7 +576,7 @@ function renderBoard() {
         el.className = 'pc';
         el.dataset.k = p.fam + p.lvl;
         el.dataset.col = String(c);
-        el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color);
+        el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color, armShape(game.s, p.fam));
         el.style.left = pos.left;
         if (fromTop.has(p.id)) {
           // Las piezas nuevas entran desde arriba del tablero y caen.
@@ -665,7 +682,7 @@ window.addEventListener('pointercancel', endDrag);
 
 // ---------- Paneles ----------
 
-type Tab = 'heroe' | 'talentos' | 'liga' | 'eventos';
+type Tab = 'heroe' | 'arsenal' | 'talentos' | 'liga' | 'eventos';
 let openTab: Tab | null = null;
 let heroSlot: Slot = 'casco';
 
@@ -700,7 +717,7 @@ function itemTile(it: Item, owned: boolean, equipped: boolean): string {
   const look = lookFor({ ...game.s.equipped, [it.slot]: it.id });
   return `<button class="item ${owned ? '' : 'missing'} ${equipped ? 'on' : ''}" style="--rar:${RARITY_COLORS[it.rarity]}"
     ${owned ? `data-equip="${it.id}" data-slot="${it.slot}"` : 'disabled'} title="${esc(it.name)}">
-    <div class="item-icon">${owned ? itemIconSvg(it.slot, look, it.tier ?? 1) : '?'}</div>
+    <div class="item-icon">${owned ? itemIconSvg(it.slot, look) : '?'}</div>
     <span>${owned ? esc(it.name) : it.rarity}</span>
   </button>`;
 }
@@ -724,7 +741,7 @@ function renderHeroSheet() {
     <div class="slots">${SLOTS.map((sl) => {
       const it = slotItem(s.equipped[sl.id], sl.id);
       return `<button class="slot ${heroSlot === sl.id ? 'sel' : ''}" data-slot-tab="${sl.id}" style="--rar:${RARITY_COLORS[it.rarity]}">
-        <div class="item-icon">${itemIconSvg(sl.id, myLook(), weaponTier(s.equipped))}</div>
+        <div class="item-icon">${itemIconSvg(sl.id, myLook())}</div>
         <small>${sl.name}</small><b>+${RARITY_BONUS[it.rarity]}%</b></button>`;
     }).join('')}</div>
     <div class="inv-head"><b>${SLOTS.find((x) => x.id === heroSlot)!.name}s</b><small>${owned(heroSlot)} de ${total(heroSlot)} · ${statText(slotItem(s.equipped[heroSlot], heroSlot)).replace(/^\+\d+% de /, 'dan ')}</small></div>
@@ -760,6 +777,74 @@ function expandBox(): string {
     <div class="expand-main"><b>Ampliar tablero</b><p>Ahora es de ${5 + s.board.cols}×${6 + s.board.rows}. Más piezas, más parejas para juntar rápido.</p>
     <div class="expand-btns">${btn('rows', '+1 fila')}${btn('cols', '+1 columna')}</div></div>
   </div>`;
+}
+
+// ---------- Arsenal ----------
+
+const FAM_TITLES: Record<Family, string> = { espada: 'Espadas', escudo: 'Escudos', pocion: 'Pociones', rayo: 'Rayos' };
+
+/** Nivel de pieza (1 a 10) con el que se muestra una variante según su nivel en el Arsenal. */
+function showTier(lvl: number) {
+  return Math.max(1, Math.min(10, 1 + Math.floor((lvl - 1) / 10)));
+}
+
+function armCard(def: ArmDef): string {
+  const st = game.s.arsenal[def.id];
+  const locked = st.lvl === 0;
+  const need = locked ? unlockShards(def.rarity) : upgradeShards(st.lvl);
+  const ready = locked ? st.shards >= need : st.lvl < MAX_ARM_LEVEL && st.shards >= need && game.s.gold >= upgradeGold(st.lvl);
+  const equipped = game.s.arms[def.fam] === def.id;
+  return `<button class="arm ${locked ? 'locked' : ''} ${equipped ? 'on' : ''} ${ready ? 'ready' : ''}" data-arm="${def.id}" style="--rar:${RARITY_COLORS[def.rarity]}">
+    <div class="arm-icon">${pieceSvg(def.fam, locked ? 1 : showTier(st.lvl), FAMILY_INFO[def.fam].color, def.shape)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+    <b>${def.name}</b>
+    <small>${locked ? def.rarity : `Nv ${st.lvl}`}${equipped ? ' · equipada' : ''}</small>
+    <div class="shard-bar"><i style="width:${Math.min(100, (st.shards / need) * 100)}%"></i><span>${st.shards}/${need}</span></div>
+  </button>`;
+}
+
+function renderArsenal() {
+  const body = $('#sheet-body');
+  const scroll = body.scrollTop;
+  body.innerHTML =
+    `<p class="league-note">Gana fragmentos al superar niveles. Con fragmentos desbloqueas cada arma y la subes de nivel. La que equipes define cómo se ven sus piezas en el tablero.</p>` +
+    FAMILIES.map((f) => {
+      const st = LEVEL_STAT[f];
+      return `<div class="arm-group"><div class="arm-head"><b>${FAM_TITLES[f]}</b><small>cada nivel +${Math.round(st.per * 100)}% de ${st.label}</small></div>
+        <div class="arm-row">${ARMS.filter((a) => a.fam === f).map(armCard).join('')}</div></div>`;
+    }).join('');
+  body.scrollTop = scroll;
+}
+
+function showArm(id: string) {
+  const def = armById(id)!;
+  const st = game.s.arsenal[id];
+  const locked = st.lvl === 0;
+  const stat = LEVEL_STAT[def.fam];
+  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
+  const equipped = game.s.arms[def.fam] === id;
+  const designs = Array.from({ length: 10 }, (_, i) => `<span>${pieceSvg(def.fam, i + 1, FAMILY_INFO[def.fam].color, def.shape)}</span>`).join('');
+  const skills = def.skills
+    .map((sk) => `<li class="${st.lvl >= sk.at ? 'got' : ''}"><b>Nv ${sk.at}</b><span>${sk.text}</span>${st.lvl >= sk.at ? '✓' : '🔒'}</li>`)
+    .join('');
+  let action = '';
+  if (locked) {
+    const need = unlockShards(def.rarity);
+    action = `<button data-arm-up="${id}" class="primary" ${st.shards >= need ? '' : 'disabled'}>Desbloquear · 🧩 ${st.shards}/${need}</button>`;
+  } else if (st.lvl < MAX_ARM_LEVEL) {
+    const sh = upgradeShards(st.lvl);
+    const g = upgradeGold(st.lvl);
+    const can = st.shards >= sh && game.s.gold >= g;
+    action = `<button data-arm-up="${id}" class="primary" ${can ? '' : 'disabled'}>Subir a Nv ${st.lvl + 1} · 🧩 ${st.shards}/${sh} · 🪙 ${fmt(g)}</button>`;
+  } else action = `<button disabled>Nivel máximo</button>`;
+  showModal(`<div class="arm-detail" style="--rar:${RARITY_COLORS[def.rarity]}">
+    <div class="arm-big">${pieceSvg(def.fam, locked ? 1 : showTier(st.lvl), FAMILY_INFO[def.fam].color, def.shape)}</div>
+    <small class="rar">${def.rarity.toUpperCase()} · ${FAM_TITLES[def.fam]}</small>
+    <h2>${def.name}</h2>
+    <p class="muted">${locked ? 'Bloqueada' : `Nivel ${st.lvl} de ${MAX_ARM_LEVEL} · +${total}% de ${stat.label}`}</p>
+    <div class="designs"><small>Cómo se ve en el tablero, del nivel 1 al 10</small><div>${designs}</div></div>
+    <ul class="skills">${skills}<li class="more"><b>Nv 41-100</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li></ul>
+    <div class="btns">${!locked && !equipped ? `<button data-arm-equip="${id}">Equipar</button>` : `<button data-close>Cerrar</button>`}${action}</div>
+  </div>`);
 }
 
 function renderSheet(full: boolean) {
@@ -823,6 +908,9 @@ function renderSheet(full: boolean) {
       <p class="league-note small">Versión de prueba: los rivales son simulados hasta que conectemos el servidor.</p>`;
     body.scrollTop = scroll;
     if (full) body.querySelector('.me')?.scrollIntoView({ block: 'center' });
+  } else if (openTab === 'arsenal') {
+    $('#sheet-title').textContent = 'Arsenal';
+    if (full) renderArsenal();
   } else if (openTab === 'heroe') {
     $('#sheet-title').textContent = 'Tu héroe';
     if (full) renderHeroSheet();
@@ -866,6 +954,11 @@ $('#sheet-body').addEventListener('click', (ev) => {
     const scroll = $('#sheet-body').scrollTop;
     renderHeroSheet();
     $('#sheet-body').scrollTop = scroll;
+    return;
+  }
+  const arm = t.closest('[data-arm]') as HTMLElement | null;
+  if (arm) {
+    showArm(arm.dataset.arm!);
     return;
   }
   const ex = t.closest('[data-expand]') as HTMLElement | null;
@@ -961,7 +1054,26 @@ function backHome() {
 $('#modal').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
   if (t.closest('[data-close]')) hideModal();
-  else if (t.closest('[data-equip-new]')) {
+  else if (t.closest('[data-arm-up]')) {
+    const id = (t.closest('[data-arm-up]') as HTMLElement).dataset.armUp!;
+    const r = game.upgradeArm(id);
+    if (r) {
+      toast(r === 'unlock' ? `¡Desbloqueaste ${armById(id)!.name}!` : `${armById(id)!.name} subió a nivel ${game.s.arsenal[id].lvl}`);
+      if (r === 'unlock') game.equipArm(id);
+      homeKey = '';
+      save(game.s);
+      showArm(id);
+      if (openTab === 'arsenal') renderArsenal();
+    }
+  } else if (t.closest('[data-arm-equip]')) {
+    const id = (t.closest('[data-arm-equip]') as HTMLElement).dataset.armEquip!;
+    if (game.equipArm(id)) {
+      homeKey = '';
+      renderLegend();
+      showArm(id);
+      if (openTab === 'arsenal') renderArsenal();
+    }
+  } else if (t.closest('[data-equip-new]')) {
     const b = t.closest('[data-equip-new]') as HTMLElement;
     game.equip(b.dataset.equipNew!, b.dataset.slot as Slot);
     heroKeyCache = homeKey = '';
