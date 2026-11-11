@@ -11,7 +11,7 @@ import {
   enemyHp,
   upgradeCost,
 } from './balance';
-import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, pieceSvg, skinById } from './art';
+import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, pieceFrame, pieceSvg, skinById } from './art';
 import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ClearReport, Game, Loot, MergeResult } from './game';
 import {
@@ -106,6 +106,8 @@ document.querySelector('#app')!.innerHTML = `
           <div class="hp hero-hp"><div class="hp-fill" id="hero-hp"></div><div class="shield-fill" id="hero-shield"></div></div>
           <div class="shield-label" id="shield-label"></div>
           <div class="hero" id="hero"></div>
+          <div class="hero-fx" id="hero-fx"></div>
+          <div class="boost-ring" id="boost-ring"></div>
         </div>
         <div class="enemy-wrap">
           <div class="enemy-name" id="enemy-name"></div>
@@ -117,7 +119,6 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="combo" id="combo"></div>
       <div class="boost-label" id="boost-label"></div>
-      <div class="flash" id="flash"></div>
     </div>
   </section>
 
@@ -239,7 +240,7 @@ function renderHero() {
   const changed = heroKeyCache !== '';
   heroKeyCache = key;
   // En combate, la espada y el escudo son los de la última fusión; las pociones dan brillo.
-  $('#hero').innerHTML = heroSvg(myLook(), look.sword ?? weaponTier(game.s.equipped), { shield: look.shield, glow: look.glow });
+  $('#hero').innerHTML = heroSvg(myLook(), look.sword ?? weaponTier(game.s.equipped), { shield: look.shield });
   if (changed) restartAnim($('#hero'), 'gear-up');
 }
 
@@ -289,7 +290,15 @@ function renderScreen() {
   $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
   $('#hero').classList.toggle('down', run.result === 'lose');
   const boosted = run.boost > 0 && !run.result;
-  $('#stage').classList.toggle('boosted', boosted);
+  // Potenciador: un aura pequeña sobre el héroe que crece con el nivel del rayo.
+  const ring = $('#boost-ring');
+  const bLvl = boosted ? Math.round((run.boostMult - 1) / 0.3) + 1 : 0;
+  if (ring.dataset.l !== String(bLvl)) {
+    ring.dataset.l = String(bLvl);
+    ring.innerHTML = bLvl ? Array.from({ length: Math.min(6, bLvl - 1) }, (_, i) => `<i style="--i:${i};--n:${Math.min(6, bLvl - 1)}">⚡</i>`).join('') : '';
+    ring.style.setProperty('--s', String(0.8 + Math.min(bLvl, 10) * 0.07));
+  }
+  ring.classList.toggle('on', boosted);
   const bl = $('#boost-label');
   bl.textContent = boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '';
   $('#run-title').textContent = `Nivel ${run.level}`;
@@ -337,6 +346,51 @@ function restartAnim(el: HTMLElement, cls: string) {
   el.classList.add(cls);
 }
 
+/** Corte sobre el enemigo: más grande, con el color del material y más chispas según el nivel. */
+function slashFx(lvl: number) {
+  const fx = $('#fx');
+  const el = document.createElement('div');
+  el.className = 'slash';
+  el.style.setProperty('--c', pieceFrame(lvl));
+  el.style.setProperty('--s', String(0.7 + Math.min(lvl, 10) * 0.09));
+  const sparks = Math.min(10, lvl * 1);
+  el.innerHTML = '<b></b>' + Array.from({ length: sparks }, (_, i) => `<i style="--a:${(360 / sparks) * i + Math.random() * 20}deg;--d:${18 + lvl * 3}px"></i>`).join('');
+  fx.appendChild(el);
+  setTimeout(() => el.remove(), 500);
+}
+
+/** Curación: cruces verdes que suben desde el héroe; más cruces y más brillo con el nivel. */
+function healFx(lvl: number) {
+  const box = $('#hero-fx');
+  const n = Math.min(8, 1 + lvl);
+  const glow = document.createElement('div');
+  glow.className = 'heal-glow';
+  glow.style.setProperty('--o', String(Math.min(0.7, 0.2 + lvl * 0.08)));
+  box.appendChild(glow);
+  setTimeout(() => glow.remove(), 700);
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('span');
+    p.className = 'plus';
+    p.textContent = '+';
+    p.style.left = 20 + Math.random() * 55 + '%';
+    p.style.animationDelay = i * 0.06 + 's';
+    p.style.fontSize = 12 + Math.min(lvl, 8) * 1.5 + 'px';
+    box.appendChild(p);
+    setTimeout(() => p.remove(), 1100);
+  }
+}
+
+/** Rayo: una chispa amarilla sobre el héroe al activar el potenciador. */
+function boltFx(lvl: number) {
+  const box = $('#hero-fx');
+  const b = document.createElement('div');
+  b.className = 'bolt-pop';
+  b.textContent = '⚡';
+  b.style.fontSize = 18 + Math.min(lvl, 10) * 2.5 + 'px';
+  box.appendChild(b);
+  setTimeout(() => b.remove(), 600);
+}
+
 /** Efectos en pantalla de cada fusión. */
 function onMergeFx(r: MergeResult) {
   const { ev } = r;
@@ -354,14 +408,11 @@ function onMergeFx(r: MergeResult) {
   if (r.boost > 0) {
     floatText(`⚡ x${r.boostMult.toFixed(2).replace(/0$/, '')}`, 'boost', 50, 30);
   }
-  // Cuanto más alto el nivel, más fuerte el efecto.
-  if (ev.lvl >= 5 || ev.burst) {
-    const f = $('#flash');
-    f.style.setProperty('--c', FAMILY_INFO[ev.fam].color);
-    f.style.setProperty('--a', String(Math.min(0.75, 0.15 + (ev.lvl - 4) * 0.1)));
-    restartAnim(f, 'on');
-  }
-  if (ev.lvl >= 7) restartAnim($('#board'), 'quake');
+  // Cuanto más alto el nivel, un poco mejor se ve el efecto (sin iluminar toda la pantalla).
+  if (ev.fam === 'espada' && r.dmg > 0) slashFx(ev.lvl);
+  if (r.heal > 0 || ev.fam === 'pocion') healFx(ev.lvl);
+  if (r.boost > 0) boltFx(ev.lvl);
+  if (ev.lvl >= 8) restartAnim($('#board'), 'quake');
   if (ev.burst) toast(`¡Explosión de ${FAMILY_INFO[ev.fam].name.toLowerCase()}!`);
   if (navigator.vibrate) navigator.vibrate(ev.burst ? 40 : 12);
 }

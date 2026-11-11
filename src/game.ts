@@ -200,7 +200,6 @@ export class Game {
     const fam: Family = ev.fam;
     if (fam === 'espada') run.look.sword = ev.lvl;
     if (fam === 'escudo') run.look.shield = ev.lvl;
-    if (fam === 'pocion') run.look.glow = ev.lvl;
     if (fam === 'espada') r.dmg = hit;
     else {
       r.dmg = hit * 0.25;
