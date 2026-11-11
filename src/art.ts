@@ -72,6 +72,7 @@ export interface Skin {
   visor: string;
   aura: string | null;
   helm: 'knight' | 'kabuto' | 'cyber';
+  helmColor?: string;
 }
 
 export const SKINS: Skin[] = [
@@ -120,20 +121,20 @@ export function skinById(id: string): Skin {
   return SKINS.find((s) => s.id === id) ?? SKINS[0];
 }
 
-function helmSvg(s: Skin): string {
+export function helmSvg(s: Skin): string {
   if (s.helm === 'kabuto') {
-    return `<path d="M36 30 Q50 12 64 30 L64 40 L36 40Z" fill="${s.armor}" stroke="#14080c" stroke-width="2"/>
+    return `<path d="M36 30 Q50 12 64 30 L64 40 L36 40Z" fill="${s.helmColor ?? s.armor}" stroke="#14080c" stroke-width="2"/>
       <path d="M38 28 Q30 10 24 8 Q34 18 40 26Z M62 28 Q70 10 76 8 Q66 18 60 26Z" fill="${s.trim}" stroke="#14080c" stroke-width="1.5"/>
       <rect x="40" y="33" width="20" height="6" rx="2" fill="${s.visor}"/>
       <circle cx="50" cy="24" r="3" fill="${s.trim}"/>`;
   }
   if (s.helm === 'cyber') {
-    return `<path d="M35 38 L37 24 Q50 14 63 24 L65 38Z" fill="${s.armor}" stroke="#05060c" stroke-width="2"/>
+    return `<path d="M35 38 L37 24 Q50 14 63 24 L65 38Z" fill="${s.helmColor ?? s.armor}" stroke="#05060c" stroke-width="2"/>
       <rect x="38" y="29" width="24" height="5" rx="2.5" fill="${s.visor}" class="neon"/>
       <path d="M60 22 L72 14" stroke="${s.trim}" stroke-width="2" stroke-linecap="round"/>
       <circle cx="72" cy="14" r="2.2" fill="${s.cape}"/>`;
   }
-  return `<path d="M36 40 L36 28 Q50 14 64 28 L64 40Z" fill="${s.armor}" stroke="#1a1d26" stroke-width="2"/>
+  return `<path d="M36 40 L36 28 Q50 14 64 28 L64 40Z" fill="${s.helmColor ?? s.armor}" stroke="#1a1d26" stroke-width="2"/>
     <rect x="41" y="30" width="18" height="4" rx="1.5" fill="${s.visor}"/>
     <path d="M50 16 Q58 4 66 10 Q58 10 52 18Z" fill="${s.cape}" stroke="#1a1d26" stroke-width="1.2"/>
     <rect x="48.5" y="18" width="3" height="20" fill="${s.trim}" opacity=".9"/>`;
@@ -227,3 +228,17 @@ export const APP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 <rect x="236" y="370" width="40" height="70" rx="10" fill="#7a2e1e" stroke="#140f22" stroke-width="10"/>
 <circle cx="256" cy="456" r="24" fill="#fff1a8" stroke="#140f22" stroke-width="10"/>
 </g></svg>`;
+
+/** Ícono chico de una pieza de equipo. */
+export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: Skin, tier: number): string {
+  if (slot === 'arma') return weaponSvg(tier, 48);
+  if (slot === 'casco') return `<svg viewBox="22 2 56 44" aria-hidden="true">${helmSvg(look)}</svg>`;
+  if (slot === 'armadura')
+    return `<svg viewBox="28 40 44 44" aria-hidden="true">
+      <path d="M36 44 L64 44 L66 80 L34 80Z" fill="${look.armor}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M42 50 L58 50 L56 70 L44 70Z" fill="${look.armorDark}" opacity=".7"/>
+      <rect x="34" y="72" width="32" height="5" fill="${look.trim}"/></svg>`;
+  return `<svg viewBox="16 38 50 64" aria-hidden="true">
+    ${look.aura ? `<ellipse cx="40" cy="70" rx="22" ry="28" fill="${look.aura}" opacity=".25"/>` : ''}
+    <path d="M38 42 Q22 70 26 98 L48 92 L46 44Z" fill="${look.cape}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}

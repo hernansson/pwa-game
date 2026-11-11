@@ -7,7 +7,9 @@ import {
   spawnInterval,
   heroMaxHp,
   weaponDamage,
+  dropLevel,
 } from './balance';
+import { LEGACY_SETS, STARTER, Slot, bonusOf, slotItem } from './items';
 
 export interface Run {
   level: number;
@@ -38,8 +40,10 @@ export interface GameState {
   upgrades: Record<UpgradeId, number>;
   forged: number;
   run: Run | null;
-  skin: string;
-  ownedSkins: string[];
+  items: string[]; // piezas de equipo que tiene
+  equipped: Record<Slot, string>;
+  skin?: string; // solo para migrar guardados viejos
+  ownedSkins?: string[];
   league: {
     week: number;
     points: number;
@@ -68,9 +72,6 @@ export function weekStart(week: number): number {
 
 export function newState(): GameState {
   const board: (number | null)[] = Array(BOARD_SIZE).fill(null);
-  board[0] = 2;
-  board[1] = 1;
-  board[2] = 1;
   return {
     version: SAVE_VERSION,
     playerName: '',
@@ -84,8 +85,8 @@ export function newState(): GameState {
     upgrades: { fuerza: 0, vida: 0, lluvia: 0, calidad: 0, codicia: 0 },
     forged: 0,
     run: null,
-    skin: 'caballero',
-    ownedSkins: ['caballero'],
+    items: Object.values(STARTER),
+    equipped: { ...STARTER },
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
     stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
     lastSeen: Date.now(),
@@ -109,14 +110,29 @@ export function migrate(raw: unknown): GameState {
   delete (s.upgrades as Record<string, number>).forja;
   s.league = { ...base.league, ...(old.league ?? {}) };
   s.stats = { ...base.stats, ...(old.stats ?? {}) };
-  if (!Array.isArray(s.board) || s.board.length !== BOARD_SIZE) s.board = base.board;
   if (typeof s.unlocked !== 'number') s.unlocked = 1;
   if (!s.stars || typeof s.stars !== 'object') s.stars = {};
   if (typeof s.energy !== 'number') {
     s.energy = ENERGY_MAX;
     s.energyAt = Date.now();
   }
-  if (!Array.isArray(s.ownedSkins) || !s.ownedSkins.length) s.ownedSkins = ['caballero'];
+  // Las skins viejas pasan a ser conjuntos de equipo.
+  if (!Array.isArray(old.items)) {
+    s.items = Object.values(STARTER);
+    s.equipped = { ...STARTER };
+    for (const skin of old.ownedSkins ?? []) for (const id of LEGACY_SETS[skin] ?? []) if (!s.items.includes(id)) s.items.push(id);
+    const set = LEGACY_SETS[old.skin ?? ''];
+    if (set) {
+      s.equipped.casco = set[0];
+      s.equipped.armadura = set[1];
+      s.equipped.capa = set[2];
+    }
+  }
+  s.equipped = { ...STARTER, ...(s.equipped ?? {}) };
+  delete s.skin;
+  delete s.ownedSkins;
+  // El tablero ahora arranca vacío en cada nivel.
+  s.board = Array(BOARD_SIZE).fill(null);
   // Campos de la versión 1 que ya no se usan.
   for (const k of ['souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
     delete (s as unknown as Record<string, unknown>)[k];
@@ -204,30 +220,44 @@ export function secondsToNextEnergy(s: GameState, now = Date.now()): number {
 }
 
 export function bestWeapon(s: GameState): number {
-  let best = 1;
+  let best = 0;
   for (const w of s.board) if (w !== null && w > best) best = w;
   return best;
 }
 
-export function damagePerHit(s: GameState): number {
-  return weaponDamage(bestWeapon(s)) * (1 + s.upgrades.fuerza * 0.15);
+function gearBonus(s: GameState, slot: Slot): number {
+  return bonusOf(slotItem(s.equipped[slot], slot));
+}
+
+export function damageMultiplier(s: GameState): number {
+  return (1 + s.upgrades.fuerza * 0.15) * (1 + gearBonus(s, 'arma'));
+}
+
+export function goldMultiplier(s: GameState): number {
+  return (1 + s.upgrades.codicia * 0.2) * (1 + gearBonus(s, 'capa'));
+}
+
+export function maxHp(s: GameState): number {
+  return heroMaxHp(s.upgrades.vida) * (1 + gearBonus(s, 'casco') + gearBonus(s, 'armadura'));
 }
 
 export function spawnSeconds(s: GameState): number {
   return spawnInterval(s.upgrades.lluvia);
 }
 
-export function goldMultiplier(s: GameState): number {
-  return 1 + s.upgrades.codicia * 0.2;
-}
-
-export function maxHp(s: GameState): number {
-  return heroMaxHp(s.upgrades.vida);
-}
-
 /** Daño de una fusión que produce un arma de cierto nivel (sin combo). */
 export function mergeDamage(s: GameState, level: number): number {
-  return weaponDamage(level) * 2 * (1 + s.upgrades.fuerza * 0.15);
+  return weaponDamage(level) * 2 * damageMultiplier(s);
+}
+
+/** Golpe automático del héroe cuando el enemigo lo alcanza. */
+export function autoDamage(s: GameState, level: number): number {
+  return weaponDamage(dropLevel(level, s.upgrades.calidad)) * damageMultiplier(s);
+}
+
+/** Número único para mostrar qué tan fuerte es el héroe. */
+export function power(s: GameState): number {
+  return Math.round(Math.sqrt(mergeDamage(s, dropLevel(s.unlocked, s.upgrades.calidad) + 1) * maxHp(s)) * 4);
 }
 
 export function upgradeDef(id: UpgradeId) {

@@ -3,7 +3,6 @@ import {
   AUTO_ATTACK_FACTOR,
   AUTO_ATTACK_RATE,
   BOSS_APPROACH_SECONDS,
-  BOSS_CHEST,
   COMBO_WINDOW,
   ENEMIES_PER_WAVE,
   ENERGY_COST,
@@ -24,7 +23,7 @@ import {
 import {
   GameState,
   Run,
-  damagePerHit,
+  autoDamage,
   goldMultiplier,
   maxHp,
   mergeDamage,
@@ -33,6 +32,13 @@ import {
   track,
   upgradeDef,
 } from './state';
+import { CHEST_GEMS, Item, LEVELS_PER_WORLD_ITEMS, duplicateGold, rollItem } from './items';
+
+export interface Loot {
+  item: Item;
+  duplicate: boolean;
+  gold: number;
+}
 
 export interface ClearReport {
   level: number;
@@ -43,6 +49,7 @@ export interface ClearReport {
   points: number;
   maxCombo: number;
   firstClear: boolean;
+  loot: Loot | null;
 }
 
 export type GameEvent =
@@ -95,6 +102,7 @@ export class Game {
   start(level: number): boolean {
     if (!this.canStart(level)) return false;
     this.s.energy -= ENERGY_COST;
+    this.s.board = this.s.board.map(() => null); // cada nivel arranca con el tablero vacío
     this.s.run = {
       level,
       wave: 0,
@@ -166,7 +174,7 @@ export class Game {
       if (this.autoClock >= 1 / AUTO_ATTACK_RATE) {
         this.autoClock = 0;
         const crit = Math.random() < 0.1;
-        this.damage(run, damagePerHit(this.s) * AUTO_ATTACK_FACTOR * (crit ? 2.5 : 1), crit, false);
+        this.damage(run, autoDamage(this.s, run.level) * AUTO_ATTACK_FACTOR * (crit ? 2.5 : 1), crit, false);
       }
     }
   }
@@ -215,7 +223,6 @@ export class Game {
     this.emit({ type: 'kill', gold, boss });
 
     if (boss) {
-      this.dropWeapons(BOSS_CHEST, dropLevel(run.level, this.s.upgrades.calidad) + 1);
       this.finish(true);
       return;
     }
@@ -240,12 +247,19 @@ export class Game {
     let gems = 0;
     let points = 0;
     let firstClear = false;
+    let loot: Loot | null = null;
     if (win) {
       stars = starsFor(run.heroHp / maxHp(this.s));
       firstClear = !this.s.stars[run.level];
       if (firstClear) {
         gems = firstClearGems(run.level);
         this.s.gems += gems;
+      }
+      // Equipo: siempre en la primera victoria, a veces al repetir.
+      if (firstClear || Math.random() < 0.15) {
+        const worldBoss = run.level % LEVELS_PER_WORLD_ITEMS === 0;
+        const min = firstClear && (worldBoss || run.level === 1) ? 'rara' : 'común';
+        loot = this.grant(rollItem(run.level / 25, min, firstClear ? this.s.items : []), run.level);
       }
       this.s.stars[run.level] = Math.max(this.s.stars[run.level] ?? 0, stars);
       this.s.unlocked = Math.max(this.s.unlocked, run.level + 1);
@@ -259,8 +273,32 @@ export class Game {
     }
     this.emit({
       type: 'end',
-      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear },
+      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, loot },
     });
+  }
+
+  /** Entrega una pieza; si ya la tenía, se convierte en oro. */
+  private grant(item: Item, level: number): Loot {
+    if (this.s.items.includes(item.id)) {
+      const gold = duplicateGold(item, level);
+      this.s.gold += gold;
+      return { item, duplicate: true, gold };
+    }
+    this.s.items.push(item.id);
+    track(this.s, `item:${item.id}`);
+    return { item, duplicate: false, gold: 0 };
+  }
+
+  /** Cofre de equipo pagado con gemas: siempre rara o mejor. */
+  openChest(): Loot | null {
+    if (this.s.gems < CHEST_GEMS) return null;
+    this.s.gems -= CHEST_GEMS;
+    track(this.s, 'chest');
+    return this.grant(rollItem(0.6, 'rara', this.s.items), this.s.unlocked);
+  }
+
+  equip(id: string, slot: Item['slot']) {
+    if (this.s.items.includes(id)) this.s.equipped[slot] = id;
   }
 
   /** Cierra la pantalla de resultado y vuelve al mapa. */

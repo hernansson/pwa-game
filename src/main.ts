@@ -10,8 +10,21 @@ import {
   enemyHp,
   upgradeCost,
 } from './balance';
-import { SKINS, enemyName, enemySvg, heroSvg, skinById, tierFor, weaponName, weaponSvg } from './art';
-import { ClearReport, Game } from './game';
+import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, skinById, tierFor, weaponName, weaponSvg } from './art';
+import { ClearReport, Game, Loot } from './game';
+import {
+  CHEST_GEMS,
+  ITEMS,
+  Item,
+  RARITY_BONUS,
+  RARITY_COLORS,
+  SLOTS,
+  Slot,
+  lookFor,
+  slotItem,
+  statText,
+  weaponTier,
+} from './items';
 import {
   DIVISIONS,
   DIVISION_COLORS,
@@ -24,7 +37,21 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { bestWeapon, exportCode, importCode, load, maxHp, regenEnergy, resetSave, save, secondsToNextEnergy, track } from './state';
+import {
+  bestWeapon,
+  exportCode,
+  goldMultiplier,
+  importCode,
+  load,
+  maxHp,
+  power,
+  regenEnergy,
+  resetSave,
+  save,
+  secondsToNextEnergy,
+  track,
+  damageMultiplier,
+} from './state';
 
 let game = new Game(load());
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -41,6 +68,12 @@ function worldName(w: number) {
 function enemyKey(level: number) {
   return (worldOf(level) - 1) * 10 + 1;
 }
+function myLook(): Skin {
+  return lookFor(game.s.equipped);
+}
+function myHero(): string {
+  return heroSvg(myLook(), weaponTier(game.s.equipped));
+}
 
 // ---------- Estructura de la pantalla ----------
 
@@ -53,7 +86,14 @@ document.querySelector('#app')!.innerHTML = `
   </header>
 
   <section class="stage" id="stage">
-    <div class="map" id="map"></div>
+    <button class="home" id="home">
+      <div class="home-hero" id="home-hero"></div>
+      <div class="home-info">
+        <b id="home-name"></b>
+        <span class="power">⚔️ Poder <b id="home-power"></b></span>
+        <span class="equip-cta">Equipar ›</span>
+      </div>
+    </button>
     <div class="battle" id="battle" hidden>
       <div class="run-top">
         <button class="flee" id="flee" aria-label="Abandonar">✕</button>
@@ -73,24 +113,22 @@ document.querySelector('#app')!.innerHTML = `
         <div class="fx" id="fx"></div>
       </div>
       <div class="combo" id="combo"></div>
-      <div class="dps" id="dps">¡Fusiona armas para atacar!</div>
     </div>
   </section>
 
-  <section class="forge">
-    <div class="forge-head">
-      <span class="arsenal">Equipada: <em id="best-weapon"></em></span>
-      <button class="sell-zone" id="sell" title="Arrastra un arma aquí para venderla">🗑️</button>
-      <button class="forge-btn" id="forge-btn">🔨 Forjar <b id="forge-cost"></b></button>
+  <section class="lower">
+    <div class="map" id="map"></div>
+    <div class="forge" id="forge" hidden>
+      <div class="forge-head"><span>Mejor arma del nivel: <em id="best-weapon"></em></span></div>
+      <div class="board" id="board"></div>
+      <p class="hint" id="hint"></p>
     </div>
-    <div class="board" id="board"></div>
-    <p class="hint" id="hint"></p>
   </section>
 
   <nav class="tabs" id="tabs">
-    <button data-tab="mejoras"><span>⬆️</span>Mejoras</button>
-    <button data-tab="liga"><span>🏆</span>Liga</button>
     <button data-tab="heroe"><span>🛡️</span>Héroe</button>
+    <button data-tab="talentos"><span>✨</span>Talentos</button>
+    <button data-tab="liga"><span>🏆</span>Liga</button>
     <button data-tab="eventos"><span>🐉</span>Eventos</button>
   </nav>
 
@@ -104,14 +142,25 @@ document.querySelector('#app')!.innerHTML = `
   <div class="modal" id="modal" hidden><div class="modal-card" id="modal-card"></div></div>
 `;
 
-// ---------- Mapa ----------
+// ---------- Pantalla principal ----------
+
+let homeKey = '';
+function renderHome() {
+  const key = `${JSON.stringify(game.s.equipped)}:${game.s.playerName}:${power(game.s)}`;
+  if (key === homeKey) return;
+  homeKey = key;
+  $('#home-hero').innerHTML = myHero();
+  $('#home-name').textContent = game.s.playerName || 'Tu héroe';
+  $('#home-power').textContent = fmt(power(game.s));
+}
+$('#home').addEventListener('click', () => openSheet('heroe'));
 
 let viewWorld = worldOf(game.s.unlocked);
 let mapKey = '';
 
 function renderMap() {
   const s = game.s;
-  const key = `${viewWorld}:${s.unlocked}:${JSON.stringify(s.stars)}:${s.energy}`;
+  const key = `${viewWorld}:${s.unlocked}:${JSON.stringify(s.stars)}`;
   if (key === mapKey) return;
   mapKey = key;
   const first = (viewWorld - 1) * LEVELS_PER_WORLD + 1;
@@ -131,16 +180,20 @@ function renderMap() {
       <span class="st">${locked ? '' : '★'.repeat(stars) + '☆'.repeat(3 - stars)}</span>
     </button>`;
   }).join('');
+  const target = Math.min(s.unlocked, first + LEVELS_PER_WORLD - 1);
   $('#map').innerHTML = `
     <div class="map-head">
       <button class="wbtn" data-world="-1" ${viewWorld <= 1 ? 'disabled' : ''}>‹</button>
       <div><small>Mundo ${viewWorld}</small><b>${worldName(viewWorld)}</b></div>
       <button class="wbtn" data-world="1" ${viewWorld >= maxWorld ? 'disabled' : ''}>›</button>
     </div>
-    <div class="path" style="--enemy-hue:${viewWorld * 70}deg">${nodes}</div>
-    <button class="play" data-level="${Math.min(s.unlocked, first + LEVELS_PER_WORLD - 1)}">
-      ${s.unlocked >= first + LEVELS_PER_WORLD ? 'Repetir jefe' : `Jugar nivel ${s.unlocked}`} <span>⚡${ENERGY_COST}</span>
-    </button>`;
+    <div class="path">${nodes}</div>
+    <div class="next-level">
+      <div class="next-enemy">${enemySvg(enemyKey(target), target % LEVELS_PER_WORLD === 0)}</div>
+      <div class="next-info"><small>${target % LEVELS_PER_WORLD === 0 ? 'Jefe del mundo' : `${WAVES_PER_LEVEL} oleadas + jefe`}</small>
+        <b>Nivel ${target}</b><span>${target < s.unlocked ? 'Ya superado: repite para ganar oro' : 'Primera victoria: equipo + gemas'}</span></div>
+    </div>
+    <button class="play" data-level="${target}">Jugar nivel ${target} <span>⚡${ENERGY_COST}</span></button>`;
 }
 
 $('#map').addEventListener('click', (ev) => {
@@ -163,8 +216,9 @@ function startLevel(level: number) {
   }
   if (game.start(level)) {
     heroKeyCache = enemyKeyCache = '';
+    boardDirty = true;
     closeSheet();
-    $('#modal').hidden = true;
+    hideModal();
   }
 }
 
@@ -172,21 +226,25 @@ function startLevel(level: number) {
 
 let heroKeyCache = '';
 function renderHero() {
-  const key = `${game.s.skin}:${bestWeapon(game.s)}`;
+  const key = JSON.stringify(game.s.equipped);
   if (key === heroKeyCache) return;
   heroKeyCache = key;
-  $('#hero').innerHTML = heroSvg(skinById(game.s.skin), bestWeapon(game.s));
+  $('#hero').innerHTML = myHero();
 }
 
 let enemyKeyCache = '';
-function renderBattle() {
+function renderScreen() {
   const run = game.s.run;
-  $('#map').hidden = !!run;
+  $('#home').hidden = !!run;
   $('#battle').hidden = !run;
+  $('#map').hidden = !!run;
+  $('#forge').hidden = !run;
   if (!run) {
+    renderHome();
     renderMap();
     return;
   }
+  renderBoard();
   const boss = game.isBossWave(run);
   renderHero();
   const ek = `${run.level}:${boss}`;
@@ -258,31 +316,30 @@ function restartAnim(el: HTMLElement, cls: string) {
 }
 
 function wireGame() {
- game.on((e) => {
-  if (e.type === 'hit') {
-    restartAnim($('#hero'), 'attack');
-    restartAnim($('#enemy'), 'hurt');
-    if (e.merge) {
-      floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit big' : 'merge-hit', 66, 36);
-      restartAnim($('#stage'), e.combo >= 5 || e.crit ? 'shake-big' : 'shake');
-    } else {
-      floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit' : 'dmg');
+  game.on((e) => {
+    if (e.type === 'hit') {
+      restartAnim($('#hero'), 'attack');
+      restartAnim($('#enemy'), 'hurt');
+      if (e.merge) {
+        floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit big' : 'merge-hit', 66, 36);
+        restartAnim($('#stage'), e.combo >= 5 || e.crit ? 'shake-big' : 'shake');
+      } else {
+        floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit' : 'dmg');
+      }
+    } else if (e.type === 'hurt') {
+      restartAnim($('#hero'), 'hit');
+      floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
+    } else if (e.type === 'kill') {
+      floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
+    } else if (e.type === 'wave') {
+      if (e.boss) toast('¡Llegó el jefe!');
+    } else if (e.type === 'drop') {
+      boardDirty = true;
+      for (const i of e.indexes) spawned.add(i);
+    } else if (e.type === 'end') {
+      setTimeout(() => showResult(e.report), 1100);
     }
-  } else if (e.type === 'hurt') {
-    restartAnim($('#hero'), 'hit');
-    floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
-  } else if (e.type === 'kill') {
-    floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
-  } else if (e.type === 'wave') {
-    if (e.boss) toast('¡Llegó el jefe!');
-  } else if (e.type === 'drop') {
-    boardDirty = true;
-    for (const i of e.indexes) spawned.add(i);
-    if (e.lost && !game.fighting) toast('Tablero lleno: se perdieron armas. ¡Fusiona!');
-  } else if (e.type === 'end') {
-    setTimeout(() => showResult(e.report), 1100);
-  }
- });
+  });
 }
 wireGame();
 
@@ -290,31 +347,44 @@ $('#flee').addEventListener('click', () => {
   if (confirm('¿Abandonar el nivel? No se devuelve la energía.')) game.abandon();
 });
 
+function lootCard(l: Loot): string {
+  const it = l.item;
+  const tier = it.tier ?? 1;
+  const look = lookFor({ ...game.s.equipped, [it.slot]: it.id });
+  return `<div class="loot" style="--rar:${RARITY_COLORS[it.rarity]}">
+    <div class="loot-icon">${itemIconSvg(it.slot, look, tier)}</div>
+    <div><small>${it.rarity.toUpperCase()} · ${SLOTS.find((x) => x.id === it.slot)!.name}</small><b>${it.name}</b>
+    <span>${l.duplicate ? `Repetida: +${fmt(l.gold)} 🪙` : statText(it)}</span></div>
+    ${l.duplicate ? '' : `<button data-equip-new="${it.id}" data-slot="${it.slot}">Equipar</button>`}
+  </div>`;
+}
+
 function showResult(r: ClearReport) {
   if (r.win) {
     const stars = [1, 2, 3].map((i) => `<span class="${i <= r.stars ? 'on' : ''}" style="animation-delay:${i * 0.15}s">★</span>`).join('');
     showModal(
       `<div class="result win"><div class="stars">${stars}</div><h2>¡Nivel ${r.level} superado!</h2>
+      ${r.loot ? lootCard(r.loot) : ''}
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="stat-row"><span>Puntos de liga</span><b>+${fmt(r.points)}</b></div>
       ${r.gems ? `<div class="stat-row"><span>Primera victoria</span><b>+${r.gems} 💠</b></div>` : ''}
-      <div class="btns"><button data-leave>Mapa</button><button data-next="${r.level + 1}" class="primary">Siguiente ⚡${ENERGY_COST}</button></div></div>`,
+      <div class="btns"><button data-leave>Inicio</button><button data-next="${r.level + 1}" class="primary">Siguiente ⚡${ENERGY_COST}</button></div></div>`,
       true,
     );
   } else {
     showModal(
       `<div class="result lose"><div class="big-ico">💀</div><h2>Tu héroe cayó</h2>
-      <p>Encadena fusiones más rápido para hacer combos, o compra mejoras con el oro que juntaste.</p>
+      <p>Encadena fusiones más rápido, mejora tu equipo o sube tus talentos con el oro que juntaste.</p>
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
-      <div class="btns"><button data-leave>Mapa</button><button data-next="${r.level}" class="primary">Reintentar ⚡${ENERGY_COST}</button></div></div>`,
+      <div class="btns"><button data-leave>Inicio</button><button data-next="${r.level}" class="primary">Reintentar ⚡${ENERGY_COST}</button></div></div>`,
       true,
     );
   }
 }
 
-// ---------- Tablero de fusión ----------
+// ---------- Tablero de fusión (solo durante el nivel) ----------
 
 let boardDirty = true;
 const spawned = new Set<number>();
@@ -325,32 +395,22 @@ function renderBoard() {
   if (!boardDirty) return;
   boardDirty = false;
   const best = bestWeapon(game.s);
-  let equippedShown = false;
   boardEl.innerHTML = game.s.board
     .map((lvl, i) => {
       if (lvl === null) return `<div class="cell" data-i="${i}"></div>`;
-      const equipped = !equippedShown && lvl === best;
-      if (equipped) equippedShown = true;
       const t = tierFor(lvl);
-      const cls = ['cell', 'filled', equipped ? 'equipped' : '', spawned.has(i) ? 'spawned' : '', i === mergedIndex ? 'merged' : '']
-        .filter(Boolean)
-        .join(' ');
+      const cls = ['cell', 'filled', spawned.has(i) ? 'spawned' : '', i === mergedIndex ? 'merged' : ''].filter(Boolean).join(' ');
       return `<div class="${cls}" data-i="${i}" style="--tier:${t.blade};--glow:${t.glow === 'none' ? 'transparent' : t.glow}">
         ${weaponSvg(lvl, 52)}<span class="lvl">${lvl}</span></div>`;
     })
     .join('');
   spawned.clear();
   mergedIndex = -1;
-  $('#best-weapon').textContent = weaponName(best);
+  $('#best-weapon').textContent = best ? weaponName(best) : '—';
   const free = game.s.board.filter((x) => x === null).length;
   const hint = $('#hint');
-  hint.textContent = game.fighting
-    ? free === 0
-      ? '¡Tablero lleno! Fusiona para que sigan cayendo armas'
-      : 'Cada fusión golpea al enemigo. ¡Encadénalas para hacer combo!'
-    : free === 0
-      ? 'Tablero lleno: fusiona o vende armas (🗑️) para hacer lugar'
-      : 'Arrastra dos armas iguales para fusionarlas, o tócalas';
+  hint.textContent =
+    free === 0 ? '¡Tablero lleno! Fusiona para que sigan cayendo armas' : 'Cada fusión golpea al enemigo. ¡Encadénalas para hacer combo!';
   hint.classList.toggle('warn', free === 0);
 }
 
@@ -359,10 +419,6 @@ let drag: { from: number; ghost: HTMLElement; startX: number; startY: number; mo
 function cellAt(x: number, y: number): HTMLElement | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   return el?.closest('.cell') as HTMLElement | null;
-}
-function sellAt(x: number, y: number): boolean {
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  return !!el?.closest('.sell-zone');
 }
 
 boardEl.addEventListener('pointerdown', (ev) => {
@@ -377,11 +433,6 @@ boardEl.addEventListener('pointerdown', (ev) => {
   document.body.appendChild(ghost);
   cell.classList.add('lifting');
   drag = { from, ghost, startX: ev.clientX, startY: ev.clientY, moved: false };
-  $('#sell').classList.add('armed');
-  boardEl.querySelectorAll<HTMLElement>('.cell').forEach((c) => {
-    const i = Number(c.dataset.i);
-    if (i !== from && game.s.board[i] === game.s.board[from]) c.classList.add('match');
-  });
 });
 
 window.addEventListener('pointermove', (ev) => {
@@ -390,7 +441,6 @@ window.addEventListener('pointermove', (ev) => {
   drag.ghost.style.transform = `translate(${ev.clientX - 30}px, ${ev.clientY - 30}px)`;
   boardEl.querySelectorAll('.over').forEach((c) => c.classList.remove('over'));
   cellAt(ev.clientX, ev.clientY)?.classList.add('over');
-  $('#sell').classList.toggle('over', sellAt(ev.clientX, ev.clientY));
 });
 
 function endDrag(ev: PointerEvent) {
@@ -398,16 +448,6 @@ function endDrag(ev: PointerEvent) {
   const d = drag;
   drag = null;
   d.ghost.remove();
-  $('#sell').classList.remove('armed', 'over');
-  if (d.moved && sellAt(ev.clientX, ev.clientY)) {
-    if (bestWeapon(game.s) === game.s.board[d.from] && game.s.board.filter((x) => x === game.s.board[d.from]).length === 1) {
-      toast('No puedes vender tu arma equipada');
-    } else {
-      toast(`Vendida por ${fmt(game.sell(d.from))} 🪙`);
-    }
-    boardDirty = true;
-    return;
-  }
   const target = cellAt(ev.clientX, ev.clientY);
   if (target && d.moved) {
     const to = Number(target.dataset.i);
@@ -425,28 +465,19 @@ window.addEventListener('pointercancel', endDrag);
 
 function onMerge(index: number) {
   mergedIndex = index;
-  const lvl = game.s.board[index]!;
-  if (lvl === bestWeapon(game.s) && game.s.run) floatText(`¡${weaponName(lvl)}!`, 'merge-text', 40, 30);
-  else if (lvl === bestWeapon(game.s)) toast(`¡Nueva arma: ${weaponName(lvl)}!`);
   if (navigator.vibrate) navigator.vibrate(15);
 }
 
-$('#forge-btn').addEventListener('click', () => {
-  if (!game.s.board.includes(null)) {
-    toast('No hay lugar en el tablero');
-  } else if (!game.forge()) {
-    toast(`Te falta oro para forjar`);
-  }
-});
-
 // ---------- Paneles ----------
 
-type Tab = 'mejoras' | 'liga' | 'heroe' | 'eventos';
+type Tab = 'heroe' | 'talentos' | 'liga' | 'eventos';
 let openTab: Tab | null = null;
+let heroSlot: Slot = 'casco';
 
 function openSheet(tab: Tab) {
   openTab = tab;
   $('#sheet').hidden = false;
+  $('#sheet').classList.toggle('tall', tab === 'heroe');
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab));
   track(game.s, `open:${tab}`);
   renderSheet(true);
@@ -470,19 +501,71 @@ $('#sheet').addEventListener('click', (ev) => {
   if (ev.target === $('#sheet')) closeSheet();
 });
 
+function itemTile(it: Item, owned: boolean, equipped: boolean): string {
+  const look = lookFor({ ...game.s.equipped, [it.slot]: it.id });
+  return `<button class="item ${owned ? '' : 'missing'} ${equipped ? 'on' : ''}" style="--rar:${RARITY_COLORS[it.rarity]}"
+    ${owned ? `data-equip="${it.id}" data-slot="${it.slot}"` : 'disabled'} title="${esc(it.name)}">
+    <div class="item-icon">${owned ? itemIconSvg(it.slot, look, it.tier ?? 1) : '?'}</div>
+    <span>${owned ? esc(it.name) : it.rarity}</span>
+  </button>`;
+}
+
+function renderHeroSheet() {
+  const s = game.s;
+  const dmg = Math.round((damageMultiplier(s) - 1) * 100);
+  const gold = Math.round((goldMultiplier(s) - 1) * 100);
+  const owned = (slot: Slot) => ITEMS.filter((i) => i.slot === slot && s.items.includes(i.id)).length;
+  const total = (slot: Slot) => ITEMS.filter((i) => i.slot === slot).length;
+  $('#sheet-body').innerHTML = `
+    <div class="hero-card">
+      <div class="hero-big">${myHero()}</div>
+      <div class="hero-stats">
+        <div class="power-big">⚔️ <b>${fmt(power(s))}</b><small>Poder</small></div>
+        <div class="stat-row"><span>❤️ Vida</span><b>${fmt(maxHp(s))}</b></div>
+        <div class="stat-row"><span>🗡️ Daño</span><b>+${dmg}%</b></div>
+        <div class="stat-row"><span>🪙 Oro</span><b>+${gold}%</b></div>
+      </div>
+    </div>
+    <div class="slots">${SLOTS.map((sl) => {
+      const it = slotItem(s.equipped[sl.id], sl.id);
+      return `<button class="slot ${heroSlot === sl.id ? 'sel' : ''}" data-slot-tab="${sl.id}" style="--rar:${RARITY_COLORS[it.rarity]}">
+        <div class="item-icon">${itemIconSvg(sl.id, myLook(), weaponTier(s.equipped))}</div>
+        <small>${sl.name}</small><b>+${RARITY_BONUS[it.rarity]}%</b></button>`;
+    }).join('')}</div>
+    <div class="inv-head"><b>${SLOTS.find((x) => x.id === heroSlot)!.name}s</b><small>${owned(heroSlot)} de ${total(heroSlot)} · ${statText(slotItem(s.equipped[heroSlot], heroSlot)).replace(/^\+\d+% de /, 'dan ')}</small></div>
+    <div class="inventory">${ITEMS.filter((i) => i.slot === heroSlot)
+      .map((i) => itemTile(i, s.items.includes(i.id), s.equipped[heroSlot] === i.id))
+      .join('')}</div>
+    <div class="chest-box">
+      <div class="chest-ico">🎁</div>
+      <div><b>Cofre de equipo</b><p>Una pieza rara o mejor. También ganas equipo al superar niveles por primera vez.</p></div>
+      <button data-chest class="${s.gems >= CHEST_GEMS ? 'can' : ''}">💠 ${CHEST_GEMS}</button>
+    </div>
+    <div class="gem-shop"><b>¿Te faltan gemas?</b><p>Ganas gemas con las primeras victorias y con los premios de la liga.</p><button data-gemshop>Comprar gemas</button></div>
+    <div class="name-row"><label>Nombre en la liga <input id="name-input" maxlength="14" value="${esc(s.playerName)}"></label></div>
+    <div class="save-box">
+      <b>Guardar progreso</b>
+      <p>Tu progreso se guarda en este dispositivo. Para pasarlo a otro, copia tu código y cárgalo allá.</p>
+      <div class="save-btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
+    </div>
+    <details class="danger"><summary>Opciones</summary><button data-reset>Borrar progreso</button></details>`;
+}
+
 function renderSheet(full: boolean) {
   if (!openTab) return;
   const body = $('#sheet-body');
-  if (openTab === 'mejoras') {
-    $('#sheet-title').textContent = 'Mejoras';
+  if (openTab === 'talentos') {
+    $('#sheet-title').textContent = 'Talentos';
     if (full) {
-      body.innerHTML = UPGRADES.map(
-        (u) => `<button class="upgrade" data-up="${u.id}">
+      body.innerHTML =
+        `<p class="league-note">Los talentos son permanentes y se compran con el oro que ganas en los niveles.</p>` +
+        UPGRADES.map(
+          (u) => `<button class="upgrade" data-up="${u.id}">
           <span class="u-ico">${u.icon}</span>
           <span class="u-main"><b>${u.name} <small data-lvl></small></b><span class="u-desc" data-desc></span></span>
           <span class="u-cost" data-cost></span>
         </button>`,
-      ).join('');
+        ).join('');
     }
     body.querySelectorAll<HTMLElement>('.upgrade').forEach((el) => {
       const id = el.dataset.up as UpgradeId;
@@ -514,11 +597,14 @@ function renderSheet(full: boolean) {
       <ol class="ranking">${list
         .map((r, i) => {
           const zone = i < PROMOTE ? 'up' : i >= LEAGUE_SIZE - DEMOTE ? 'down' : '';
-          const sk = skinById(r.skin);
-          return `<li class="${zone} ${r.isPlayer ? 'me' : ''} rar-${sk.rarity}">
+          const sk = r.isPlayer ? null : skinById(r.skin);
+          const art = r.isPlayer ? myHero() : heroSvg(sk!, Math.min(10, r.weapon));
+          const label = r.isPlayer ? slotItem(s.equipped.armadura, 'armadura').name : sk!.name;
+          const rar = r.isPlayer ? slotItem(s.equipped.armadura, 'armadura').rarity : sk!.rarity;
+          return `<li class="${zone} ${r.isPlayer ? 'me' : ''} rar-${rar}">
             <span class="pos">${i + 1}</span>
-            <span class="mini">${heroSvg(sk, r.isPlayer ? bestWeapon(s) : r.weapon)}</span>
-            <span class="who">${esc(r.name)}${r.isPlayer ? ' (tú)' : ''}<small>${sk.name}</small></span>
+            <span class="mini">${art}</span>
+            <span class="who">${esc(r.name)}${r.isPlayer ? ' (tú)' : ''}<small>${label}</small></span>
             <span class="pts">${fmt(r.points)}</span>
           </li>`;
         })
@@ -528,33 +614,7 @@ function renderSheet(full: boolean) {
     if (full) body.querySelector('.me')?.scrollIntoView({ block: 'center' });
   } else if (openTab === 'heroe') {
     $('#sheet-title').textContent = 'Tu héroe';
-    if (!full) return;
-    body.innerHTML = `
-      <p class="league-note">Las skins solo cambian la apariencia. Todos te ven con ella en la liga y en los eventos.</p>
-      <div class="skins">${SKINS.map((sk) => {
-        const owned = game.s.ownedSkins.includes(sk.id);
-        const active = game.s.skin === sk.id;
-        const action = active
-          ? '<span class="tag">En uso</span>'
-          : owned
-            ? `<button data-equip="${sk.id}">Usar</button>`
-            : `<button data-buy="${sk.id}" class="${game.s.gems >= sk.price ? 'can' : ''}">💠 ${sk.price}</button>`;
-        return `<div class="skin rar-${sk.rarity} ${active ? 'active' : ''}">
-          <div class="skin-art">${heroSvg(sk, bestWeapon(game.s))}</div>
-          <b>${sk.name}</b><small class="rarity">${sk.rarity}</small>${action}</div>`;
-      }).join('')}</div>
-      <div class="gem-shop">
-        <b>¿Te faltan gemas?</b>
-        <p>Ganas gemas al superar niveles por primera vez y con los premios de la liga.</p>
-        <button data-gemshop>Comprar gemas</button>
-      </div>
-      <div class="name-row"><label>Nombre en la liga <input id="name-input" maxlength="14" value="${esc(game.s.playerName)}"></label></div>
-      <div class="save-box">
-        <b>Guardar progreso</b>
-        <p>Tu progreso se guarda solo en este dispositivo. Para pasarlo a otro, copia tu código y cárgalo allá.</p>
-        <div class="save-btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
-      </div>
-      <details class="danger"><summary>Opciones</summary><button data-reset>Borrar progreso</button></details>`;
+    if (full) renderHeroSheet();
   } else if (openTab === 'eventos') {
     $('#sheet-title').textContent = 'Eventos';
     if (!full) return;
@@ -568,7 +628,7 @@ function renderSheet(full: boolean) {
       <div class="event raid">
         <div class="ev-art">${enemySvg(11, true)}</div>
         <div class="ev-body"><small>PRÓXIMAMENTE</small><b>Raids con amigos</b>
-          <p>Forma un grupo de hasta 4 amigos y venzan juntos jefes que solos son imposibles. Cada uno pone su héroe y su arma.</p>
+          <p>Forma un grupo de hasta 4 amigos y venzan juntos jefes que solos son imposibles. Cada uno pone su héroe con su equipo.</p>
           <button data-interest="raids">¡Me interesa!</button></div>
       </div>`;
   }
@@ -582,26 +642,30 @@ $('#sheet-body').addEventListener('click', (ev) => {
     renderSheet(false);
     return;
   }
-  const equip = t.closest('[data-equip]') as HTMLElement | null;
-  if (equip) {
-    game.s.skin = equip.dataset.equip!;
-    renderSheet(true);
+  const slotTab = t.closest('[data-slot-tab]') as HTMLElement | null;
+  if (slotTab) {
+    heroSlot = slotTab.dataset.slotTab as Slot;
+    renderHeroSheet();
     return;
   }
-  const buy = t.closest('[data-buy]') as HTMLElement | null;
-  if (buy) {
-    const sk = skinById(buy.dataset.buy!);
-    track(game.s, `skin_try:${sk.id}`);
-    if (game.s.gems >= sk.price) {
-      game.s.gems -= sk.price;
-      game.s.ownedSkins.push(sk.id);
-      game.s.skin = sk.id;
-      track(game.s, `skin_buy:${sk.id}`);
-      toast(`¡Conseguiste ${sk.name}!`);
-    } else {
-      toast(`Te faltan ${sk.price - game.s.gems} 💠`);
+  const equip = t.closest('[data-equip]') as HTMLElement | null;
+  if (equip) {
+    game.equip(equip.dataset.equip!, equip.dataset.slot as Slot);
+    track(game.s, `equip:${equip.dataset.equip}`);
+    const scroll = $('#sheet-body').scrollTop;
+    renderHeroSheet();
+    $('#sheet-body').scrollTop = scroll;
+    return;
+  }
+  if (t.closest('[data-chest]')) {
+    const loot = game.openChest();
+    if (!loot) {
+      track(game.s, 'chest_nogems');
+      toast(`Te faltan ${CHEST_GEMS - game.s.gems} 💠`);
+      return;
     }
-    renderSheet(true);
+    renderHeroSheet();
+    showModal(`<div class="result"><div class="big-ico chest-open">🎁</div><h2>¡Abriste un cofre!</h2>${lootCard(loot)}<button data-close>Genial</button></div>`);
     return;
   }
   const interest = t.closest('[data-interest]') as HTMLElement | null;
@@ -662,18 +726,26 @@ function hideModal() {
   $('#modal').hidden = true;
   modalBlocking = false;
 }
+function backHome() {
+  game.leave();
+  hideModal();
+  viewWorld = worldOf(game.s.unlocked);
+  homeKey = mapKey = '';
+}
 $('#modal').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
   if (t.closest('[data-close]')) hideModal();
-  else if (t.closest('[data-leave]')) {
-    game.leave();
-    hideModal();
-    viewWorld = worldOf(game.s.unlocked);
-  } else if (t.closest('[data-next]')) {
+  else if (t.closest('[data-equip-new]')) {
+    const b = t.closest('[data-equip-new]') as HTMLElement;
+    game.equip(b.dataset.equipNew!, b.dataset.slot as Slot);
+    heroKeyCache = homeKey = '';
+    b.textContent = 'Equipada ✓';
+    b.setAttribute('disabled', '');
+    if (openTab === 'heroe') renderHeroSheet();
+  } else if (t.closest('[data-leave]')) backHome();
+  else if (t.closest('[data-next]')) {
     const lvl = Number((t.closest('[data-next]') as HTMLElement).dataset.next);
-    game.leave();
-    hideModal();
-    viewWorld = worldOf(Math.min(lvl, game.s.unlocked));
+    backHome();
     startLevel(Math.min(lvl, game.s.unlocked));
   } else if (t.closest('[data-refill]')) {
     if (game.s.gems >= REFILL_GEMS) {
@@ -696,7 +768,7 @@ $('#modal').addEventListener('click', (ev) => {
     wireGame();
     save(game.s);
     boardDirty = true;
-    heroKeyCache = enemyKeyCache = mapKey = '';
+    heroKeyCache = enemyKeyCache = mapKey = homeKey = '';
     viewWorld = worldOf(game.s.unlocked);
     hideModal();
     closeSheet();
@@ -762,9 +834,6 @@ function renderTop() {
   const secs = secondsToNextEnergy(s);
   $('#energy-time').textContent = s.energy < ENERGY_MAX ? ` ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` : '';
   $('#energy').classList.toggle('low', s.energy < ENERGY_COST);
-  const price = game.forgePrice;
-  $('#forge-cost').textContent = `🪙${fmt(price)}`;
-  $('#forge-btn').classList.toggle('can', s.gold >= price && s.board.includes(null));
 }
 
 let last = performance.now();
@@ -775,8 +844,7 @@ function frame(now: number) {
   last = now;
   game.tick(dt);
   renderTop();
-  renderBattle();
-  renderBoard();
+  renderScreen();
   sheetClock += dt;
   if (sheetClock > 0.25) {
     sheetClock = 0;
@@ -805,6 +873,7 @@ if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
     <p>Recorre niveles cortos y vence al jefe del final. Durante el nivel caen armas: <b>cada fusión golpea al enemigo</b>, y si las encadenas rápido haces combo.</p>
+    <p>Gana equipo para tu héroe y hazlo cada vez más fuerte.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,
     true,

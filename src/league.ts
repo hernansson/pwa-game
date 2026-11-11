@@ -69,7 +69,7 @@ export function standings(s: GameState, now = Date.now()): Rival[] {
   }));
   list.push({
     name: s.playerName || 'Tú',
-    skin: s.skin,
+    skin: 'equipo',
     weapon: 0,
     target: 0,
     curve: 1,
