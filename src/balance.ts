@@ -99,8 +99,11 @@ export const CAPS = {
   startShield: 0.4, // escudo al empezar: hasta 40% de la vida
 };
 
-/** Probabilidad de que una pieza nueva llegue ya en nivel 2 (por ahora siempre 0; más adelante puede ser una mejora paga). */
+/** Probabilidad de que una pieza nueva llegue ya en nivel 2 sin el pase (siempre 0). */
 export const LEVEL_TWO_CHANCE = 0;
+
+/** Pase mensual: dura 30 días y hace que parte de las piezas nuevas lleguen en nivel 2 o 3. */
+export const PASS = { days: 30, lvl2: 0.3, lvl3: 0.1 };
 
 export function firstClearGems(level: number): number {
   return level % LEVELS_PER_WORLD === 0 ? 30 : 5;

@@ -8,8 +8,9 @@ import {
   CAPS,
   heroMaxHp,
   LEVEL_TWO_CHANCE,
+  PASS,
 } from './balance';
-import { Grid } from './board';
+import { Grid, PieceOdds } from './board';
 import { ITEMS, LEGACY_SETS, OLD_WEAPONS, STARTER } from './items';
 import { ARMS, ArmFam, Mods, NO_MODS, STARTER_ARMS, armById, armMods } from './arsenal';
 
@@ -50,6 +51,7 @@ export interface GameState {
   arsenal: Record<string, { lvl: number; shards: number }>; // lvl 0 = bloqueada
   arms: Record<ArmFam, string>; // variante equipada de cada familia y skin
   freeChestAt: number; // cuándo se abrió el último cofre gratis
+  passUntil: number; // hasta cuándo dura el pase mensual
   ownedSkins?: string[];
   league: {
     week: number;
@@ -93,6 +95,7 @@ export function newState(): GameState {
     arsenal: Object.fromEntries(ARMS.map((a) => [a.id, { lvl: Object.values(STARTER_ARMS).includes(a.id) ? 1 : 0, shards: 0 }])),
     arms: { ...STARTER_ARMS },
     freeChestAt: 0,
+    passUntil: 0,
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
     stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
     lastSeen: Date.now(),
@@ -168,6 +171,7 @@ export function migrate(raw: unknown): GameState {
     if (def && def.fam === f && s.arsenal[id]?.lvl) s.arms[f as ArmFam] = id;
   }
   if (typeof s.freeChestAt !== 'number') s.freeChestAt = 0;
+  if (typeof s.passUntil !== 'number') s.passUntil = 0;
   for (const k of ['items', 'equipped', 'skin', 'ownedSkins']) delete (s as unknown as Record<string, unknown>)[k];
   // Campos de versiones anteriores que ya no se usan.
   const b = old.board as unknown;
@@ -295,8 +299,17 @@ export function comboTime(_s: GameState): number {
   return COMBO_WINDOW;
 }
 
-export function pieceLevelTwoChance(_s: GameState): number {
-  return LEVEL_TWO_CHANCE;
+export function passActive(s: GameState, now = Date.now()): boolean {
+  return s.passUntil > now;
+}
+
+/** Días que le quedan al pase mensual (0 si no está activo). */
+export function passDaysLeft(s: GameState, now = Date.now()): number {
+  return passActive(s, now) ? Math.ceil((s.passUntil - now) / 86400000) : 0;
+}
+
+export function pieceOdds(s: GameState): PieceOdds {
+  return passActive(s) ? { two: PASS.lvl2, three: PASS.lvl3 } : { two: LEVEL_TWO_CHANCE, three: 0 };
 }
 
 /** Número único para mostrar qué tan fuerte es el héroe. */

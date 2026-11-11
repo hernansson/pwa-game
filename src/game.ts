@@ -29,14 +29,14 @@ import {
   damageMultiplier,
   critChance,
   maxHp,
-  pieceLevelTwoChance,
+  pieceOdds,
   regenEnergy,
   arsenalMods,
   track,
   upgradeDef,
 } from './state';
 import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
-import { LEVELS_PER_WORLD } from './balance';
+import { LEVELS_PER_WORLD, PASS } from './balance';
 
 export interface ClearReport {
   level: number;
@@ -112,7 +112,7 @@ export class Game {
   }
 
   private newPiece() {
-    return randomPiece(pieceLevelTwoChance(this.s), this.rand);
+    return randomPiece(pieceOdds(this.s), this.rand);
   }
 
   start(level: number): boolean {
@@ -131,7 +131,7 @@ export class Game {
       boost: 0,
       boostMult: 1,
       look: {},
-      grid: startingGrid(BASE_COLS + this.s.board.cols, BASE_ROWS + this.s.board.rows, pieceLevelTwoChance(this.s), this.rand),
+      grid: startingGrid(BASE_COLS + this.s.board.cols, BASE_ROWS + this.s.board.rows, pieceOdds(this.s), this.rand),
       combo: 0,
       comboTimer: 0,
       maxCombo: 0,
@@ -370,6 +370,12 @@ export class Game {
     this.s.board[kind]++;
     track(this.s, `expand:${kind}:${this.s.board[kind]}`);
     return true;
+  }
+
+  /** Activa el pase mensual por 30 días (o los suma si ya estaba activo). Por ahora es de prueba, sin cobro. */
+  activatePass(now = Date.now()) {
+    this.s.passUntil = Math.max(now, this.s.passUntil) + PASS.days * 86400000;
+    track(this.s, 'pass:activate');
   }
 
   /** Modificadores del Arsenal. Se recalculan al empezar cada nivel. */

@@ -15,6 +15,7 @@ import {
   swordBonus,
   enemyHp,
   upgradeCost,
+  PASS,
 } from './balance';
 import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
@@ -47,6 +48,8 @@ import {
   secondsToNextEnergy,
   track,
   damageMultiplier,
+  passActive,
+  passDaysLeft,
 } from './state';
 
 let game = new Game(load());
@@ -909,6 +912,7 @@ function expandBox(): string {
 }
 
 function renderVip() {
+  const s = game.s;
   $('#sheet-body').innerHTML = `
     <div class="vip-hero"><span>👑</span><p>Llegaste lejos. Acá están las mejoras especiales para tu héroe.</p></div>
     ${expandBox()}
@@ -916,9 +920,10 @@ function renderVip() {
       <div class="vip-ico">🚫</div>
       <div class="vip-main"><b>Sin anuncios</b><p>Juega sin interrupciones para siempre.</p><button data-interest="noads">¡Me interesa!</button></div>
     </div>
-    <div class="vip-card soon">
+    <div class="vip-card pass${passActive(s) ? ' on' : ''}">
       <div class="vip-ico">✨</div>
-      <div class="vip-main"><b>Pase VIP</b><p>Animaciones especiales, un cofre gratis extra por día y empezar niveles con piezas de nivel 2.</p><button data-interest="vippass">¡Me interesa!</button></div>
+      <div class="vip-main"><b>Pase mensual</b><p>Durante 30 días, ${Math.round(PASS.lvl2 * 100)}% de las piezas nuevas llegan en nivel 2 y ${Math.round(PASS.lvl3 * 100)}% en nivel 3. Fusiones más fuertes desde el primer toque.</p>
+      ${passActive(s) ? `<div class="pass-on">✅ Activo · quedan ${passDaysLeft(s)} días</div><button data-pass>Sumar 30 días (prueba)</button>` : `<button data-pass class="can">Activar (prueba gratis)</button>`}</div>
     </div>
     <div class="vip-card">
       <div class="vip-ico">💠</div>
@@ -1248,6 +1253,12 @@ $('#sheet-body').addEventListener('click', (ev) => {
       renderArsenal();
       $('#sheet-body').scrollTo({ top: 0, behavior: 'smooth' });
     } else showArm(def.id);
+    return;
+  }
+  if (t.closest('[data-pass]')) {
+    game.activatePass();
+    toast('✨ ¡Pase mensual activo! Tus piezas llegan más fuertes');
+    refreshSheet();
     return;
   }
   const ex = t.closest('[data-expand]') as HTMLElement | null;

@@ -754,3 +754,8 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 .set-box.test { border: 1px dashed var(--gem); }
 .set-box.test .btns button:first-child { background: var(--gem); color: #04222b; }
 .set-box.test .btns button:last-child { background: var(--gold); color: #2a1a00; }
+
+/* v16: pase mensual */
+.vip-card.pass { border-color: #f5c84c88; background: linear-gradient(135deg, #f5c84c22, var(--card) 60%); }
+.vip-card.pass.on { border-color: #4cd58a; }
+.pass-on { font-weight: 700; color: #4cd58a; margin: 6px 0; }

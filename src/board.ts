@@ -47,7 +47,10 @@ export function makePiece(fam: Family, lvl: number): Piece {
   return { fam, lvl, id: nextId++ };
 }
 
-export function randomPiece(levelTwoChance: number, rand = Math.random): Piece {
+/** Chances de que una pieza nueva llegue en nivel 2 o 3. */
+export interface PieceOdds { two: number; three: number }
+
+export function randomPiece(odds: PieceOdds, rand = Math.random): Piece {
   const total = FAMILIES.reduce((a, f) => a + FAMILY_INFO[f].weight, 0);
   let r = rand() * total;
   let fam: Family = 'espada';
@@ -58,14 +61,15 @@ export function randomPiece(levelTwoChance: number, rand = Math.random): Piece {
       break;
     }
   }
-  // Siempre nivel 1 salvo que una mejora suba la chance de nivel 2.
-  const lvl = rand() < levelTwoChance ? 2 : 1;
+  // Siempre nivel 1 salvo con el pase mensual.
+  const r2 = rand();
+  const lvl = r2 < odds.three ? 3 : r2 < odds.three + odds.two ? 2 : 1;
   return makePiece(fam, lvl);
 }
 
 /** Tablero lleno de piezas al azar. */
-export function startingGrid(cols: number, rows: number, levelTwoChance: number, rand = Math.random): Grid {
-  return Array.from({ length: cols }, () => Array.from({ length: rows }, () => randomPiece(levelTwoChance, rand)));
+export function startingGrid(cols: number, rows: number, odds: PieceOdds, rand = Math.random): Grid {
+  return Array.from({ length: cols }, () => Array.from({ length: rows }, () => randomPiece(odds, rand)));
 }
 
 /**
