@@ -24,9 +24,9 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { bestWeapon, dps, load, maxHp, regenEnergy, resetSave, save, secondsToNextEnergy, track } from './state';
+import { bestWeapon, exportCode, importCode, load, maxHp, regenEnergy, resetSave, save, secondsToNextEnergy, track } from './state';
 
-const game = new Game(load());
+let game = new Game(load());
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const REFILL_GEMS = 30;
 const WORLD_NAMES = ['Bosque Viscoso', 'Cuevas del Eco', 'Picos de Piedra'];
@@ -72,7 +72,8 @@ document.querySelector('#app')!.innerHTML = `
         </div>
         <div class="fx" id="fx"></div>
       </div>
-      <div class="dps" id="dps"></div>
+      <div class="combo" id="combo"></div>
+      <div class="dps" id="dps">¡Fusiona armas para atacar!</div>
     </div>
   </section>
 
@@ -201,6 +202,14 @@ function renderBattle() {
   $('#hero-hp').style.width = Math.max(0, run.heroHp / maxHp(game.s)) * 100 + '%';
   $('#hero-hp').classList.toggle('low', run.heroHp / maxHp(game.s) < 0.3);
   $('#enemy').classList.toggle('dead', game.respawning || run.result === 'win');
+  ($('.enemy-wrap') as HTMLElement).style.transform = `translateX(${-(1 - run.enemyPos) * 70}%)`;
+  $('#enemy').classList.toggle('attacking', run.enemyPos <= 0 && !game.respawning && !run.result);
+  const combo = $('#combo');
+  const comboText = run.combo >= 2 && !run.result ? `COMBO x${run.combo}` : '';
+  if (combo.textContent !== comboText) {
+    combo.textContent = comboText;
+    if (comboText) restartAnim(combo, 'pop');
+  }
   $('#hero').classList.toggle('walking', game.respawning && !run.result);
   $('#hero').classList.toggle('down', run.result === 'lose');
   $('#run-title').textContent = `Nivel ${run.level}`;
@@ -220,7 +229,6 @@ function renderBattle() {
     r.innerHTML = html;
     r.dataset.k = html;
   }
-  $('#dps').textContent = `${fmt(dps(game.s))} daño/s`;
 }
 
 function floatText(text: string, cls: string, xPct = 72, yPct = 40) {
@@ -249,11 +257,17 @@ function restartAnim(el: HTMLElement, cls: string) {
   el.classList.add(cls);
 }
 
-game.on((e) => {
+function wireGame() {
+ game.on((e) => {
   if (e.type === 'hit') {
     restartAnim($('#hero'), 'attack');
     restartAnim($('#enemy'), 'hurt');
-    floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit' : 'dmg');
+    if (e.merge) {
+      floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit big' : 'merge-hit', 66, 36);
+      restartAnim($('#stage'), e.combo >= 5 || e.crit ? 'shake-big' : 'shake');
+    } else {
+      floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit' : 'dmg');
+    }
   } else if (e.type === 'hurt') {
     restartAnim($('#hero'), 'hit');
     floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
@@ -264,12 +278,13 @@ game.on((e) => {
   } else if (e.type === 'drop') {
     boardDirty = true;
     for (const i of e.indexes) spawned.add(i);
-    if (e.indexes.length) floatText(`+${e.indexes.length} ⚔️`, 'loot', 62, 55);
-    if (e.lost) toast('Tablero lleno: se perdieron armas. ¡Fusiona!');
+    if (e.lost && !game.fighting) toast('Tablero lleno: se perdieron armas. ¡Fusiona!');
   } else if (e.type === 'end') {
     setTimeout(() => showResult(e.report), 1100);
   }
-});
+ });
+}
+wireGame();
 
 $('#flee').addEventListener('click', () => {
   if (confirm('¿Abandonar el nivel? No se devuelve la energía.')) game.abandon();
@@ -281,7 +296,7 @@ function showResult(r: ClearReport) {
     showModal(
       `<div class="result win"><div class="stars">${stars}</div><h2>¡Nivel ${r.level} superado!</h2>
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
-      <div class="stat-row"><span>Armas conseguidas</span><b>+${r.drops} ⚔️</b></div>
+      <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="stat-row"><span>Puntos de liga</span><b>+${fmt(r.points)}</b></div>
       ${r.gems ? `<div class="stat-row"><span>Primera victoria</span><b>+${r.gems} 💠</b></div>` : ''}
       <div class="btns"><button data-leave>Mapa</button><button data-next="${r.level + 1}" class="primary">Siguiente ⚡${ENERGY_COST}</button></div></div>`,
@@ -290,9 +305,9 @@ function showResult(r: ClearReport) {
   } else {
     showModal(
       `<div class="result lose"><div class="big-ico">💀</div><h2>Tu héroe cayó</h2>
-      <p>Fusiona armas o compra mejoras con el oro que juntaste y vuelve a intentarlo.</p>
+      <p>Encadena fusiones más rápido para hacer combos, o compra mejoras con el oro que juntaste.</p>
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
-      <div class="stat-row"><span>Armas conseguidas</span><b>+${r.drops} ⚔️</b></div>
+      <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="btns"><button data-leave>Mapa</button><button data-next="${r.level}" class="primary">Reintentar ⚡${ENERGY_COST}</button></div></div>`,
       true,
     );
@@ -329,9 +344,12 @@ function renderBoard() {
   $('#best-weapon').textContent = weaponName(best);
   const free = game.s.board.filter((x) => x === null).length;
   const hint = $('#hint');
-  hint.textContent =
-    free === 0
-      ? 'Tablero lleno: fusiona o vende armas (🗑️) para recibir más'
+  hint.textContent = game.fighting
+    ? free === 0
+      ? '¡Tablero lleno! Fusiona para que sigan cayendo armas'
+      : 'Cada fusión golpea al enemigo. ¡Encadénalas para hacer combo!'
+    : free === 0
+      ? 'Tablero lleno: fusiona o vende armas (🗑️) para hacer lugar'
       : 'Arrastra dos armas iguales para fusionarlas, o tócalas';
   hint.classList.toggle('warn', free === 0);
 }
@@ -531,6 +549,11 @@ function renderSheet(full: boolean) {
         <button data-gemshop>Comprar gemas</button>
       </div>
       <div class="name-row"><label>Nombre en la liga <input id="name-input" maxlength="14" value="${esc(game.s.playerName)}"></label></div>
+      <div class="save-box">
+        <b>Guardar progreso</b>
+        <p>Tu progreso se guarda solo en este dispositivo. Para pasarlo a otro, copia tu código y cárgalo allá.</p>
+        <div class="save-btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
+      </div>
       <details class="danger"><summary>Opciones</summary><button data-reset>Borrar progreso</button></details>`;
   } else if (openTab === 'eventos') {
     $('#sheet-title').textContent = 'Eventos';
@@ -593,6 +616,24 @@ $('#sheet-body').addEventListener('click', (ev) => {
     showModal(`<h2>Tienda de gemas</h2><p>Todavía no está habilitada en esta versión de prueba.</p><p class="muted">Gracias por tocar: nos ayuda a saber qué te interesa.</p><button data-close>Entendido</button>`);
     return;
   }
+  if (t.closest('[data-export]')) {
+    const code = exportCode(game.s);
+    track(game.s, 'save_export');
+    navigator.clipboard?.writeText(code).then(
+      () => toast('Código copiado. Guárdalo en un lugar seguro.'),
+      () => {},
+    );
+    showModal(`<h2>Tu código de guardado</h2><p>Cópialo y guárdalo. En otro dispositivo, ve a Héroe → Cargar un código.</p>
+      <textarea class="code" readonly>${code}</textarea><button data-close>Listo</button>`);
+    ($('#modal-card textarea') as HTMLTextAreaElement).select();
+    return;
+  }
+  if (t.closest('[data-import]')) {
+    showModal(`<h2>Cargar progreso</h2><p>Pega tu código. <b>Reemplaza</b> el progreso de este dispositivo.</p>
+      <textarea class="code" id="import-code" placeholder="FORJA-..."></textarea>
+      <div class="btns"><button data-close>Cancelar</button><button data-do-import class="primary">Cargar</button></div>`);
+    return;
+  }
   if (t.closest('[data-reset]')) {
     if (confirm('¿Seguro? Se borra todo tu progreso.')) {
       resetSave();
@@ -645,6 +686,21 @@ $('#modal').addEventListener('click', (ev) => {
       track(game.s, 'energy_refill_nogems');
       toast(`Te faltan ${REFILL_GEMS - game.s.gems} 💠`);
     }
+  } else if (t.closest('[data-do-import]')) {
+    const loaded = importCode(($('#import-code') as HTMLTextAreaElement).value);
+    if (!loaded) {
+      toast('Ese código no es válido');
+      return;
+    }
+    game = new Game(loaded);
+    wireGame();
+    save(game.s);
+    boardDirty = true;
+    heroKeyCache = enemyKeyCache = mapKey = '';
+    viewWorld = worldOf(game.s.unlocked);
+    hideModal();
+    closeSheet();
+    toast('¡Progreso cargado!');
   } else if (t.closest('[data-start]')) {
     const v = ($('#start-name') as HTMLInputElement).value.trim().slice(0, 14);
     game.s.playerName = v || 'Héroe' + Math.floor(Math.random() * 900 + 100);
@@ -748,7 +804,7 @@ if (rolloverLeague(game.s)) showLeagueResult();
 if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
-    <p>Recorre niveles cortos y vence al jefe del final. Tu héroe pelea solo: tú fusionas las armas que sueltan los enemigos para hacerlo más fuerte.</p>
+    <p>Recorre niveles cortos y vence al jefe del final. Durante el nivel caen armas: <b>cada fusión golpea al enemigo</b>, y si las encadenas rápido haces combo.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,
     true,

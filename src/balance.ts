@@ -7,8 +7,13 @@ export const LEVELS_PER_WORLD = 10;
 export const ENERGY_MAX = 30;
 export const ENERGY_COST = 5;
 export const ENERGY_REGEN_SECONDS = 5 * 60; // 1 de energía cada 5 minutos
-export const DROP_CHANCE = 0.7; // probabilidad de que un enemigo suelte un arma
-export const BOSS_CHEST = 3; // armas en el cofre del jefe
+export const BOSS_CHEST = 2; // armas extra en el cofre del jefe
+export const APPROACH_SECONDS = 4; // lo que tarda un enemigo en llegar al héroe
+export const BOSS_APPROACH_SECONDS = 6;
+export const MERGE_PUSHBACK = 0.04; // cada fusión empuja al enemigo hacia atrás
+export const COMBO_WINDOW = 1.6; // segundos para encadenar fusiones
+export const AUTO_ATTACK_RATE = 0.8; // golpes por segundo del arma equipada cuando el enemigo llega
+export const AUTO_ATTACK_FACTOR = 0.5;
 
 export function weaponDamage(level: number): number {
   return 5 * Math.pow(2, level - 1);
@@ -16,17 +21,17 @@ export function weaponDamage(level: number): number {
 
 /** Dificultad de un nivel (1, 2, 3...). Crece más rápido que el oro para pedir fusiones. */
 function difficulty(level: number): number {
-  return Math.pow(1.42, level - 1);
+  return Math.pow(1.6, level - 1);
 }
 
 export function enemyHp(level: number, boss: boolean): number {
-  const base = 14 * difficulty(level);
+  const base = 24 * difficulty(level);
   return boss ? base * 10 : base;
 }
 
 /** Daño por segundo que recibe el héroe. */
 export function enemyDps(level: number, boss: boolean): number {
-  const base = 2.5 * Math.pow(1.3, level - 1);
+  const base = 6 * Math.pow(1.3, level - 1);
   return boss ? base * 1.8 : base;
 }
 
@@ -69,7 +74,7 @@ export interface UpgradeDef {
   icon: string;
 }
 
-export type UpgradeId = 'fuerza' | 'vida' | 'velocidad' | 'calidad' | 'codicia';
+export type UpgradeId = 'fuerza' | 'vida' | 'lluvia' | 'calidad' | 'codicia';
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -91,13 +96,13 @@ export const UPGRADES: UpgradeDef[] = [
     icon: '❤️',
   },
   {
-    id: 'velocidad',
-    name: 'Velocidad',
-    desc: (l) => `+8% de velocidad de ataque (ahora +${l * 8}%)`,
+    id: 'lluvia',
+    name: 'Lluvia de armas',
+    desc: (l) => `Cae un arma cada ${spawnInterval(l).toFixed(2)} s durante el nivel`,
     baseCost: 40,
     growth: 1.8,
-    max: 25,
-    icon: '⚡',
+    max: 15,
+    icon: '🌧️',
   },
   {
     id: 'calidad',
@@ -127,6 +132,10 @@ export function heroMaxHp(vidaLvl: number): number {
   return 100 * Math.pow(1.18, vidaLvl);
 }
 
-export function attacksPerSecond(speedLvl: number): number {
-  return 1.3 * (1 + speedLvl * 0.08);
+export function spawnInterval(lluviaLvl: number): number {
+  return 0.9 * Math.pow(0.94, lluviaLvl);
+}
+
+export function comboMultiplier(combo: number): number {
+  return 1 + Math.min(combo, 20) * 0.1;
 }

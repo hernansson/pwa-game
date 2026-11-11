@@ -4,7 +4,7 @@ import {
   ENERGY_REGEN_SECONDS,
   UPGRADES,
   UpgradeId,
-  attacksPerSecond,
+  spawnInterval,
   heroMaxHp,
   weaponDamage,
 } from './balance';
@@ -14,7 +14,12 @@ export interface Run {
   wave: number; // 0..WAVES_PER_LEVEL-1 oleadas normales, WAVES_PER_LEVEL = jefe
   enemyInWave: number;
   enemyHp: number;
+  enemyPos: number; // 1 = recién aparece, 0 = llegó al héroe
   heroHp: number;
+  spawnClock: number;
+  combo: number;
+  comboTimer: number;
+  maxCombo: number;
   gold: number;
   drops: number;
   result: null | 'win' | 'lose';
@@ -47,7 +52,9 @@ export interface GameState {
   events: { t: number; e: string }[];
 }
 
-const SAVE_KEY = 'heroes-forja-save-v2';
+const SAVE_KEY = 'heroes-forja-save';
+const OLD_KEYS = ['heroes-forja-save-v2', 'heroes-forja-save-v1'];
+export const SAVE_VERSION = 3;
 
 export function currentWeek(now = Date.now()): number {
   // Semanas que arrancan el lunes 00:00 UTC.
@@ -65,7 +72,7 @@ export function newState(): GameState {
   board[1] = 1;
   board[2] = 1;
   return {
-    version: 2,
+    version: SAVE_VERSION,
     playerName: '',
     gold: 0,
     gems: 20,
@@ -74,7 +81,7 @@ export function newState(): GameState {
     unlocked: 1,
     stars: {},
     board,
-    upgrades: { fuerza: 0, vida: 0, velocidad: 0, calidad: 0, codicia: 0 },
+    upgrades: { fuerza: 0, vida: 0, lluvia: 0, calidad: 0, codicia: 0 },
     forged: 0,
     run: null,
     skin: 'caballero',
@@ -86,17 +93,72 @@ export function newState(): GameState {
   };
 }
 
+/**
+ * Convierte cualquier guardado viejo al formato actual, para que actualizar el
+ * juego nunca borre el progreso.
+ */
+export function migrate(raw: unknown): GameState {
+  const base = newState();
+  if (!raw || typeof raw !== 'object') return base;
+  const old = raw as Partial<GameState> & Record<string, unknown>;
+  const s: GameState = { ...base, ...old } as GameState;
+  s.upgrades = { ...base.upgrades, ...(old.upgrades ?? {}) };
+  const legacy = old.upgrades as Record<string, number> | undefined;
+  if (legacy && typeof legacy.velocidad === 'number' && !legacy.lluvia) s.upgrades.lluvia = Math.min(15, legacy.velocidad);
+  delete (s.upgrades as Record<string, number>).velocidad;
+  delete (s.upgrades as Record<string, number>).forja;
+  s.league = { ...base.league, ...(old.league ?? {}) };
+  s.stats = { ...base.stats, ...(old.stats ?? {}) };
+  if (!Array.isArray(s.board) || s.board.length !== BOARD_SIZE) s.board = base.board;
+  if (typeof s.unlocked !== 'number') s.unlocked = 1;
+  if (!s.stars || typeof s.stars !== 'object') s.stars = {};
+  if (typeof s.energy !== 'number') {
+    s.energy = ENERGY_MAX;
+    s.energyAt = Date.now();
+  }
+  if (!Array.isArray(s.ownedSkins) || !s.ownedSkins.length) s.ownedSkins = ['caballero'];
+  // Campos de la versión 1 que ya no se usan.
+  for (const k of ['souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
+    delete (s as unknown as Record<string, unknown>)[k];
+  }
+  s.run = null;
+  s.version = SAVE_VERSION;
+  return s;
+}
+
 export function load(): GameState {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as GameState;
-      return { ...newState(), ...parsed };
+    for (const key of [SAVE_KEY, ...OLD_KEYS]) {
+      const raw = localStorage.getItem(key);
+      if (raw) return migrate(JSON.parse(raw));
     }
   } catch {
     /* sin almacenamiento: partida nueva */
   }
   return newState();
+}
+
+/** Código de texto con todo el progreso, para pasarlo a otro dispositivo. */
+export function exportCode(s: GameState): string {
+  const { events: _events, run: _run, ...rest } = s;
+  const json = JSON.stringify(rest);
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return 'FORJA-' + btoa(bin);
+}
+
+export function importCode(code: string): GameState | null {
+  try {
+    const clean = code.trim().replace(/^FORJA-/, '').replace(/\s+/g, '');
+    const bin = atob(clean);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const data = JSON.parse(new TextDecoder().decode(bytes));
+    if (!data || typeof data !== 'object' || !Array.isArray(data.board)) return null;
+    return migrate(data);
+  } catch {
+    return null;
+  }
 }
 
 export function save(s: GameState): void {
@@ -110,7 +172,7 @@ export function save(s: GameState): void {
 
 export function resetSave(): void {
   try {
-    localStorage.removeItem(SAVE_KEY);
+    for (const key of [SAVE_KEY, ...OLD_KEYS]) localStorage.removeItem(key);
   } catch {
     /* nada */
   }
@@ -151,8 +213,8 @@ export function damagePerHit(s: GameState): number {
   return weaponDamage(bestWeapon(s)) * (1 + s.upgrades.fuerza * 0.15);
 }
 
-export function attackRate(s: GameState): number {
-  return attacksPerSecond(s.upgrades.velocidad);
+export function spawnSeconds(s: GameState): number {
+  return spawnInterval(s.upgrades.lluvia);
 }
 
 export function goldMultiplier(s: GameState): number {
@@ -163,8 +225,9 @@ export function maxHp(s: GameState): number {
   return heroMaxHp(s.upgrades.vida);
 }
 
-export function dps(s: GameState): number {
-  return damagePerHit(s) * attackRate(s);
+/** Daño de una fusión que produce un arma de cierto nivel (sin combo). */
+export function mergeDamage(s: GameState, level: number): number {
+  return weaponDamage(level) * 2 * (1 + s.upgrades.fuerza * 0.15);
 }
 
 export function upgradeDef(id: UpgradeId) {

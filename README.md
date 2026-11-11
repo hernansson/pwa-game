@@ -1,8 +1,8 @@
 # Héroes de la Forja (prototipo)
 
 Juego web instalable como PWA: recorres niveles cortos que terminan en un jefe,
-tu héroe pelea solo, fusionas las armas que sueltan los enemigos y compites cada
-semana en una liga. Cada nivel cuesta energía, que se recarga con el tiempo.
+durante el nivel caen armas al tablero y cada fusión golpea al enemigo (con combos),
+y compites cada semana en una liga. Cada nivel cuesta energía, que se recarga con el tiempo.
 
 ## Desarrollo
 
@@ -17,7 +17,7 @@ npm run build:single # dist-single/index.html en un solo archivo (vista previa)
 
 - `src/balance.ts`: todas las fórmulas de equilibrio (daño, vida, oro, costos).
 - `src/game.ts`: lógica de niveles, combate, fusión, forja y mejoras.
-- `src/state.ts`: estado, guardado local y energía.
+- `src/state.ts`: estado, guardado local con migraciones, código de guardado y energía.
 - `src/league.ts`: liga semanal (rivales simulados hasta tener servidor).
 - `src/art.ts`: arte SVG de héroes, skins, armas y enemigos.
 - `src/main.ts`: interfaz.

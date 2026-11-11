@@ -1,10 +1,16 @@
 import {
+  APPROACH_SECONDS,
+  AUTO_ATTACK_FACTOR,
+  AUTO_ATTACK_RATE,
+  BOSS_APPROACH_SECONDS,
   BOSS_CHEST,
-  DROP_CHANCE,
+  COMBO_WINDOW,
   ENEMIES_PER_WAVE,
   ENERGY_COST,
+  MERGE_PUSHBACK,
   UpgradeId,
   WAVES_PER_LEVEL,
+  comboMultiplier,
   dropLevel,
   enemyDps,
   enemyGold,
@@ -18,11 +24,12 @@ import {
 import {
   GameState,
   Run,
-  attackRate,
   damagePerHit,
   goldMultiplier,
   maxHp,
+  mergeDamage,
   regenEnergy,
+  spawnSeconds,
   track,
   upgradeDef,
 } from './state';
@@ -34,12 +41,12 @@ export interface ClearReport {
   gold: number;
   gems: number;
   points: number;
-  drops: number;
+  maxCombo: number;
   firstClear: boolean;
 }
 
 export type GameEvent =
-  | { type: 'hit'; dmg: number; crit: boolean }
+  | { type: 'hit'; dmg: number; crit: boolean; merge: boolean; combo: number }
   | { type: 'hurt'; dmg: number }
   | { type: 'kill'; gold: number; boss: boolean }
   | { type: 'wave'; wave: number; boss: boolean }
@@ -50,9 +57,9 @@ type Listener = (e: GameEvent) => void;
 
 export class Game {
   s: GameState;
-  private attackClock = 0;
+  private autoClock = 0;
   private respawnDelay = 0;
-  private endDelay = 0;
+  private hurtClock = 0;
   private listeners: Listener[] = [];
 
   constructor(s: GameState) {
@@ -69,6 +76,11 @@ export class Game {
 
   get respawning() {
     return this.respawnDelay > 0;
+  }
+
+  get fighting() {
+    const run = this.s.run;
+    return !!run && !run.result;
   }
 
   isBossWave(run: Run) {
@@ -88,14 +100,18 @@ export class Game {
       wave: 0,
       enemyInWave: 0,
       enemyHp: enemyHp(level, false),
+      enemyPos: 1,
       heroHp: maxHp(this.s),
+      spawnClock: 0,
+      combo: 0,
+      comboTimer: 0,
+      maxCombo: 0,
       gold: 0,
       drops: 0,
       result: null,
     };
-    this.attackClock = 0;
-    this.respawnDelay = 0.6;
-    this.endDelay = 0;
+    this.autoClock = 0;
+    this.respawnDelay = 0.5;
     track(this.s, `start:${level}`);
     this.emit({ type: 'wave', wave: 0, boss: false });
     return true;
@@ -103,50 +119,75 @@ export class Game {
 
   /** Abandona el nivel actual (la energía no se devuelve). */
   abandon() {
-    const run = this.s.run;
-    if (!run || run.result) return;
-    this.finish(false);
+    if (this.fighting) this.finish(false);
   }
 
   tick(dt: number) {
     regenEnergy(this.s);
     const run = this.s.run;
-    if (!run) return;
-    if (run.result) {
-      this.endDelay -= dt;
-      return;
+    if (!run || run.result) return;
+
+    // Lluvia de armas: es lo que alimenta el tablero durante el nivel.
+    run.spawnClock += dt;
+    const every = spawnSeconds(this.s);
+    while (run.spawnClock >= every) {
+      run.spawnClock -= every;
+      this.dropWeapons(1, dropLevel(run.level, this.s.upgrades.calidad));
     }
+
+    if (run.comboTimer > 0) {
+      run.comboTimer -= dt;
+      if (run.comboTimer <= 0) run.combo = 0;
+    }
+
     if (this.respawnDelay > 0) {
       this.respawnDelay -= dt;
       return;
     }
     const boss = this.isBossWave(run);
 
-    // El enemigo golpea al héroe de forma continua.
-    const incoming = enemyDps(run.level, boss) * dt;
-    run.heroHp -= incoming;
-    if (Math.random() < dt * 1.2) this.emit({ type: 'hurt', dmg: enemyDps(run.level, boss) / 1.2 });
-    if (run.heroHp <= 0) {
-      run.heroHp = 0;
-      this.finish(false);
-      return;
-    }
-
-    this.attackClock += dt;
-    const interval = 1 / attackRate(this.s);
-    while (this.attackClock >= interval && !run.result) {
-      this.attackClock -= interval;
-      this.attack(run);
-      if (this.respawnDelay > 0) break;
+    // El enemigo avanza hacia el héroe.
+    run.enemyPos = Math.max(0, run.enemyPos - dt / (boss ? BOSS_APPROACH_SECONDS : APPROACH_SECONDS));
+    if (run.enemyPos <= 0) {
+      // Llegó: golpea al héroe, y el héroe responde con su arma equipada.
+      const dps = enemyDps(run.level, boss);
+      run.heroHp -= dps * dt;
+      this.hurtClock += dt;
+      if (this.hurtClock > 0.7) {
+        this.hurtClock = 0;
+        this.emit({ type: 'hurt', dmg: dps * 0.7 });
+      }
+      if (run.heroHp <= 0) {
+        run.heroHp = 0;
+        this.finish(false);
+        return;
+      }
+      this.autoClock += dt;
+      if (this.autoClock >= 1 / AUTO_ATTACK_RATE) {
+        this.autoClock = 0;
+        const crit = Math.random() < 0.1;
+        this.damage(run, damagePerHit(this.s) * AUTO_ATTACK_FACTOR * (crit ? 2.5 : 1), crit, false);
+      }
     }
   }
 
-  private attack(run: Run) {
-    const crit = Math.random() < 0.1;
-    const dmg = damagePerHit(this.s) * (crit ? 2.5 : 1);
+  private damage(run: Run, dmg: number, crit: boolean, merge: boolean) {
     run.enemyHp -= dmg;
-    this.emit({ type: 'hit', dmg, crit });
+    this.emit({ type: 'hit', dmg, crit, merge, combo: run.combo });
     if (run.enemyHp <= 0) this.kill(run);
+  }
+
+  /** Golpe producido por una fusión durante el nivel. */
+  private mergeAttack(level: number) {
+    const run = this.s.run;
+    if (!run || run.result || this.respawnDelay > 0) return;
+    run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
+    run.comboTimer = COMBO_WINDOW;
+    run.maxCombo = Math.max(run.maxCombo, run.combo);
+    run.enemyPos = Math.min(1, run.enemyPos + MERGE_PUSHBACK);
+    const crit = Math.random() < 0.08;
+    const dmg = mergeDamage(this.s, level) * comboMultiplier(run.combo - 1) * (crit ? 2 : 1);
+    this.damage(run, dmg, crit, true);
   }
 
   private dropWeapons(count: number, level: number): void {
@@ -172,32 +213,29 @@ export class Game {
     this.s.gold += gold;
     this.s.stats.kills++;
     this.emit({ type: 'kill', gold, boss });
-    const lvl = dropLevel(run.level, this.s.upgrades.calidad);
 
     if (boss) {
-      this.dropWeapons(BOSS_CHEST, lvl + 1);
+      this.dropWeapons(BOSS_CHEST, dropLevel(run.level, this.s.upgrades.calidad) + 1);
       this.finish(true);
       return;
     }
-    if (Math.random() < DROP_CHANCE) this.dropWeapons(1, lvl);
-
-    this.respawnDelay = 1.0; // el héroe camina hasta el siguiente enemigo
+    this.respawnDelay = 0.35;
     run.enemyInWave++;
     if (run.enemyInWave >= ENEMIES_PER_WAVE) {
       run.wave++;
       run.enemyInWave = 0;
       // Pequeña curación entre oleadas.
       run.heroHp = Math.min(maxHp(this.s), run.heroHp + maxHp(this.s) * 0.15);
-      this.respawnDelay = 1.8;
+      this.respawnDelay = 0.9;
       this.emit({ type: 'wave', wave: run.wave, boss: this.isBossWave(run) });
     }
     run.enemyHp = enemyHp(run.level, this.isBossWave(run));
+    run.enemyPos = 1;
   }
 
   private finish(win: boolean) {
     const run = this.s.run!;
     run.result = win ? 'win' : 'lose';
-    this.endDelay = 1.2;
     let stars = 0;
     let gems = 0;
     let points = 0;
@@ -214,14 +252,14 @@ export class Game {
       points = leaguePointsForClear(run.level, stars);
       this.s.league.points += points;
       this.s.stats.clears++;
-      track(this.s, `clear:${run.level}:${stars}`);
+      track(this.s, `clear:${run.level}:${stars}:${run.maxCombo}`);
     } else {
       this.s.stats.fails++;
       track(this.s, `fail:${run.level}:${run.wave}`);
     }
     this.emit({
       type: 'end',
-      report: { level: run.level, win, stars, gold: run.gold, gems, points, drops: run.drops, firstClear },
+      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear },
     });
   }
 
@@ -242,7 +280,7 @@ export class Game {
     return true;
   }
 
-  /** Mueve o fusiona armas. Devuelve 'merge', 'move', 'swap' o null. */
+  /** Mueve o fusiona armas. Durante un nivel, cada fusión golpea al enemigo. */
   drop(from: number, to: number): 'merge' | 'move' | 'swap' | null {
     const b = this.s.board;
     if (from === to || b[from] === null) return null;
@@ -255,6 +293,7 @@ export class Game {
       b[to] = (b[to] as number) + 1;
       b[from] = null;
       this.s.stats.merges++;
+      this.mergeAttack(b[to] as number);
       return 'merge';
     }
     [b[to], b[from]] = [b[from], b[to]];
