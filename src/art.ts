@@ -150,7 +150,7 @@ function heroShield(lvl: number): string {
   const f = pieceFrame(lvl);
   const s = 0.8 + Math.min(lvl, 10) * 0.04;
   return `<g transform="translate(30 62) scale(${s}) translate(-30 -62)" class="hero-shield">
-    <path d="M30 44 L44 49 Q44 70 30 82 Q16 70 16 49Z" fill="#2b5fbf" stroke="${f}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M30 44 L44 49 Q44 70 30 82 Q16 70 16 49Z" fill="${shieldColor(lvl)}" stroke="${f}" stroke-width="3.5" stroke-linejoin="round"/>
     <path d="M30 50 L39 53 Q39 67 30 75Z" fill="#fff" opacity=".25"/>
     <circle cx="30" cy="61" r="${3 + Math.min(lvl, 10) * 0.4}" fill="${f}" stroke="#0d0f16" stroke-width="1.2"/>
   </g>`;
@@ -267,7 +267,8 @@ export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: 
 // ---------- Piezas del tablero ----------
 
 /** Color del marco según el nivel de la pieza (1 a 10). */
-export const PIECE_FRAMES = ['#5d6776', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#4fb3ff', '#ff4d6a', '#b77bff', '#ff7a2f', '#a8fbff'];
+/** Mismo orden de materiales que las espadas: hierro, bronce, plata, oro, esmeralda, zafiro, rubí, amatista, obsidiana, celestial. */
+export const PIECE_FRAMES = ['#7d8794', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#4f8dff', '#ff4d6a', '#b77bff', '#ff7a2f', '#a8fbff'];
 
 const PIECE_ICONS: Record<string, (c: string, d: string) => string> = {
   espada: (c, d) => `<g transform="rotate(-40 32 32)">
@@ -305,6 +306,17 @@ export function pieceFrame(lvl: number): string {
   return PIECE_FRAMES[Math.max(1, Math.min(lvl, PIECE_FRAMES.length)) - 1];
 }
 
+/** Color de la pieza según familia y nivel: espadas y escudos toman el material del nivel, como en el héroe. */
+export function shieldColor(lvl: number): string {
+  return lvl <= 1 ? '#2b5fbf' : TIERS[Math.min(lvl, TIERS.length) - 1].blade;
+}
+
+function pieceColor(fam: string, lvl: number, base: string): string {
+  if (fam === 'espada') return TIERS[Math.min(lvl, TIERS.length) - 1].blade;
+  if (fam === 'escudo') return shieldColor(lvl);
+  return base;
+}
+
 /** Pieza del tablero: el icono dice la familia y el marco y el número dicen el nivel. */
 export function pieceSvg(fam: string, lvl: number, color: string): string {
   const frame = pieceFrame(lvl);
@@ -317,7 +329,7 @@ export function pieceSvg(fam: string, lvl: number, color: string): string {
   return `<svg viewBox="0 0 64 64" aria-hidden="true">
     <rect x="2" y="2" width="60" height="60" rx="13" fill="${d}" stroke="${frame}" stroke-width="${lvl >= 4 ? 4 : 3}"/>
     <rect x="5" y="5" width="54" height="26" rx="10" fill="#fff" opacity=".07"/>
-    <g transform="translate(32 33) scale(${scale}) translate(-32 -33)">${PIECE_ICONS[fam]?.(color, d) ?? ''}</g>
+    <g transform="translate(32 33) scale(${scale}) translate(-32 -33)">${PIECE_ICONS[fam]?.(pieceColor(fam, lvl, color), d) ?? ''}</g>
     ${sparkle}
     <circle cx="13" cy="13" r="8.5" fill="${frame}" stroke="#0008" stroke-width="1.5"/>
     <text x="13" y="17.5" text-anchor="middle" font-size="12" font-weight="900" fill="#1a1020" font-family="system-ui,sans-serif">${lvl}</text>

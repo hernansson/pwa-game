@@ -44,14 +44,18 @@ export function pieceValue(lvl: number, size: number): number {
   return Math.pow(2, lvl - 2) * (1 + 0.5 * (size - 2));
 }
 
-/** Duración del potenciador de un rayo: 0,1 s en nivel 2, unos 2,5 s en nivel 10. */
-export function boostSeconds(lvl: number): number {
-  return 0.1 * Math.pow(1.5, lvl - 2);
+/**
+ * El potenciador de un rayo siempre dura lo mismo: alcanza para 3 o 4 fusiones
+ * (un jugador tarda entre 0,5 y 0,8 s por fusión). El nivel solo sube cuánto multiplica.
+ */
+export const BOOST_SECONDS = 2.5;
+export function boostSeconds(_lvl: number): number {
+  return BOOST_SECONDS;
 }
 
-/** Cuánto multiplica el daño el potenciador. */
+/** Cuánto multiplica el daño el potenciador: x1,3 en nivel 2, x3,4 en nivel 9, x4 en nivel 10. */
 export function boostMultiplier(lvl: number): number {
-  return 1 + 0.15 * (lvl - 1);
+  return 1 + 0.3 * (lvl - 1);
 }
 
 /** Segundos que tienes entre fusiones para no perder el combo. */
