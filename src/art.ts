@@ -186,12 +186,27 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
 
 const ENEMY_COLORS = ['#58c26b', '#d36bd8', '#e0884a', '#4fb3e8', '#c9c35a', '#e85a5a'];
 
-export function enemySvg(wave: number, boss: boolean): string {
+export interface EnemyOpts {
+  color?: string;
+  horns?: boolean;
+  spikes?: boolean;
+  eyes?: string;
+}
+
+export function enemySvg(wave: number, boss: boolean, o: EnemyOpts = {}): string {
   const kind = Math.floor((wave - 1) / 10) % 3;
-  const color = ENEMY_COLORS[Math.floor((wave - 1) / 30) % ENEMY_COLORS.length];
-  const crown = boss
-    ? `<path d="M34 18 L40 6 L48 16 L56 4 L64 16 L72 6 L76 18Z" fill="#ffd34d" stroke="#3a2a00" stroke-width="2"/>`
+  const color = o.color ?? ENEMY_COLORS[Math.floor((wave - 1) / 30) % ENEMY_COLORS.length];
+  const top = [30, 40, 34][kind];
+  const horns = o.horns
+    ? `<path d="M40 ${top + 6} Q30 ${top - 8} 26 ${top - 18} Q40 ${top - 10} 46 ${top + 2}Z M70 ${top + 6} Q80 ${top - 8} 84 ${top - 18} Q70 ${top - 10} 64 ${top + 2}Z" fill="#f2e6cf" stroke="#2a2018" stroke-width="2" stroke-linejoin="round"/>`
     : '';
+  const spikes = o.spikes
+    ? `<path d="M22 ${top + 30} L12 ${top + 24} L20 ${top + 40}Z M88 ${top + 30} L98 ${top + 24} L90 ${top + 40}Z M30 ${top + 14} L22 ${top + 4} L36 ${top + 10}Z M80 ${top + 14} L88 ${top + 4} L74 ${top + 10}Z" fill="${o.eyes ?? '#ffe066'}" stroke="#1a1410" stroke-width="1.5"/>`
+    : '';
+  const crown =
+    horns +
+    spikes +
+    (boss ? `<path d="M34 18 L40 6 L48 16 L56 4 L64 16 L72 6 L76 18Z" fill="#ffd34d" stroke="#3a2a00" stroke-width="2"/>` : '');
   if (kind === 0) {
     // Babosa
     return `<svg viewBox="0 0 110 100" class="enemy-svg" aria-hidden="true">
@@ -224,6 +239,29 @@ export function enemySvg(wave: number, boss: boolean): string {
     <rect x="42" y="40" width="26" height="8" rx="3" fill="#1d1a18"/>
     <circle cx="49" cy="44" r="2.6" fill="${color}"/><circle cx="61" cy="44" r="2.6" fill="${color}"/>
     ${crown}</svg>`;
+}
+
+const ENEMY_TITLES = ['de Fuego', 'de Hielo', 'de Sombra', 'del Pantano', 'de Cristal', 'de Lava', 'del Trueno', 'de Hueso', 'de Niebla', 'de Oro', 'de Óxido', 'de Espinas', 'del Abismo', 'de Ceniza', 'de Jade', 'Estelar'];
+
+/** Cada nivel tiene su propio jefe: especie por mundo, y color, cuernos, púas y título por nivel. */
+export function levelEnemy(level: number) {
+  const world = Math.ceil(level / 10);
+  const kind = (world - 1) % 3;
+  const hue = (level * 53 + world * 29) % 360;
+  return {
+    wave: kind * 10 + 1,
+    opts: { color: `hsl(${hue} 58% 56%)`, horns: level % 3 === 1 || level % 10 === 0, spikes: level % 4 === 2 || level % 10 === 0, eyes: `hsl(${(hue + 180) % 360} 90% 65%)` } as EnemyOpts,
+    title: ENEMY_TITLES[(level * 7 + world * 3) % ENEMY_TITLES.length],
+    hue,
+  };
+}
+export function levelEnemySvg(level: number, boss: boolean): string {
+  const e = levelEnemy(level);
+  return enemySvg(e.wave, boss, e.opts);
+}
+export function levelEnemyName(level: number, worldBoss: boolean): string {
+  const e = levelEnemy(level);
+  return `${worldBoss ? 'Rey ' : ''}${enemyName(e.wave, false)} ${e.title}`;
 }
 
 export function enemyName(wave: number, boss: boolean): string {

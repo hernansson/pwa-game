@@ -15,7 +15,7 @@ import {
   enemyHp,
   upgradeCost,
 } from './balance';
-import { Skin, enemyName, enemySvg, famIcon, heroSvg, pieceFrame, pieceSvg, skinById } from './art';
+import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ClearReport, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
@@ -59,10 +59,6 @@ function worldOf(level: number) {
 function worldName(w: number) {
   return WORLD_NAMES[(w - 1) % WORLD_NAMES.length] + (w > WORLD_NAMES.length ? ` ${Math.ceil(w / WORLD_NAMES.length)}` : '');
 }
-/** Los enemigos cambian de especie con cada mundo. */
-function enemyKey(level: number) {
-  return (worldOf(level) - 1) * 10 + 1;
-}
 function myLook(): Skin {
   return skinById(armById(game.s.arms.skin)?.skin ?? 'caballero');
 }
@@ -102,20 +98,29 @@ document.querySelector('#app')!.innerHTML = `
     <div class="res gems" title="Gemas"><span class="ico">💠</span><b id="gems">0</b></div>
     <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small></button>
     <button id="install" class="install" hidden>Instalar</button>
-    <button class="vip-btn" id="vip-btn" hidden>👑 VIP</button>
     <button class="gear" id="settings" aria-label="Ajustes">⚙️</button>
   </header>
 
-  <section class="stage" id="stage">
-    <button class="home" id="home">
-      <div class="home-hero" id="home-hero"></div>
-      <div class="home-info">
-        <b id="home-name"></b>
-        <span class="power">⚔️ Poder <b id="home-power"></b></span>
-        <span class="equip-cta">Ver héroe ›</span>
+  <section class="lobby" id="lobby">
+    <div class="lobby-top">
+      <button class="me-chip" data-open="heroe"><span class="me-hero" id="me-hero"></span><span><b id="me-name"></b><small>⚔️ <b id="me-power"></b></small></span></button>
+    </div>
+    <div class="lobby-main">
+      <div class="rail left">
+        <button class="rail-btn" data-open="cofres"><span class="ri">🎁</span><small id="rail-chest">Cofres</small><i class="dot" data-dot="cofres" hidden></i></button>
+        <button class="rail-btn" data-open="liga"><span class="ri">🏆</span><small id="rail-league">Liga</small></button>
       </div>
-    </button>
-    <div class="battle" id="battle" hidden>
+      <div class="stage-card" id="stage-card"></div>
+      <div class="rail right">
+        <button class="rail-btn" data-open="eventos"><span class="ri">🐉</span><small>Eventos</small><em>Pronto</em></button>
+        <button class="rail-btn vip" id="vip-btn" data-open="vip" hidden><span class="ri">👑</span><small>VIP</small></button>
+      </div>
+    </div>
+    <div class="lobby-play" id="lobby-play"></div>
+  </section>
+
+  <section class="stage" id="stage" hidden>
+    <div class="battle" id="battle">
       <div class="run-top">
         <button class="flee" id="flee" aria-label="Abandonar">✕</button>
         <div class="run-title" id="run-title"></div>
@@ -143,8 +148,7 @@ document.querySelector('#app')!.innerHTML = `
     </div>
   </section>
 
-  <section class="lower">
-    <div class="map" id="map"></div>
+  <section class="lower" id="lower" hidden>
     <div class="forge" id="forge" hidden>
       <div class="legend" id="legend"></div>
       <div class="pboard" id="board">
@@ -174,68 +178,114 @@ document.querySelector('#app')!.innerHTML = `
 
 // ---------- Pantalla principal ----------
 
-let homeKey = '';
-function renderHome() {
-  const key = `${JSON.stringify(game.s.arms)}:${game.s.playerName}:${power(game.s)}`;
-  if (key === homeKey) return;
-  homeKey = key;
-  $('#home-hero').innerHTML = myHero();
-  $('#home-name').textContent = game.s.playerName || 'Tu héroe';
-  $('#home-power').textContent = fmt(power(game.s));
+let viewLevel = game.s.unlocked;
+let lobbyKey = '';
+let rankCache = { t: 0, rank: 0 };
+
+function leagueRank(): number {
+  if (Date.now() - rankCache.t > 5000) rankCache = { t: Date.now(), rank: standings(game.s).findIndex((x) => x.isPlayer) + 1 };
+  return rankCache.rank;
 }
-$('#home').addEventListener('click', () => openSheet('heroe'));
 
-let viewWorld = worldOf(game.s.unlocked);
-let mapKey = '';
-
-function renderMap() {
+function renderLobby() {
   const s = game.s;
-  const key = `${viewWorld}:${s.unlocked}:${JSON.stringify(s.stars)}`;
-  if (key === mapKey) return;
-  mapKey = key;
-  const first = (viewWorld - 1) * LEVELS_PER_WORLD + 1;
+  viewLevel = Math.max(1, Math.min(s.unlocked, viewLevel));
+  const lvl = viewLevel;
+  const wait = game.freeChestIn();
+  const key = `${lvl}:${s.unlocked}:${s.stars[lvl] ?? 0}:${s.playerName}:${power(s)}:${JSON.stringify(s.arms)}:${Math.ceil(wait / 60000)}:${leagueRank()}`;
+  if (key === lobbyKey) return;
+  lobbyKey = key;
+  $('#me-hero').innerHTML = myHero();
+  $('#me-name').textContent = s.playerName || 'Tu héroe';
+  $('#me-power').textContent = fmt(power(s));
+  $('#rail-chest').textContent = wait ? timeShort(wait) : '¡Gratis!';
+  $('#rail-league').textContent = `#${leagueRank()}`;
+
+  const world = worldOf(lvl);
+  const first = (world - 1) * LEVELS_PER_WORLD + 1;
+  const worldBoss = lvl % LEVELS_PER_WORLD === 0;
+  const stars = s.stars[lvl] ?? 0;
+  const e = levelEnemy(lvl);
+  const track = Array.from({ length: LEVELS_PER_WORLD }, (_, i) => {
+    const n = first + i;
+    const cls = n === lvl ? 'now' : n > s.unlocked ? 'locked' : s.stars[n] ? 'done' : 'open';
+    return `<i class="${cls} ${n % LEVELS_PER_WORLD === 0 ? 'crown' : ''}" data-view="${n}">${n % LEVELS_PER_WORLD === 0 ? '👑' : ''}</i>`;
+  }).join('');
+  $('#stage-card').innerHTML = `
+    <div class="sc-bg" style="--h:${e.hue};--w:${(world * 67) % 360}"></div>
+    <button class="world-name" data-worlds><small>Mundo ${world}</small><b>${worldName(world)}</b><span>🗺️</span></button>
+    <div class="lvl-nav">
+      <button data-step="-1" ${lvl <= 1 ? 'disabled' : ''} aria-label="Nivel anterior">‹</button>
+      <div class="lvl-title"><small>${worldBoss ? 'Jefe del mundo' : 'Nivel'}</small><b>${lvl}</b></div>
+      <button data-step="1" ${lvl >= s.unlocked ? 'disabled' : ''} aria-label="Nivel siguiente">›</button>
+    </div>
+    <div class="boss-art ${worldBoss ? 'world-boss' : ''}"><div class="boss-glow"></div>${levelEnemySvg(lvl, true)}</div>
+    <div class="boss-name">${levelEnemyName(lvl, worldBoss)}</div>
+    <div class="lvl-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}">★</span>`).join('')}</div>
+    <div class="world-track">${track}</div>`;
+  const cleared = lvl < s.unlocked;
+  $('#lobby-play').innerHTML = `
+    <button class="play big" data-level="${lvl}"><b>${cleared ? 'Repetir' : 'Jugar'}</b><span>⚡${ENERGY_COST}</span></button>
+    <small class="play-note">${cleared ? 'Ya superado: repite por oro y fragmentos' : `${WAVES_PER_LEVEL} oleadas y el jefe · primera victoria: fragmentos + gemas`}</small>`;
+}
+
+function timeShort(ms: number): string {
+  const m = Math.ceil(ms / 60000);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`;
+}
+
+function stepLevel(d: number) {
+  const next = Math.max(1, Math.min(game.s.unlocked, viewLevel + d));
+  if (next === viewLevel) return;
+  viewLevel = next;
+  renderLobby();
+  restartAnim($('#stage-card'), d > 0 ? 'slide-l' : 'slide-r');
+}
+
+function showWorlds() {
+  const s = game.s;
   const maxWorld = worldOf(s.unlocked);
-  const nodes = Array.from({ length: LEVELS_PER_WORLD }, (_, i) => {
-    const lvl = first + i;
-    const locked = lvl > s.unlocked;
-    const stars = s.stars[lvl] ?? 0;
-    const boss = lvl % LEVELS_PER_WORLD === 0;
-    const current = lvl === s.unlocked;
-    // Recorrido en zigzag: fila 1 izquierda→derecha, fila 2 derecha→izquierda.
-    const row = Math.floor(i / 5);
-    const col = row % 2 === 0 ? i % 5 : 4 - (i % 5);
-    return `<button class="node ${locked ? 'locked' : ''} ${boss ? 'boss' : ''} ${current ? 'current' : ''}" data-level="${lvl}"
-      style="grid-row:${row + 1};grid-column:${col + 1}" ${locked ? 'disabled' : ''}>
-      <span class="n">${locked ? '🔒' : boss ? '👑' : lvl}</span>
-      <span class="st">${locked ? '' : '★'.repeat(stars) + '☆'.repeat(3 - stars)}</span>
+  const rows = Array.from({ length: maxWorld + 1 }, (_, i) => {
+    const w = maxWorld - i + 1; // el más nuevo arriba, y el próximo bloqueado como adelanto
+    const first = (w - 1) * LEVELS_PER_WORLD + 1;
+    const locked = first > s.unlocked;
+    let st = 0;
+    for (let n = first; n < first + LEVELS_PER_WORLD; n++) st += s.stars[n] ?? 0;
+    const done = Math.max(0, Math.min(LEVELS_PER_WORLD, s.unlocked - first));
+    return `<button class="world-row ${locked ? 'locked' : ''}" ${locked ? 'disabled' : `data-goto-world="${w}"`} style="--h:${(w * 67) % 360}">
+      <span class="wr-art">${locked ? '🔒' : levelEnemySvg(first + LEVELS_PER_WORLD - 1, true)}</span>
+      <span class="wr-main"><small>Mundo ${w} · niveles ${first}-${first + LEVELS_PER_WORLD - 1}</small><b>${worldName(w)}</b>
+        <i class="wr-bar"><i style="width:${done * 10}%"></i></i></span>
+      <span class="wr-stars">${locked ? '' : `★ ${st}/${LEVELS_PER_WORLD * 3}`}</span>
     </button>`;
   }).join('');
-  const target = Math.min(s.unlocked, first + LEVELS_PER_WORLD - 1);
-  $('#map').innerHTML = `
-    <div class="map-head">
-      <button class="wbtn" data-world="-1" ${viewWorld <= 1 ? 'disabled' : ''}>‹</button>
-      <div><small>Mundo ${viewWorld}</small><b>${worldName(viewWorld)}</b></div>
-      <button class="wbtn" data-world="1" ${viewWorld >= maxWorld ? 'disabled' : ''}>›</button>
-    </div>
-    <div class="path">${nodes}</div>
-    <div class="next-level">
-      <div class="next-enemy">${enemySvg(enemyKey(target), target % LEVELS_PER_WORLD === 0)}</div>
-      <div class="next-info"><small>${target % LEVELS_PER_WORLD === 0 ? 'Jefe del mundo' : `${WAVES_PER_LEVEL} oleadas + jefe`}</small>
-        <b>Nivel ${target}</b><span>${target < s.unlocked ? 'Ya superado: repite por oro y fragmentos' : 'Primera victoria: fragmentos + gemas'}</span></div>
-    </div>
-    <button class="play" data-level="${target}">Jugar nivel ${target} <span>⚡${ENERGY_COST}</span></button>`;
+  showModal(`<div class="worlds"><button class="x" data-close aria-label="Cerrar">✕</button><h2>Mundos</h2><div class="world-list">${rows}</div></div>`);
 }
 
-$('#map').addEventListener('click', (ev) => {
+$('#lobby').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
-  const w = t.closest('[data-world]') as HTMLElement | null;
-  if (w) {
-    viewWorld = Math.max(1, Math.min(worldOf(game.s.unlocked), viewWorld + Number(w.dataset.world)));
-    renderMap();
-    return;
+  const open = t.closest('[data-open]') as HTMLElement | null;
+  if (open) return openSheet(open.dataset.open as Tab);
+  const step = t.closest('[data-step]') as HTMLElement | null;
+  if (step) return stepLevel(Number(step.dataset.step));
+  const view = t.closest('[data-view]') as HTMLElement | null;
+  if (view && Number(view.dataset.view) <= game.s.unlocked) {
+    viewLevel = Number(view.dataset.view);
+    return renderLobby();
   }
+  if (t.closest('[data-worlds]')) return showWorlds();
   const n = t.closest('[data-level]') as HTMLElement | null;
   if (n) startLevel(Number(n.dataset.level));
+});
+
+// Deslizar la tarjeta del nivel para pasar al anterior o al siguiente.
+let swipeX: number | null = null;
+$('#stage-card').addEventListener('pointerdown', (ev) => (swipeX = ev.clientX));
+$('#stage-card').addEventListener('pointerup', (ev) => {
+  if (swipeX === null) return;
+  const dx = ev.clientX - swipeX;
+  swipeX = null;
+  if (Math.abs(dx) > 50) stepLevel(dx < 0 ? 1 : -1);
 });
 
 function startLevel(level: number) {
@@ -269,14 +319,13 @@ function renderHero() {
 let enemyKeyCache = '';
 function renderScreen() {
   const run = game.s.run;
-  $('#home').hidden = !!run;
-  $('#battle').hidden = !run;
-  $('#map').hidden = !!run;
+  $('#lobby').hidden = !!run;
+  $('#stage').hidden = !run;
+  $('#lower').hidden = !run;
   $('#forge').hidden = !run;
   $('#app').classList.toggle('in-run', !!run);
   if (!run) {
-    renderHome();
-    renderMap();
+    renderLobby();
     return;
   }
   renderBoard();
@@ -286,9 +335,9 @@ function renderScreen() {
   if (ek !== enemyKeyCache) {
     enemyKeyCache = ek;
     const el = $('#enemy');
-    el.innerHTML = enemySvg(enemyKey(run.level), boss);
+    el.innerHTML = levelEnemySvg(run.level, boss);
     el.classList.toggle('boss', boss);
-    $('#enemy-name').textContent = enemyName(enemyKey(run.level), boss);
+    $('#enemy-name').textContent = boss ? levelEnemyName(run.level, run.level % LEVELS_PER_WORLD === 0) : enemyName(levelEnemy(run.level).wave, false);
   }
   const max = enemyHp(run.level, boss);
   $('#hp-fill').style.width = (game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / max) * 100) + '%';
@@ -1029,7 +1078,7 @@ function armAction(t: HTMLElement, inModal: boolean): boolean {
     }
   } else ok = game.equipArm(id);
   if (ok) {
-    homeKey = heroKeyCache = '';
+    lobbyKey = heroKeyCache = '';
     renderLegend();
     save(game.s);
     if (inModal) showArm(id);
@@ -1134,7 +1183,7 @@ $('#sheet-body').addEventListener('click', (ev) => {
   if (up) {
     if (game.buy(up.dataset.up as UpgradeId)) {
       restartAnim(up, 'bought');
-      homeKey = '';
+      lobbyKey = '';
     }
     updateTalents();
     return;
@@ -1212,7 +1261,7 @@ $('#modal').addEventListener('change', (ev) => {
   const t = ev.target as HTMLInputElement;
   if (t.id === 'name-input') {
     game.s.playerName = t.value.trim().slice(0, 14);
-    homeKey = '';
+    lobbyKey = '';
     save(game.s);
   }
 });
@@ -1256,14 +1305,19 @@ function hideModal() {
 function backHome() {
   game.leave();
   hideModal();
-  viewWorld = worldOf(game.s.unlocked);
-  homeKey = mapKey = '';
+  viewLevel = game.s.unlocked;
+  lobbyKey = '';
 }
 $('#modal').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
   if (t.closest('[data-close]')) hideModal();
   else if (armAction(t, true)) {
     /* hecho */
+  } else if (t.closest('[data-goto-world]')) {
+    const w = Number((t.closest('[data-goto-world]') as HTMLElement).dataset.gotoWorld);
+    viewLevel = Math.min(game.s.unlocked, w * LEVELS_PER_WORLD);
+    lobbyKey = '';
+    hideModal();
   } else if (t.closest('[data-goto]')) {
     hideModal();
     openSheet((t.closest('[data-goto]') as HTMLElement).dataset.goto as Tab);
@@ -1293,8 +1347,8 @@ $('#modal').addEventListener('click', (ev) => {
     wireGame();
     save(game.s);
     resetBoardView();
-    heroKeyCache = enemyKeyCache = mapKey = homeKey = '';
-    viewWorld = worldOf(game.s.unlocked);
+    heroKeyCache = enemyKeyCache = lobbyKey = '';
+    viewLevel = game.s.unlocked;
     hideModal();
     closeSheet();
     toast('¡Progreso cargado!');
