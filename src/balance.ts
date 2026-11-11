@@ -22,7 +22,7 @@ function earlyEase(level: number): number {
  * Crecimiento por nivel. Hasta el nivel LATE.from los enemigos crecen rápido (el enganche inicial);
  * después crecen más despacio para que el avance siga siendo constante en mundos lejanos.
  */
-export const LATE = { from: 30, hp: 1.33, hit: 1.21, gold: 1.33 };
+export const LATE = { from: 30, hp: 1.22, hit: 1.12, gold: 1.24 };
 function grow(level: number, early: number, late: number): number {
   const a = Math.min(level, LATE.from) - 1;
   const b = Math.max(0, level - LATE.from);
