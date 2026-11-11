@@ -7,11 +7,13 @@ import {
   UPGRADES,
   UpgradeId,
   WAVES_PER_LEVEL,
+  enemyAttackSeconds,
   enemyHp,
   upgradeCost,
 } from './balance';
-import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, skinById, tierFor, weaponName, weaponSvg } from './art';
-import { ClearReport, Game, Loot } from './game';
+import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, pieceSvg, skinById } from './art';
+import { COLS, FAMILIES, FAMILY_INFO, Family, ROWS, height } from './board';
+import { ClearReport, Game, Loot, MergeResult } from './game';
 import {
   CHEST_GEMS,
   ITEMS,
@@ -38,7 +40,7 @@ import {
 } from './league';
 import { esc, fmt } from './format';
 import {
-  bestWeapon,
+  autoDropTime,
   exportCode,
   goldMultiplier,
   importCode,
@@ -102,12 +104,14 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="arena">
         <div class="hero-wrap">
-          <div class="hp hero-hp"><div class="hp-fill" id="hero-hp"></div></div>
+          <div class="hp hero-hp"><div class="hp-fill" id="hero-hp"></div><div class="shield-fill" id="hero-shield"></div></div>
+          <div class="shield-label" id="shield-label"></div>
           <div class="hero" id="hero"></div>
         </div>
         <div class="enemy-wrap">
           <div class="enemy-name" id="enemy-name"></div>
           <div class="hp"><div class="hp-fill" id="hp-fill"></div></div>
+          <div class="atk" title="Próximo golpe"><div id="atk-fill"></div></div>
           <div class="enemy" id="enemy"></div>
         </div>
         <div class="fx" id="fx"></div>
@@ -119,9 +123,16 @@ document.querySelector('#app')!.innerHTML = `
   <section class="lower">
     <div class="map" id="map"></div>
     <div class="forge" id="forge" hidden>
-      <div class="forge-head"><span>Mejor arma del nivel: <em id="best-weapon"></em></span></div>
-      <div class="board" id="board"></div>
-      <p class="hint" id="hint"></p>
+      <div class="next-row">
+        <div class="next-now"><small>Ahora</small><div class="next-piece" id="next-now"></div></div>
+        <div class="next-later"><small>Luego</small><div class="next-piece" id="next-later"></div></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="pboard" id="board">
+        <div class="pieces" id="pieces"></div>
+        <div class="cols" id="cols">${Array.from({ length: COLS }, (_, c) => `<button data-col="${c}" aria-label="Columna ${c + 1}"></button>`).join('')}</div>
+        <div class="auto-bar"><div id="auto-fill"></div></div>
+      </div>
     </div>
   </section>
 
@@ -216,7 +227,7 @@ function startLevel(level: number) {
   }
   if (game.start(level)) {
     heroKeyCache = enemyKeyCache = '';
-    boardDirty = true;
+    resetBoardView();
     closeSheet();
     hideModal();
   }
@@ -239,6 +250,7 @@ function renderScreen() {
   $('#battle').hidden = !run;
   $('#map').hidden = !!run;
   $('#forge').hidden = !run;
+  $('#app').classList.toggle('in-run', !!run);
   if (!run) {
     renderHome();
     renderMap();
@@ -260,15 +272,21 @@ function renderScreen() {
   $('#hero-hp').style.width = Math.max(0, run.heroHp / maxHp(game.s)) * 100 + '%';
   $('#hero-hp').classList.toggle('low', run.heroHp / maxHp(game.s) < 0.3);
   $('#enemy').classList.toggle('dead', game.respawning || run.result === 'win');
-  ($('.enemy-wrap') as HTMLElement).style.transform = `translateX(${-(1 - run.enemyPos) * 70}%)`;
-  $('#enemy').classList.toggle('attacking', run.enemyPos <= 0 && !game.respawning && !run.result);
+  const hpMax = maxHp(game.s);
+  $('#hero-shield').style.width = Math.min(1, run.shield / hpMax) * 100 + '%';
+  $('#shield-label').textContent = run.shield >= 1 ? `🛡️ ${fmt(run.shield)}` : '';
+  const atk = $('#atk-fill');
+  atk.style.width = (run.stun > 0 ? 100 : Math.max(0, 1 - run.enemyTimer / enemyAttackSeconds(boss)) * 100) + '%';
+  atk.parentElement!.classList.toggle('stunned', run.stun > 0);
+  atk.parentElement!.classList.toggle('soon', run.stun <= 0 && run.enemyTimer < 1);
+  $('#enemy').classList.toggle('stunned', run.stun > 0);
   const combo = $('#combo');
   const comboText = run.combo >= 2 && !run.result ? `COMBO x${run.combo}` : '';
   if (combo.textContent !== comboText) {
     combo.textContent = comboText;
     if (comboText) restartAnim(combo, 'pop');
   }
-  $('#hero').classList.toggle('walking', game.respawning && !run.result);
+  $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
   $('#hero').classList.toggle('down', run.result === 'lose');
   $('#run-title').textContent = `Nivel ${run.level}`;
   const route: string[] = [];
@@ -315,27 +333,49 @@ function restartAnim(el: HTMLElement, cls: string) {
   el.classList.add(cls);
 }
 
+/** Efectos en pantalla de cada fusión. */
+function onMergeFx(r: MergeResult) {
+  const { ev } = r;
+  burstAt(ev.col, ev.row, FAMILY_INFO[ev.fam].color, ev.burst || ev.size >= 4);
+  if (r.dmg > 0) {
+    restartAnim($('#hero'), 'attack');
+    restartAnim($('#enemy'), 'hurt');
+    const big = r.crit || r.combo >= 5 || ev.burst;
+    floatText(fmt(r.dmg) + (r.crit ? '!' : ''), r.crit ? 'crit big' : ev.fam === 'espada' ? 'merge-hit' : 'dmg', 68, 34);
+    if (ev.fam === 'espada' || big) restartAnim($('#stage'), big ? 'shake-big' : 'shake');
+  }
+  if (r.shield >= 1) floatText('+' + fmt(r.shield) + ' 🛡️', 'shield', 22, 30);
+  if (r.heal >= 1) floatText('+' + fmt(r.heal) + ' ❤️', 'heal', 22, 40);
+  if (r.stun > 0) floatText(`🔮 ${r.stun.toFixed(1)}s`, 'stun', 74, 22);
+  if (r.gold > 0) floatText('+' + fmt(r.gold) + ' 🪙', 'gold', 74, 16);
+  if (ev.burst) toast(`¡Explosión de ${FAMILY_INFO[ev.fam].name.toLowerCase()}!`);
+  if (navigator.vibrate) navigator.vibrate(ev.burst ? 40 : 12);
+}
+
 function wireGame() {
   game.on((e) => {
-    if (e.type === 'hit') {
-      restartAnim($('#hero'), 'attack');
-      restartAnim($('#enemy'), 'hurt');
-      if (e.merge) {
-        floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit big' : 'merge-hit', 66, 36);
-        restartAnim($('#stage'), e.combo >= 5 || e.crit ? 'shake-big' : 'shake');
-      } else {
-        floatText(fmt(e.dmg) + (e.crit ? '!' : ''), e.crit ? 'crit' : 'dmg');
+    if (e.type === 'merge') onMergeFx(e.r);
+    else if (e.type === 'hurt') {
+      restartAnim($('#enemy'), 'lunge');
+      if (e.dmg > 0) {
+        restartAnim($('#hero'), 'hit');
+        floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
       }
-    } else if (e.type === 'hurt') {
-      restartAnim($('#hero'), 'hit');
-      floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
+      if (e.blocked > 0) floatText(`🛡️ ${fmt(e.blocked)}`, 'shield', 30, 22);
     } else if (e.type === 'kill') {
       floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
     } else if (e.type === 'wave') {
       if (e.boss) toast('¡Llegó el jefe!');
-    } else if (e.type === 'drop') {
-      boardDirty = true;
-      for (const i of e.indexes) spawned.add(i);
+    } else if (e.type === 'place') {
+      lastPlaced = game.s.run?.focusId ?? 0;
+    } else if (e.type === 'reject') {
+      const b = $(`#cols [data-col="${e.col}"]`);
+      if (b) restartAnim(b, 'nope');
+    } else if (e.type === 'overflow') {
+      restartAnim($('#board'), 'overflow');
+      restartAnim($('#stage'), 'shake-big');
+      toast('¡Tablero lleno! Perdiste vida');
+      if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
     } else if (e.type === 'end') {
       setTimeout(() => showResult(e.report), 1100);
     }
@@ -375,7 +415,7 @@ function showResult(r: ClearReport) {
   } else {
     showModal(
       `<div class="result lose"><div class="big-ico">💀</div><h2>Tu héroe cayó</h2>
-      <p>Encadena fusiones más rápido, mejora tu equipo o sube tus talentos con el oro que juntaste.</p>
+      <p>Elige mejor dónde soltar cada pieza para armar cadenas. Usa escudos y pociones cuando el enemigo aprieta, y sube tus talentos con el oro que juntaste.</p>
       <div class="stat-row"><span>Oro</span><b>+${fmt(r.gold)} 🪙</b></div>
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="btns"><button data-leave>Inicio</button><button data-next="${r.level}" class="primary">Reintentar ⚡${ENERGY_COST}</button></div></div>`,
@@ -384,88 +424,115 @@ function showResult(r: ClearReport) {
   }
 }
 
-// ---------- Tablero de fusión (solo durante el nivel) ----------
+// ---------- Tablero de piezas (solo durante el nivel) ----------
 
-let boardDirty = true;
-const spawned = new Set<number>();
-let mergedIndex = -1;
-const boardEl = $('#board');
+const piecesEl = $('#pieces');
+const pieceEls = new Map<number, HTMLElement>();
+let lastPlaced = 0;
+let nextKey = '';
+
+$('#legend').innerHTML = FAMILIES.map(
+  (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color)}<small>${legendWord(f)}</small></span>`,
+).join('');
+function legendWord(f: Family) {
+  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', orbe: 'frena', moneda: 'oro' }[f];
+}
+
+function resetBoardView() {
+  pieceEls.forEach((el) => el.remove());
+  pieceEls.clear();
+  lastPlaced = 0;
+  nextKey = '';
+}
+
+function cellPos(col: number, row: number) {
+  return { left: (col * 100) / COLS + '%', bottom: (row * 100) / ROWS + '%' };
+}
+
+function burstAt(col: number, row: number, color: string, big: boolean) {
+  const el = document.createElement('div');
+  el.className = 'burst' + (big ? ' big' : '');
+  const p = cellPos(col, row);
+  el.style.left = p.left;
+  el.style.bottom = p.bottom;
+  el.style.setProperty('--c', color);
+  piecesEl.appendChild(el);
+  setTimeout(() => el.remove(), 500);
+}
 
 function renderBoard() {
-  if (!boardDirty) return;
-  boardDirty = false;
-  const best = bestWeapon(game.s);
-  boardEl.innerHTML = game.s.board
-    .map((lvl, i) => {
-      if (lvl === null) return `<div class="cell" data-i="${i}"></div>`;
-      const t = tierFor(lvl);
-      const cls = ['cell', 'filled', spawned.has(i) ? 'spawned' : '', i === mergedIndex ? 'merged' : ''].filter(Boolean).join(' ');
-      return `<div class="${cls}" data-i="${i}" style="--tier:${t.blade};--glow:${t.glow === 'none' ? 'transparent' : t.glow}">
-        ${weaponSvg(lvl, 52)}<span class="lvl">${lvl}</span></div>`;
-    })
-    .join('');
-  spawned.clear();
-  mergedIndex = -1;
-  $('#best-weapon').textContent = best ? weaponName(best) : '—';
-  const free = game.s.board.filter((x) => x === null).length;
-  const hint = $('#hint');
-  hint.textContent =
-    free === 0 ? '¡Tablero lleno! Fusiona para que sigan cayendo armas' : 'Cada fusión golpea al enemigo. ¡Encadénalas para hacer combo!';
-  hint.classList.toggle('warn', free === 0);
-}
-
-let drag: { from: number; ghost: HTMLElement; startX: number; startY: number; moved: boolean } | null = null;
-
-function cellAt(x: number, y: number): HTMLElement | null {
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  return el?.closest('.cell') as HTMLElement | null;
-}
-
-boardEl.addEventListener('pointerdown', (ev) => {
-  const cell = (ev.target as HTMLElement).closest('.cell') as HTMLElement | null;
-  if (!cell || !cell.classList.contains('filled')) return;
-  ev.preventDefault();
-  const from = Number(cell.dataset.i);
-  const ghost = document.createElement('div');
-  ghost.className = 'ghost';
-  ghost.innerHTML = weaponSvg(game.s.board[from]!, 60);
-  ghost.style.transform = `translate(${ev.clientX - 30}px, ${ev.clientY - 30}px)`;
-  document.body.appendChild(ghost);
-  cell.classList.add('lifting');
-  drag = { from, ghost, startX: ev.clientX, startY: ev.clientY, moved: false };
-});
-
-window.addEventListener('pointermove', (ev) => {
-  if (!drag) return;
-  if (Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY) > 6) drag.moved = true;
-  drag.ghost.style.transform = `translate(${ev.clientX - 30}px, ${ev.clientY - 30}px)`;
-  boardEl.querySelectorAll('.over').forEach((c) => c.classList.remove('over'));
-  cellAt(ev.clientX, ev.clientY)?.classList.add('over');
-});
-
-function endDrag(ev: PointerEvent) {
-  if (!drag) return;
-  const d = drag;
-  drag = null;
-  d.ghost.remove();
-  const target = cellAt(ev.clientX, ev.clientY);
-  if (target && d.moved) {
-    const to = Number(target.dataset.i);
-    if (game.drop(d.from, to) === 'merge') onMerge(to);
-  } else if (!d.moved) {
-    // Toque simple: fusión rápida con la primera pareja igual.
-    const lvl = game.s.board[d.from];
-    const pair = game.s.board.findIndex((x, i) => i !== d.from && x === lvl);
-    if (pair !== -1 && game.drop(d.from, pair) === 'merge') onMerge(pair);
+  const run = game.s.run;
+  if (!run) return;
+  const alive = new Set<number>();
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      const p = run.grid[c][r];
+      if (!p) continue;
+      alive.add(p.id);
+      const pos = cellPos(c, r);
+      let el = pieceEls.get(p.id);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'pc';
+        el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color);
+        el.style.left = pos.left;
+        if (p.id === lastPlaced) {
+          // Entra desde arriba y cae hasta su lugar.
+          el.style.bottom = '100%';
+          el.classList.add('falling');
+          piecesEl.appendChild(el);
+          void el.offsetWidth;
+        } else {
+          el.style.bottom = pos.bottom;
+          if (run.drops > 0) el.classList.add('born');
+          piecesEl.appendChild(el);
+        }
+        pieceEls.set(p.id, el);
+      }
+      if (el.style.left !== pos.left) el.style.left = pos.left;
+      if (el.style.bottom !== pos.bottom) el.style.bottom = pos.bottom;
+    }
   }
-  boardDirty = true;
+  pieceEls.forEach((el, id) => {
+    if (alive.has(id)) return;
+    pieceEls.delete(id);
+    el.classList.add('gone');
+    setTimeout(() => el.remove(), 220);
+  });
+  // Columnas casi llenas en rojo.
+  const cols = $('#cols').children;
+  for (let c = 0; c < COLS; c++) {
+    const h = height(run.grid, c);
+    cols[c].classList.toggle('danger', h >= ROWS - 1);
+    cols[c].classList.toggle('full', h >= ROWS);
+  }
+  $('#board').classList.toggle('busy', run.resolving);
+  const nk = run.next.map((p) => p.id).join(',');
+  if (nk !== nextKey) {
+    nextKey = nk;
+    const [a, b] = run.next;
+    $('#next-now').innerHTML = pieceSvg(a.fam, a.lvl, FAMILY_INFO[a.fam].color);
+    $('#next-later').innerHTML = pieceSvg(b.fam, b.lvl, FAMILY_INFO[b.fam].color);
+    restartAnim($('#next-now'), 'pop');
+  }
+  $('#auto-fill').style.width = (run.resolving ? 0 : Math.min(1, run.idle / autoDropTime(game.s)) * 100) + '%';
 }
-window.addEventListener('pointerup', endDrag);
-window.addEventListener('pointercancel', endDrag);
 
-function onMerge(index: number) {
-  mergedIndex = index;
-  if (navigator.vibrate) navigator.vibrate(15);
+$('#cols').addEventListener('pointerdown', (ev) => {
+  const b = (ev.target as HTMLElement).closest('[data-col]') as HTMLElement | null;
+  if (!b) return;
+  ev.preventDefault();
+  const col = Number(b.dataset.col);
+  // Si todavía se está resolviendo una cadena, el toque queda en espera un momento.
+  if (game.canDrop) game.dropAt(col);
+  else pending = { col, t: performance.now() };
+});
+
+let pending: { col: number; t: number } | null = null;
+function flushPending() {
+  if (!pending || !game.canDrop) return;
+  if (performance.now() - pending.t < 600) game.dropAt(pending.col);
+  pending = null;
 }
 
 // ---------- Paneles ----------
@@ -767,7 +834,7 @@ $('#modal').addEventListener('click', (ev) => {
     game = new Game(loaded);
     wireGame();
     save(game.s);
-    boardDirty = true;
+    resetBoardView();
     heroKeyCache = enemyKeyCache = mapKey = homeKey = '';
     viewWorld = worldOf(game.s.unlocked);
     hideModal();
@@ -843,6 +910,7 @@ function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   game.tick(dt);
+  flushPending();
   renderTop();
   renderScreen();
   sheetClock += dt;
@@ -872,7 +940,7 @@ if (rolloverLeague(game.s)) showLeagueResult();
 if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
-    <p>Recorre niveles cortos y vence al jefe del final. Durante el nivel caen armas: <b>cada fusión golpea al enemigo</b>, y si las encadenas rápido haces combo.</p>
+    <p>Recorre niveles cortos y vence al jefe del final. Toca una columna para soltar la pieza: <b>dos iguales que se tocan se fusionan</b> y actúan. Las espadas pegan, los escudos protegen, las pociones curan, los orbes frenan al enemigo y las monedas dan oro.</p><p>Si armas cadenas, haces combo.</p>
     <p>Gana equipo para tu héroe y hazlo cada vez más fuerte.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,

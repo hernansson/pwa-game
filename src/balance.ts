@@ -1,38 +1,42 @@
 // Todas las fórmulas de equilibrio en un solo lugar, para poder ajustarlas fácil.
 
-export const BOARD_SIZE = 16; // tablero 4x4
 export const WAVES_PER_LEVEL = 3;
-export const ENEMIES_PER_WAVE = 4;
+export const ENEMIES_PER_WAVE = 3;
 export const LEVELS_PER_WORLD = 10;
 export const ENERGY_MAX = 30;
 export const ENERGY_COST = 5;
 export const ENERGY_REGEN_SECONDS = 5 * 60; // 1 de energía cada 5 minutos
-export const BOSS_CHEST = 2; // armas extra en el cofre del jefe
-export const APPROACH_SECONDS = 4; // lo que tarda un enemigo en llegar al héroe
-export const BOSS_APPROACH_SECONDS = 6;
-export const MERGE_PUSHBACK = 0.04; // cada fusión empuja al enemigo hacia atrás
-export const COMBO_WINDOW = 1.6; // segundos para encadenar fusiones
-export const AUTO_ATTACK_RATE = 0.8; // golpes por segundo del arma equipada cuando el enemigo llega
-export const AUTO_ATTACK_FACTOR = 0.5;
+export const START_ROWS = 3; // filas llenas al empezar el nivel
+export const RESOLVE_STEP = 0.2; // segundos entre cada paso de una cadena
+export const COMBO_WINDOW = 4; // segundos para seguir sumando combo
+export const OVERFLOW_DAMAGE = 0.25; // parte de la vida que se pierde si el tablero desborda
+export const OVERFLOW_CLEAR_ROWS = 3; // filas de arriba que se vacían al desbordar
+export const BASE_DAMAGE = 7;
 
-export function weaponDamage(level: number): number {
-  return 5 * Math.pow(2, level - 1);
+/** Las piezas de los mundos avanzados pegan más fuerte. */
+export function levelPower(level: number): number {
+  return Math.pow(1.2, level - 1);
 }
 
-/** Dificultad de un nivel (1, 2, 3...). Crece más rápido que el oro para pedir fusiones. */
-function difficulty(level: number): number {
-  return Math.pow(1.6, level - 1);
+/** Los primeros niveles son más suaves, para aprender a jugar. */
+function earlyEase(level: number): number {
+  return Math.min(1, 0.55 + 0.15 * (level - 1));
 }
 
 export function enemyHp(level: number, boss: boolean): number {
-  const base = 24 * difficulty(level);
-  return boss ? base * 10 : base;
+  const base = 30 * Math.pow(1.3, level - 1) * earlyEase(level);
+  return boss ? base * 4 : base;
 }
 
-/** Daño por segundo que recibe el héroe. */
-export function enemyDps(level: number, boss: boolean): number {
-  const base = 6 * Math.pow(1.3, level - 1);
-  return boss ? base * 1.8 : base;
+/** Daño de cada golpe del enemigo. */
+export function enemyHit(level: number, boss: boolean): number {
+  const base = 8 * Math.pow(1.18, level - 1) * earlyEase(level);
+  return boss ? base * 1.6 : base;
+}
+
+/** Segundos entre golpes del enemigo. */
+export function enemyAttackSeconds(boss: boolean): number {
+  return boss ? 3.4 : 4;
 }
 
 export function enemyGold(level: number, boss: boolean): number {
@@ -40,9 +44,19 @@ export function enemyGold(level: number, boss: boolean): number {
   return boss ? base * 10 : base;
 }
 
-/** Nivel de las armas que sueltan los enemigos en este nivel. */
-export function dropLevel(level: number, calidad: number): number {
-  return 1 + calidad + Math.floor((level - 1) / 4);
+/** Fuerza de una fusión según el nivel que resulta y cuántas piezas juntó. */
+export function pieceValue(lvl: number, size: number): number {
+  return Math.pow(2, lvl - 2) * (1 + 0.5 * (size - 2));
+}
+
+/** Segundos sin jugar hasta que cae una pieza sola. */
+export function autoDropSeconds(calma: number): number {
+  return 2.4 * Math.pow(1.07, calma);
+}
+
+/** Probabilidad de que una pieza nueva llegue ya en nivel 2. */
+export function levelTwoChance(calidad: number): number {
+  return Math.min(0.5, calidad * 0.05);
 }
 
 export function firstClearGems(level: number): number {
@@ -59,11 +73,6 @@ export function starsFor(hpLeftRatio: number): number {
   return 1;
 }
 
-export function forgeCost(forged: number, level: number): number {
-  // Forjar es caro comparado con lo que sueltan los enemigos, pero siempre está disponible.
-  return Math.ceil(15 * Math.pow(1.33, level - 1) * Math.pow(1.04, forged));
-}
-
 export interface UpgradeDef {
   id: UpgradeId;
   name: string;
@@ -74,7 +83,7 @@ export interface UpgradeDef {
   icon: string;
 }
 
-export type UpgradeId = 'fuerza' | 'vida' | 'lluvia' | 'calidad' | 'codicia';
+export type UpgradeId = 'fuerza' | 'vida' | 'calma' | 'calidad' | 'codicia';
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -96,21 +105,21 @@ export const UPGRADES: UpgradeDef[] = [
     icon: '❤️',
   },
   {
-    id: 'lluvia',
-    name: 'Lluvia de armas',
-    desc: (l) => `Cae un arma cada ${spawnInterval(l).toFixed(2)} s durante el nivel`,
+    id: 'calma',
+    name: 'Calma',
+    desc: (l) => `Si no juegas, cae una pieza sola cada ${autoDropSeconds(l).toFixed(1)} s`,
     baseCost: 40,
     growth: 1.8,
     max: 15,
-    icon: '🌧️',
+    icon: '🧘',
   },
   {
     id: 'calidad',
     name: 'Calidad',
-    desc: (l) => `Las armas que caen suben ${l} nivel${l === 1 ? '' : 'es'}`,
-    baseCost: 300,
-    growth: 6,
-    max: 12,
+    desc: (l) => `${Math.round(levelTwoChance(l) * 100)}% de piezas que llegan en nivel 2`,
+    baseCost: 120,
+    growth: 2.2,
+    max: 10,
     icon: '💎',
   },
   {
@@ -130,10 +139,6 @@ export function upgradeCost(def: UpgradeDef, lvl: number): number {
 
 export function heroMaxHp(vidaLvl: number): number {
   return 100 * Math.pow(1.18, vidaLvl);
-}
-
-export function spawnInterval(lluviaLvl: number): number {
-  return 0.9 * Math.pow(0.94, lluviaLvl);
 }
 
 export function comboMultiplier(combo: number): number {

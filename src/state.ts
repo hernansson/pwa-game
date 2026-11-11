@@ -1,14 +1,13 @@
 import {
-  BOARD_SIZE,
   ENERGY_MAX,
   ENERGY_REGEN_SECONDS,
   UPGRADES,
   UpgradeId,
-  spawnInterval,
+  autoDropSeconds,
   heroMaxHp,
-  weaponDamage,
-  dropLevel,
+  levelTwoChance,
 } from './balance';
+import { Grid, Piece } from './board';
 import { LEGACY_SETS, STARTER, Slot, bonusOf, slotItem } from './items';
 
 export interface Run {
@@ -16,14 +15,22 @@ export interface Run {
   wave: number; // 0..WAVES_PER_LEVEL-1 oleadas normales, WAVES_PER_LEVEL = jefe
   enemyInWave: number;
   enemyHp: number;
-  enemyPos: number; // 1 = recién aparece, 0 = llegó al héroe
+  enemyTimer: number; // segundos hasta el próximo golpe del enemigo
+  stun: number; // segundos que el enemigo queda frenado (orbes)
   heroHp: number;
-  spawnClock: number;
+  shield: number; // vida extra de los escudos, absorbe golpes
+  grid: Grid;
+  next: Piece[]; // la pieza que vas a soltar y la siguiente
+  idle: number; // segundos sin jugar
+  resolving: boolean; // hay una cadena de fusiones en curso
+  resolveClock: number;
+  focusId: number; // pieza recién soltada o fusionada: ahí queda la fusión
   combo: number;
   comboTimer: number;
   maxCombo: number;
   gold: number;
   drops: number;
+  merges: number;
   result: null | 'win' | 'lose';
 }
 
@@ -36,9 +43,7 @@ export interface GameState {
   energyAt: number; // momento del último cálculo de recarga
   unlocked: number; // nivel más alto disponible
   stars: Record<number, number>;
-  board: (number | null)[]; // nivel del arma en cada casilla
   upgrades: Record<UpgradeId, number>;
-  forged: number;
   run: Run | null;
   items: string[]; // piezas de equipo que tiene
   equipped: Record<Slot, string>;
@@ -58,7 +63,7 @@ export interface GameState {
 
 const SAVE_KEY = 'heroes-forja-save';
 const OLD_KEYS = ['heroes-forja-save-v2', 'heroes-forja-save-v1'];
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export function currentWeek(now = Date.now()): number {
   // Semanas que arrancan el lunes 00:00 UTC.
@@ -71,7 +76,6 @@ export function weekStart(week: number): number {
 }
 
 export function newState(): GameState {
-  const board: (number | null)[] = Array(BOARD_SIZE).fill(null);
   return {
     version: SAVE_VERSION,
     playerName: '',
@@ -81,9 +85,7 @@ export function newState(): GameState {
     energyAt: Date.now(),
     unlocked: 1,
     stars: {},
-    board,
-    upgrades: { fuerza: 0, vida: 0, lluvia: 0, calidad: 0, codicia: 0 },
-    forged: 0,
+    upgrades: { fuerza: 0, vida: 0, calma: 0, calidad: 0, codicia: 0 },
     run: null,
     items: Object.values(STARTER),
     equipped: { ...STARTER },
@@ -105,9 +107,11 @@ export function migrate(raw: unknown): GameState {
   const s: GameState = { ...base, ...old } as GameState;
   s.upgrades = { ...base.upgrades, ...(old.upgrades ?? {}) };
   const legacy = old.upgrades as Record<string, number> | undefined;
-  if (legacy && typeof legacy.velocidad === 'number' && !legacy.lluvia) s.upgrades.lluvia = Math.min(15, legacy.velocidad);
-  delete (s.upgrades as Record<string, number>).velocidad;
-  delete (s.upgrades as Record<string, number>).forja;
+  // Versiones viejas: velocidad → lluvia de armas → calma. La calidad cambió de efecto y se acota.
+  const oldRain = legacy?.lluvia ?? legacy?.velocidad;
+  if (typeof oldRain === 'number' && !legacy?.calma) s.upgrades.calma = Math.min(15, oldRain);
+  s.upgrades.calidad = Math.min(10, s.upgrades.calidad);
+  for (const k of ['velocidad', 'forja', 'lluvia']) delete (s.upgrades as Record<string, number>)[k];
   s.league = { ...base.league, ...(old.league ?? {}) };
   s.stats = { ...base.stats, ...(old.stats ?? {}) };
   if (typeof s.unlocked !== 'number') s.unlocked = 1;
@@ -131,10 +135,8 @@ export function migrate(raw: unknown): GameState {
   s.equipped = { ...STARTER, ...(s.equipped ?? {}) };
   delete s.skin;
   delete s.ownedSkins;
-  // El tablero ahora arranca vacío en cada nivel.
-  s.board = Array(BOARD_SIZE).fill(null);
-  // Campos de la versión 1 que ya no se usan.
-  for (const k of ['souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
+  // Campos de versiones anteriores que ya no se usan.
+  for (const k of ['board', 'forged', 'souls', 'wave', 'maxWave', 'bestWaveEver', 'killsInWave', 'enemyHp', 'bossTimer', 'farming', 'forgeProgress', 'bossFirstClears']) {
     delete (s as unknown as Record<string, unknown>)[k];
   }
   s.run = null;
@@ -170,7 +172,7 @@ export function importCode(code: string): GameState | null {
     const bin = atob(clean);
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     const data = JSON.parse(new TextDecoder().decode(bytes));
-    if (!data || typeof data !== 'object' || !Array.isArray(data.board)) return null;
+    if (!data || typeof data !== 'object' || !data.upgrades) return null;
     return migrate(data);
   } catch {
     return null;
@@ -219,12 +221,6 @@ export function secondsToNextEnergy(s: GameState, now = Date.now()): number {
   return Math.max(0, ENERGY_REGEN_SECONDS - (now - s.energyAt) / 1000);
 }
 
-export function bestWeapon(s: GameState): number {
-  let best = 0;
-  for (const w of s.board) if (w !== null && w > best) best = w;
-  return best;
-}
-
 function gearBonus(s: GameState, slot: Slot): number {
   return bonusOf(slotItem(s.equipped[slot], slot));
 }
@@ -241,23 +237,17 @@ export function maxHp(s: GameState): number {
   return heroMaxHp(s.upgrades.vida) * (1 + gearBonus(s, 'casco') + gearBonus(s, 'armadura'));
 }
 
-export function spawnSeconds(s: GameState): number {
-  return spawnInterval(s.upgrades.lluvia);
+export function autoDropTime(s: GameState): number {
+  return autoDropSeconds(s.upgrades.calma);
 }
 
-/** Daño de una fusión que produce un arma de cierto nivel (sin combo). */
-export function mergeDamage(s: GameState, level: number): number {
-  return weaponDamage(level) * 2 * damageMultiplier(s);
-}
-
-/** Golpe automático del héroe cuando el enemigo lo alcanza. */
-export function autoDamage(s: GameState, level: number): number {
-  return weaponDamage(dropLevel(level, s.upgrades.calidad)) * damageMultiplier(s);
+export function pieceLevelTwoChance(s: GameState): number {
+  return levelTwoChance(s.upgrades.calidad);
 }
 
 /** Número único para mostrar qué tan fuerte es el héroe. */
 export function power(s: GameState): number {
-  return Math.round(Math.sqrt(mergeDamage(s, dropLevel(s.unlocked, s.upgrades.calidad) + 1) * maxHp(s)) * 4);
+  return Math.round(Math.sqrt(damageMultiplier(s) * (maxHp(s) / 100)) * 100 * (1 + s.upgrades.calidad * 0.05));
 }
 
 export function upgradeDef(id: UpgradeId) {

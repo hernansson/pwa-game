@@ -1,34 +1,36 @@
 import {
-  APPROACH_SECONDS,
-  AUTO_ATTACK_FACTOR,
-  AUTO_ATTACK_RATE,
-  BOSS_APPROACH_SECONDS,
+  BASE_DAMAGE,
   COMBO_WINDOW,
   ENEMIES_PER_WAVE,
   ENERGY_COST,
-  MERGE_PUSHBACK,
+  OVERFLOW_CLEAR_ROWS,
+  OVERFLOW_DAMAGE,
+  RESOLVE_STEP,
+  START_ROWS,
   UpgradeId,
   WAVES_PER_LEVEL,
   comboMultiplier,
-  dropLevel,
-  enemyDps,
+  enemyAttackSeconds,
   enemyGold,
+  enemyHit,
   enemyHp,
   firstClearGems,
-  forgeCost,
   leaguePointsForClear,
+  levelPower,
+  pieceValue,
   starsFor,
   upgradeCost,
 } from './balance';
+import { COLS, Family, MergeEvent, ROWS, boardFull, dropInto, findPiece, isFull, mergeStep, randomPiece, settle, startingGrid } from './board';
 import {
   GameState,
   Run,
-  autoDamage,
+  autoDropTime,
+  damageMultiplier,
   goldMultiplier,
   maxHp,
-  mergeDamage,
+  pieceLevelTwoChance,
   regenEnergy,
-  spawnSeconds,
   track,
   upgradeDef,
 } from './state';
@@ -52,22 +54,35 @@ export interface ClearReport {
   loot: Loot | null;
 }
 
+/** Lo que produjo una fusión, para mostrarlo en pantalla. */
+export interface MergeResult {
+  ev: MergeEvent;
+  combo: number;
+  dmg: number;
+  crit: boolean;
+  gold: number;
+  shield: number;
+  heal: number;
+  stun: number;
+}
+
 export type GameEvent =
-  | { type: 'hit'; dmg: number; crit: boolean; merge: boolean; combo: number }
-  | { type: 'hurt'; dmg: number }
+  | { type: 'merge'; r: MergeResult }
+  | { type: 'hurt'; dmg: number; blocked: number }
   | { type: 'kill'; gold: number; boss: boolean }
   | { type: 'wave'; wave: number; boss: boolean }
-  | { type: 'drop'; indexes: number[]; lost: number }
+  | { type: 'place'; col: number; auto: boolean }
+  | { type: 'reject'; col: number }
+  | { type: 'overflow'; dmg: number }
   | { type: 'end'; report: ClearReport };
 
 type Listener = (e: GameEvent) => void;
 
 export class Game {
   s: GameState;
-  private autoClock = 0;
   private respawnDelay = 0;
-  private hurtClock = 0;
   private listeners: Listener[] = [];
+  rand = Math.random;
 
   constructor(s: GameState) {
     this.s = s;
@@ -99,27 +114,37 @@ export class Game {
     return !this.s.run && level <= this.s.unlocked && this.s.energy >= ENERGY_COST;
   }
 
+  private newPiece() {
+    return randomPiece(pieceLevelTwoChance(this.s), this.rand);
+  }
+
   start(level: number): boolean {
     if (!this.canStart(level)) return false;
     this.s.energy -= ENERGY_COST;
-    this.s.board = this.s.board.map(() => null); // cada nivel arranca con el tablero vacío
     this.s.run = {
       level,
       wave: 0,
       enemyInWave: 0,
       enemyHp: enemyHp(level, false),
-      enemyPos: 1,
+      enemyTimer: enemyAttackSeconds(false),
+      stun: 0,
       heroHp: maxHp(this.s),
-      spawnClock: 0,
+      shield: 0,
+      grid: startingGrid(START_ROWS, pieceLevelTwoChance(this.s), this.rand),
+      next: [this.newPiece(), this.newPiece()],
+      idle: 0,
+      resolving: false,
+      resolveClock: 0,
+      focusId: 0,
       combo: 0,
       comboTimer: 0,
       maxCombo: 0,
       gold: 0,
       drops: 0,
+      merges: 0,
       result: null,
     };
-    this.autoClock = 0;
-    this.respawnDelay = 0.5;
+    this.respawnDelay = 0.6;
     track(this.s, `start:${level}`);
     this.emit({ type: 'wave', wave: 0, boss: false });
     return true;
@@ -130,88 +155,157 @@ export class Game {
     if (this.fighting) this.finish(false);
   }
 
+  /** Se puede soltar una pieza (no hay una cadena resolviéndose). */
+  get canDrop(): boolean {
+    const run = this.s.run;
+    return !!run && !run.result && !run.resolving;
+  }
+
+  /** El jugador suelta la pieza actual en una columna. */
+  dropAt(col: number): boolean {
+    const run = this.s.run;
+    if (!run || !this.canDrop || col < 0 || col >= COLS) return false;
+    if (boardFull(run.grid)) {
+      this.overflow(run);
+      return false;
+    }
+    if (isFull(run.grid, col)) {
+      this.emit({ type: 'reject', col });
+      return false;
+    }
+    this.place(run, col, false);
+    return true;
+  }
+
+  private place(run: Run, col: number, auto: boolean) {
+    const piece = run.next.shift()!;
+    run.next.push(this.newPiece());
+    dropInto(run.grid, col, piece);
+    run.focusId = piece.id;
+    run.resolving = true;
+    run.resolveClock = RESOLVE_STEP * 0.7; // deja ver la caída antes de fusionar
+    run.idle = 0;
+    run.drops++;
+    this.emit({ type: 'place', col, auto });
+  }
+
+  /** Un paso de la cadena: fusiona lo que se toca y deja caer lo de arriba. */
+  private resolve(run: Run) {
+    const events = mergeStep(run.grid, findPiece(run.grid, run.focusId));
+    if (events.length) {
+      for (const ev of events) {
+        const p = run.grid[ev.col][ev.row];
+        if (p) run.focusId = p.id;
+        this.applyMerge(run, ev);
+        if (run.result) return;
+      }
+      settle(run.grid);
+      run.resolveClock = RESOLVE_STEP;
+    } else if (settle(run.grid)) {
+      run.resolveClock = RESOLVE_STEP;
+    } else {
+      run.resolving = false;
+    }
+  }
+
+  private applyMerge(run: Run, ev: MergeEvent) {
+    this.s.stats.merges++;
+    run.merges++;
+    run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
+    run.comboTimer = COMBO_WINDOW;
+    run.maxCombo = Math.max(run.maxCombo, run.combo);
+    const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
+    const crit = this.rand() < 0.08;
+    const hit = BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1);
+    const hp = maxHp(this.s);
+    const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0 };
+    const fam: Family = ev.fam;
+    if (fam === 'espada') r.dmg = hit;
+    else {
+      r.dmg = hit * (fam === 'orbe' ? 0.4 : 0.25);
+      if (fam === 'escudo') {
+        r.shield = Math.min(hp - run.shield, hp * 0.07 * v);
+        run.shield += r.shield;
+      } else if (fam === 'pocion') {
+        r.heal = Math.min(hp - run.heroHp, hp * 0.06 * v);
+        run.heroHp += r.heal;
+      } else if (fam === 'orbe') {
+        r.stun = Math.min(6 - run.stun, 0.8 * v);
+        run.stun += r.stun;
+      } else if (fam === 'moneda') {
+        r.gold = enemyGold(run.level, false) * 0.6 * v * goldMultiplier(this.s);
+        run.gold += r.gold;
+        this.s.gold += r.gold;
+      }
+    }
+    if (this.respawnDelay > 0) r.dmg = 0;
+    this.emit({ type: 'merge', r });
+    if (r.dmg > 0) {
+      run.enemyHp -= r.dmg;
+      if (run.enemyHp <= 0) this.kill(run);
+    }
+  }
+
+  /** El tablero no tiene lugar: el héroe recibe un golpe fuerte y se vacía la parte de arriba. */
+  private overflow(run: Run) {
+    const dmg = maxHp(this.s) * OVERFLOW_DAMAGE;
+    for (let c = 0; c < COLS; c++) for (let r = ROWS - OVERFLOW_CLEAR_ROWS; r < ROWS; r++) run.grid[c][r] = null;
+    run.combo = 0;
+    this.emit({ type: 'overflow', dmg });
+    this.hurt(run, dmg, false);
+  }
+
+  private hurt(run: Run, dmg: number, blockable: boolean) {
+    const blocked = blockable ? Math.min(run.shield, dmg) : 0;
+    run.shield -= blocked;
+    run.heroHp -= dmg - blocked;
+    this.emit({ type: 'hurt', dmg: dmg - blocked, blocked });
+    if (run.heroHp <= 0) {
+      run.heroHp = 0;
+      this.finish(false);
+    }
+  }
+
   tick(dt: number) {
     regenEnergy(this.s);
     const run = this.s.run;
     if (!run || run.result) return;
-
-    // Lluvia de armas: es lo que alimenta el tablero durante el nivel.
-    run.spawnClock += dt;
-    const every = spawnSeconds(this.s);
-    while (run.spawnClock >= every) {
-      run.spawnClock -= every;
-      this.dropWeapons(1, dropLevel(run.level, this.s.upgrades.calidad));
-    }
 
     if (run.comboTimer > 0) {
       run.comboTimer -= dt;
       if (run.comboTimer <= 0) run.combo = 0;
     }
 
+    if (run.resolving) {
+      run.resolveClock -= dt;
+      if (run.resolveClock <= 0) this.resolve(run);
+      if (run.result) return;
+    } else {
+      // Si no juegas, cae una pieza sola.
+      run.idle += dt;
+      if (run.idle >= autoDropTime(this.s)) {
+        run.idle = 0;
+        const open = Array.from({ length: COLS }, (_, c) => c).filter((c) => !isFull(run.grid, c));
+        if (!open.length) this.overflow(run);
+        else this.place(run, open[Math.floor(this.rand() * open.length)], true);
+        if (run.result) return;
+      }
+    }
+
     if (this.respawnDelay > 0) {
       this.respawnDelay -= dt;
       return;
     }
-    const boss = this.isBossWave(run);
-
-    // El enemigo avanza hacia el héroe.
-    run.enemyPos = Math.max(0, run.enemyPos - dt / (boss ? BOSS_APPROACH_SECONDS : APPROACH_SECONDS));
-    if (run.enemyPos <= 0) {
-      // Llegó: golpea al héroe, y el héroe responde con su arma equipada.
-      const dps = enemyDps(run.level, boss);
-      run.heroHp -= dps * dt;
-      this.hurtClock += dt;
-      if (this.hurtClock > 0.7) {
-        this.hurtClock = 0;
-        this.emit({ type: 'hurt', dmg: dps * 0.7 });
-      }
-      if (run.heroHp <= 0) {
-        run.heroHp = 0;
-        this.finish(false);
-        return;
-      }
-      this.autoClock += dt;
-      if (this.autoClock >= 1 / AUTO_ATTACK_RATE) {
-        this.autoClock = 0;
-        const crit = Math.random() < 0.1;
-        this.damage(run, autoDamage(this.s, run.level) * AUTO_ATTACK_FACTOR * (crit ? 2.5 : 1), crit, false);
-      }
+    if (run.stun > 0) {
+      run.stun = Math.max(0, run.stun - dt);
+      return;
     }
-  }
-
-  private damage(run: Run, dmg: number, crit: boolean, merge: boolean) {
-    run.enemyHp -= dmg;
-    this.emit({ type: 'hit', dmg, crit, merge, combo: run.combo });
-    if (run.enemyHp <= 0) this.kill(run);
-  }
-
-  /** Golpe producido por una fusión durante el nivel. */
-  private mergeAttack(level: number) {
-    const run = this.s.run;
-    if (!run || run.result || this.respawnDelay > 0) return;
-    run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
-    run.comboTimer = COMBO_WINDOW;
-    run.maxCombo = Math.max(run.maxCombo, run.combo);
-    run.enemyPos = Math.min(1, run.enemyPos + MERGE_PUSHBACK);
-    const crit = Math.random() < 0.08;
-    const dmg = mergeDamage(this.s, level) * comboMultiplier(run.combo - 1) * (crit ? 2 : 1);
-    this.damage(run, dmg, crit, true);
-  }
-
-  private dropWeapons(count: number, level: number): void {
-    const indexes: number[] = [];
-    let lost = 0;
-    for (let i = 0; i < count; i++) {
-      const idx = this.s.board.indexOf(null);
-      if (idx === -1) {
-        lost++;
-        continue;
-      }
-      this.s.board[idx] = level;
-      indexes.push(idx);
+    run.enemyTimer -= dt;
+    if (run.enemyTimer <= 0) {
+      const boss = this.isBossWave(run);
+      run.enemyTimer = enemyAttackSeconds(boss);
+      this.hurt(run, enemyHit(run.level, boss), true);
     }
-    if (this.s.run) this.s.run.drops += indexes.length;
-    this.emit({ type: 'drop', indexes, lost });
   }
 
   private kill(run: Run) {
@@ -237,7 +331,7 @@ export class Game {
       this.emit({ type: 'wave', wave: run.wave, boss: this.isBossWave(run) });
     }
     run.enemyHp = enemyHp(run.level, this.isBossWave(run));
-    run.enemyPos = 1;
+    run.enemyTimer = enemyAttackSeconds(this.isBossWave(run));
   }
 
   private finish(win: boolean) {
@@ -304,48 +398,6 @@ export class Game {
   /** Cierra la pantalla de resultado y vuelve al mapa. */
   leave() {
     this.s.run = null;
-  }
-
-  get forgePrice(): number {
-    return forgeCost(this.s.forged, this.s.unlocked);
-  }
-
-  forge(): boolean {
-    if (this.s.gold < this.forgePrice || !this.s.board.includes(null)) return false;
-    this.s.gold -= this.forgePrice;
-    this.s.forged++;
-    this.dropWeapons(1, dropLevel(this.s.unlocked, this.s.upgrades.calidad));
-    return true;
-  }
-
-  /** Mueve o fusiona armas. Durante un nivel, cada fusión golpea al enemigo. */
-  drop(from: number, to: number): 'merge' | 'move' | 'swap' | null {
-    const b = this.s.board;
-    if (from === to || b[from] === null) return null;
-    if (b[to] === null) {
-      b[to] = b[from];
-      b[from] = null;
-      return 'move';
-    }
-    if (b[to] === b[from]) {
-      b[to] = (b[to] as number) + 1;
-      b[from] = null;
-      this.s.stats.merges++;
-      this.mergeAttack(b[to] as number);
-      return 'merge';
-    }
-    [b[to], b[from]] = [b[from], b[to]];
-    return 'swap';
-  }
-
-  /** Vende un arma por oro (para liberar lugar). */
-  sell(index: number): number {
-    const lvl = this.s.board[index];
-    if (lvl === null) return 0;
-    const value = Math.ceil(3 * Math.pow(2, lvl - 1));
-    this.s.board[index] = null;
-    this.s.gold += value;
-    return value;
   }
 
   canBuy(id: UpgradeId): boolean {

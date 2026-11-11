@@ -242,3 +242,60 @@ export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: 
     ${look.aura ? `<ellipse cx="40" cy="70" rx="22" ry="28" fill="${look.aura}" opacity=".25"/>` : ''}
     <path d="M38 42 Q22 70 26 98 L48 92 L46 44Z" fill="${look.cape}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/></svg>`;
 }
+
+// ---------- Piezas del tablero ----------
+
+/** Color del marco según el nivel de la pieza: hierro, bronce, plata, oro, jade, prisma. */
+export const PIECE_FRAMES = ['#5d6776', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#ff7af5'];
+
+const PIECE_ICONS: Record<string, (c: string, d: string) => string> = {
+  espada: (c, d) => `<g transform="rotate(-40 32 32)">
+    <path d="M32 7 L37 15 L37 40 L27 40 L27 15Z" fill="${c}" stroke="${d}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 9 L34.5 15 L34.5 39 L32 39Z" fill="#fff" opacity=".7"/>
+    <rect x="21" y="40" width="22" height="5" rx="2" fill="${d}"/>
+    <rect x="29.5" y="45" width="5" height="9" rx="1.5" fill="#6b4a2b" stroke="${d}" stroke-width="1"/>
+    <circle cx="32" cy="56" r="3" fill="${c}" stroke="${d}" stroke-width="1"/></g>`,
+  escudo: (c, d) => `<path d="M32 9 L50 15 Q50 40 32 55 Q14 40 14 15Z" fill="${c}" stroke="${d}" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M32 15 L44 19 Q44 37 32 48Z" fill="#fff" opacity=".28"/>
+    <path d="M32 18 V46 M22 27 H42" stroke="${d}" stroke-width="2.5" opacity=".55"/>`,
+  pocion: (c, d) => `<rect x="27" y="8" width="10" height="6" rx="2" fill="#a0724a" stroke="${d}" stroke-width="1.5"/>
+    <path d="M28 14 H36 V22 Q48 27 48 39 Q48 54 32 54 Q16 54 16 39 Q16 27 28 22Z" fill="#e8f2ff" fill-opacity=".25" stroke="${d}" stroke-width="2.5"/>
+    <path d="M18.5 37 Q32 33 45.5 37 Q46 52 32 52 Q18 52 18.5 37Z" fill="${c}"/>
+    <circle cx="25" cy="31" r="3" fill="#fff" opacity=".6"/>`,
+  orbe: (c, d) => `<ellipse cx="32" cy="50" rx="14" ry="5" fill="${d}" opacity=".6"/>
+    <circle cx="32" cy="30" r="19" fill="${c}" stroke="${d}" stroke-width="2.5"/>
+    <circle cx="32" cy="30" r="11" fill="#fff" opacity=".18"/>
+    <path d="M24 30 Q32 18 40 30 Q32 42 24 30Z" fill="#fff" opacity=".35"/>
+    <circle cx="25" cy="22" r="4" fill="#fff" opacity=".7"/>`,
+  moneda: (c, d) => `<circle cx="32" cy="33" r="20" fill="${d}"/>
+    <circle cx="32" cy="31" r="20" fill="${c}" stroke="${d}" stroke-width="2"/>
+    <circle cx="32" cy="31" r="14" fill="none" stroke="${d}" stroke-width="2" opacity=".55"/>
+    <path d="M32 21 L35 28 L42 28 L36.5 32.5 L38.5 40 L32 35.5 L25.5 40 L27.5 32.5 L22 28 L29 28Z" fill="#fff" opacity=".6"/>`,
+};
+
+const PIECE_DARK: Record<string, string> = {
+  espada: '#2a3140',
+  escudo: '#14306b',
+  pocion: '#5a0f2a',
+  orbe: '#2e1360',
+  moneda: '#6b4a00',
+};
+
+/** Pieza del tablero: el icono dice la familia y el marco y el número dicen el nivel. */
+export function pieceSvg(fam: string, lvl: number, color: string): string {
+  const frame = PIECE_FRAMES[Math.min(lvl, PIECE_FRAMES.length) - 1];
+  const d = PIECE_DARK[fam] ?? '#222';
+  const scale = 0.78 + Math.min(lvl, 6) * 0.04;
+  const sparkle =
+    lvl >= 4
+      ? `<path d="M52 8 L54 13 L59 15 L54 17 L52 22 L50 17 L45 15 L50 13Z" fill="#fff" class="spark"/>`
+      : '';
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">
+    <rect x="2" y="2" width="60" height="60" rx="13" fill="${d}" stroke="${frame}" stroke-width="${lvl >= 4 ? 4 : 3}"/>
+    <rect x="5" y="5" width="54" height="26" rx="10" fill="#fff" opacity=".07"/>
+    <g transform="translate(32 33) scale(${scale}) translate(-32 -33)">${PIECE_ICONS[fam]?.(color, d) ?? ''}</g>
+    ${sparkle}
+    <circle cx="13" cy="13" r="8.5" fill="${frame}" stroke="#0008" stroke-width="1.5"/>
+    <text x="13" y="17.5" text-anchor="middle" font-size="12" font-weight="900" fill="#1a1020" font-family="system-ui,sans-serif">${lvl}</text>
+  </svg>`;
+}
