@@ -3,7 +3,7 @@
 export const BASE_COLS = 5;
 export const BASE_ROWS = 6;
 export const MAX_EXTRA_COLS = 1;
-export const MAX_EXTRA_ROWS = 2;
+export const MAX_EXTRA_ROWS = 1;
 export const MAX_LEVEL = 10;
 
 export type Family = 'espada' | 'escudo' | 'pocion' | 'rayo';

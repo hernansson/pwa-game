@@ -356,19 +356,15 @@ export class Game {
     this.s.run = null;
   }
 
-  /** Precio en gemas de la próxima ampliación del tablero, o null si ya está al máximo. */
-  expandPrice(kind: 'rows' | 'cols'): number | null {
-    const n = this.s.board[kind];
-    if (kind === 'rows') return n >= MAX_EXTRA_ROWS ? null : [60, 120][n];
-    return n >= MAX_EXTRA_COLS ? null : 150;
-  }
-
-  expand(kind: 'rows' | 'cols'): boolean {
-    const price = this.expandPrice(kind);
-    if (price === null || this.s.gems < price || this.s.run) return false;
-    this.s.gems -= price;
-    this.s.board[kind]++;
-    track(this.s, `expand:${kind}:${this.s.board[kind]}`);
+  /**
+   * Ampliación del tablero: 1 fila y 1 columna como máximo, solo con dinero real (todavía sin cobro).
+   * Por ahora la activa el botón de prueba en Ajustes.
+   */
+  setBoardExtra(kind: 'rows' | 'cols', on: boolean): boolean {
+    if (this.s.run) return false;
+    const max = kind === 'rows' ? MAX_EXTRA_ROWS : MAX_EXTRA_COLS;
+    this.s.board[kind] = on ? max : 0;
+    track(this.s, `board_test:${kind}:${on ? 1 : 0}`);
     return true;
   }
 

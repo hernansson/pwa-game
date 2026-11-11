@@ -10,7 +10,7 @@ import {
   LEVEL_TWO_CHANCE,
   PASS,
 } from './balance';
-import { Grid, PieceOdds } from './board';
+import { Grid, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, PieceOdds } from './board';
 import { ITEMS, LEGACY_SETS, OLD_WEAPONS, STARTER } from './items';
 import { ARMS, ArmFam, Mods, NO_MODS, STARTER_ARMS, armById, armMods } from './arsenal';
 
@@ -172,6 +172,12 @@ export function migrate(raw: unknown): GameState {
   }
   if (typeof s.freeChestAt !== 'number') s.freeChestAt = 0;
   if (typeof s.passUntil !== 'number') s.passUntil = 0;
+  // El tablero ahora crece como mucho 1 fila y 1 columna, y solo con dinero: se devuelven las gemas de la 2.ª fila.
+  if (s.board.rows > MAX_EXTRA_ROWS) {
+    s.gems += 120;
+    s.board.rows = MAX_EXTRA_ROWS;
+  }
+  s.board.cols = Math.min(s.board.cols, MAX_EXTRA_COLS);
   for (const k of ['items', 'equipped', 'skin', 'ownedSkins']) delete (s as unknown as Record<string, unknown>)[k];
   // Campos de versiones anteriores que ya no se usan.
   const b = old.board as unknown;

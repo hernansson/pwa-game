@@ -18,7 +18,7 @@ import {
   PASS,
 } from './balance';
 import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
-import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
+import { BASE_COLS, BASE_ROWS, Cell, FAMILIES, FAMILY_INFO, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, colsOf, rowsOf } from './board';
 import { ClearReport, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
 import {
@@ -614,12 +614,22 @@ function burstAt(col: number, row: number, color: string, big: boolean) {
 function renderBoard() {
   const run = game.s.run;
   if (!run) return;
-  if (colsOf(run.grid) !== COLS || rowsOf(run.grid) !== ROWS) {
+  if (colsOf(run.grid) !== COLS || rowsOf(run.grid) !== ROWS || !$('#board').dataset.ready) {
     COLS = colsOf(run.grid);
     ROWS = rowsOf(run.grid);
+    // Lo que todavía no compró se ve con candado al costado y arriba, así sabe que existe.
+    const lockC = Math.max(0, BASE_COLS + MAX_EXTRA_COLS - COLS);
+    const lockR = Math.max(0, BASE_ROWS + MAX_EXTRA_ROWS - ROWS);
     const b = $('#board');
+    b.dataset.ready = '1';
     b.style.setProperty('--cols', String(COLS));
     b.style.setProperty('--rows', String(ROWS));
+    b.style.setProperty('--vcols', String(COLS + lockC));
+    b.style.setProperty('--vrows', String(ROWS + lockR));
+    b.querySelectorAll('.lock-zone').forEach((n) => n.remove());
+    const cell = '<i><span>🔒</span></i>';
+    if (lockC) b.insertAdjacentHTML('beforeend', `<div class="lock-zone col" data-locked>${cell.repeat(ROWS + lockR)}</div>`);
+    if (lockR) b.insertAdjacentHTML('beforeend', `<div class="lock-zone row" data-locked>${cell.repeat(COLS)}</div>`);
   }
   const alive = new Set<number>();
   const spawnedInCol: number[] = Array(COLS).fill(0);
@@ -692,6 +702,11 @@ function doMerge(from: Cell, to: Cell) {
   return true;
 }
 
+$('#board').addEventListener('pointerdown', (ev) => {
+  if (!(ev.target as HTMLElement).closest('[data-locked]')) return;
+  track(game.s, 'board_locked_tap');
+  toast('🔒 Ese espacio se desbloquea en la Zona VIP 👑');
+});
 piecesEl.addEventListener('pointerdown', (ev) => {
   const from = cellFromPoint(ev.clientX, ev.clientY);
   if (!from || !game.fighting) return;
@@ -908,18 +923,17 @@ function updateTalents() {
     });
 }
 
+/** Precio de referencia de cada ampliación del tablero (dinero real, todavía sin cobro). */
+const BOARD_PRICE = 'US$ 1,99';
+
 function expandBox(): string {
   const s = game.s;
-  const btn = (kind: 'rows' | 'cols', label: string) => {
-    const price = game.expandPrice(kind);
-    return price === null
-      ? `<button disabled>${label} ✓</button>`
-      : `<button data-expand="${kind}" class="${s.gems >= price ? 'can' : ''}">${label} <span>💠 ${price}</span></button>`;
-  };
+  const item = (kind: 'rows' | 'cols', label: string) =>
+    s.board[kind] ? `<button disabled>${label} ✓</button>` : `<button data-interest="board_${kind}" class="money">${label} <span>${BOARD_PRICE}</span></button>`;
   return `<div class="vip-card">
     <div class="vip-ico">▦</div>
-    <div class="vip-main"><b>Tablero más grande</b><p>Ahora es de ${5 + s.board.cols}×${6 + s.board.rows}. Más piezas en pantalla, más parejas para juntar rápido.</p>
-    <div class="expand-btns">${btn('rows', '+1 fila')}${btn('cols', '+1 columna')}</div></div>
+    <div class="vip-main"><b>Tablero más grande</b><p>Ahora es de ${BASE_COLS + s.board.cols}×${BASE_ROWS + s.board.rows}. Ese espacio con candado que ves al pelear se vuelve tuyo: más piezas, más parejas.</p>
+    <div class="expand-btns">${item('rows', '+1 fila')}${item('cols', '+1 columna')}</div></div>
   </div>`;
 }
 
@@ -1464,19 +1478,6 @@ $('#sheet-body').addEventListener('click', (ev) => {
     refreshSheet();
     return;
   }
-  const ex = t.closest('[data-expand]') as HTMLElement | null;
-  if (ex) {
-    const kind = ex.dataset.expand as 'rows' | 'cols';
-    const price = game.expandPrice(kind) ?? 0;
-    if (game.expand(kind)) {
-      toast(kind === 'rows' ? '¡Tablero con una fila más!' : '¡Tablero con una columna más!');
-    } else {
-      track(game.s, 'expand_nogems');
-      toast(`Te faltan ${price - game.s.gems} 💠`);
-    }
-    refreshSheet();
-    return;
-  }
   if (t.closest('[data-free-chest]')) return openChestUi('armas', true);
   const chest = t.closest('[data-chest]') as HTMLElement | null;
   if (chest) return openChestUi(chest.dataset.chest!, false);
@@ -1507,7 +1508,8 @@ function showSettings() {
       <div class="btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
     </div>
     <div class="set-box test"><b>Versión de prueba</b><p>Para probar todo sin esperar. En la versión final esto se compra.</p>
-      <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div></div>
+      <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div>
+      <div class="btns"><button data-test-board="rows">${game.s.board.rows ? 'Quitar' : 'Poner'} +1 fila</button><button data-test-board="cols">${game.s.board.cols ? 'Quitar' : 'Poner'} +1 columna</button></div></div>
     <details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>
   </div>`);
 }
@@ -1542,6 +1544,14 @@ $('#modal').addEventListener('click', (ev) => {
     track(game.s, 'test_gems');
     save(game.s);
     toast('+1.000 💠 de prueba');
+  } else if (t.closest('[data-test-board]')) {
+    const el = t.closest('[data-test-board]') as HTMLElement;
+    const kind = el.dataset.testBoard as 'rows' | 'cols';
+    const on = !game.s.board[kind];
+    if (!game.setBoardExtra(kind, on)) return toast('Termina la pelea primero');
+    save(game.s);
+    el.textContent = `${on ? 'Quitar' : 'Poner'} +1 ${kind === 'rows' ? 'fila' : 'columna'}`;
+    toast(on ? 'Tablero ampliado (prueba)' : 'Ampliación quitada (prueba)');
   } else if (t.closest('[data-test-gold]')) {
     game.s.gold += 50000;
     track(game.s, 'test_gold');
