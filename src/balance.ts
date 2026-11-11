@@ -71,8 +71,22 @@ export function shieldReduction(lvl = 1): number {
 /** Segundos que tienes entre fusiones para no perder el combo. */
 export const COMBO_WINDOW = 2.5;
 
-/** Probabilidad base de crítico; el talento Crítico suma 1% por nivel. */
-export const BASE_CRIT = 0.08;
+/** Probabilidad base de crítico; el talento Crítico suma 0,5% por nivel. */
+export const BASE_CRIT = 0.05;
+
+/**
+ * Topes de los stats en porcentaje. Daño, vida, escudo y potencia no tienen tope porque los
+ * enemigos crecen sin parar; lo que se expresa como probabilidad, tiempo o reducción sí,
+ * para que nadie llegue a 100% de crítico o a no recibir daño.
+ */
+export const CAPS = {
+  crit: 0.5, // probabilidad de crítico total
+  critMult: 1, // golpe crítico máximo x3
+  reduce: 0.6, // daño recibido: como mucho -60% sumando escudo fusionado y Arsenal
+  combo: 1.5, // tiempo extra de combo: hasta 4 s
+  boostSec: 2, // duración extra del potenciador: hasta 4,5 s
+  startShield: 0.4, // escudo al empezar: hasta 40% de la vida
+};
 
 /** Probabilidad de que una pieza nueva llegue ya en nivel 2 (por ahora siempre 0; más adelante puede ser una mejora paga). */
 export const LEVEL_TWO_CHANCE = 0;
@@ -125,10 +139,10 @@ export const UPGRADES: UpgradeDef[] = [
   {
     id: 'critico',
     name: 'Crítico',
-    desc: (l) => `+1% de probabilidad de crítico por nivel (ahora ${Math.round((BASE_CRIT + l * 0.01) * 100)}%)`,
-    baseCost: 20,
-    growth: 1.55,
-    max: 40,
+    desc: (l) => `+0,5% de probabilidad de crítico por nivel, hasta +10% (ahora +${(l * 0.5).toString().replace('.', ',')}%)`,
+    baseCost: 50,
+    growth: 1.8,
+    max: 20,
     icon: '🎯',
   },
 ];

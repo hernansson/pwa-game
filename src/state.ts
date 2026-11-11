@@ -5,6 +5,7 @@ import {
   UpgradeId,
   COMBO_WINDOW,
   BASE_CRIT,
+  CAPS,
   heroMaxHp,
   LEVEL_TWO_CHANCE,
 } from './balance';
@@ -64,7 +65,7 @@ export interface GameState {
 
 const SAVE_KEY = 'heroes-forja-save';
 const OLD_KEYS = ['heroes-forja-save-v2', 'heroes-forja-save-v1'];
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export function currentWeek(now = Date.now()): number {
   // Semanas que arrancan el lunes 00:00 UTC.
@@ -110,6 +111,11 @@ export function migrate(raw: unknown): GameState {
   const s: GameState = { ...base, ...old } as GameState;
   s.upgrades = { ...base.upgrades, ...(old.upgrades ?? {}) };
   const legacy = old.upgrades as Record<string, number> | undefined;
+  // v5: el talento Crítico se rebalanceó (antes 1% por nivel y más barato): se devuelve su oro y vuelve a 0.
+  if ((old.version ?? 0) < 5 && legacy?.critico) {
+    for (let i = 0; i < Math.min(40, legacy.critico); i++) s.gold += Math.ceil(20 * Math.pow(1.55, i));
+    s.upgrades.critico = 0;
+  }
   // Ritmo (calma) y Codicia se quitaron: se devuelve el oro que costaron.
   const calma = Math.min(15, legacy?.calma ?? legacy?.lluvia ?? legacy?.velocidad ?? 0);
   for (let i = 0; i < calma; i++) s.gold += Math.ceil(40 * Math.pow(1.8, i));
@@ -263,6 +269,11 @@ export function arsenalMods(s: GameState): Mods {
     const def = armById(id);
     if (def) armMods(def, s.arsenal[id]?.lvl ?? 0, m);
   }
+  m.critMult = Math.min(CAPS.critMult, m.critMult);
+  m.reduce = Math.min(CAPS.reduce, m.reduce);
+  m.combo = Math.min(CAPS.combo, m.combo);
+  m.boostSec = Math.min(CAPS.boostSec, m.boostSec);
+  m.startShield = Math.min(CAPS.startShield, m.startShield);
   return m;
 }
 
@@ -273,7 +284,7 @@ export function armShape(s: GameState, fam: ArmFam): number {
 
 /** Probabilidad de crítico: base + talento + Arsenal. */
 export function critChance(s: GameState): number {
-  return BASE_CRIT + s.upgrades.critico * 0.01 + arsenalMods(s).crit;
+  return Math.min(CAPS.crit, BASE_CRIT + s.upgrades.critico * 0.005 + arsenalMods(s).crit);
 }
 
 export function maxHp(s: GameState): number {
@@ -291,7 +302,7 @@ export function pieceLevelTwoChance(_s: GameState): number {
 /** Número único para mostrar qué tan fuerte es el héroe. */
 export function power(s: GameState): number {
   const m = arsenalMods(s);
-  return Math.round(Math.sqrt(damageMultiplier(s) * (1 + m.dmg) * ((1 + critChance(s) * (1 + m.critMult)) / 1.08) * (maxHp(s) / 100) * (1 + m.shield / 2 + m.heal / 4)) * 100);
+  return Math.round(Math.sqrt(damageMultiplier(s) * (1 + m.dmg) * ((1 + critChance(s) * (1 + m.critMult)) / (1 + BASE_CRIT)) * (maxHp(s) / 100) * (1 + m.shield / 2 + m.heal / 4)) * 100);
 }
 
 export function upgradeDef(id: UpgradeId) {

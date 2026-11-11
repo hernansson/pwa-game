@@ -17,6 +17,7 @@ import {
   shieldReduction,
   swordBonus,
   boostSeconds,
+  CAPS,
   starsFor,
   upgradeCost,
 } from './balance';
@@ -226,7 +227,7 @@ export class Game {
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
-    if (blockable) dmg *= Math.max(0.2, 1 - shieldReduction(run.look.shield) - this.mods.reduce);
+    if (blockable) dmg *= Math.max(1 - CAPS.reduce, 1 - shieldReduction(run.look.shield) - this.mods.reduce);
     const blocked = blockable ? Math.min(run.shield, dmg) : 0;
     run.shield -= blocked;
     run.heroHp -= dmg - blocked;
