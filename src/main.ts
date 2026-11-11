@@ -3,6 +3,8 @@ import {
   ENEMIES_PER_WAVE,
   ENERGY_COST,
   ENERGY_MAX,
+  BOOST_SECONDS,
+  COMBO_WINDOW,
   LEVELS_PER_WORLD,
   UPGRADES,
   UpgradeId,
@@ -697,8 +699,8 @@ type Tab = 'heroe' | 'arsenal' | 'cofres' | 'liga' | 'eventos' | 'vip';
 let openTab: Tab | null = null;
 
 const TAB_TITLES: Record<Tab, [string, string]> = {
-  heroe: ['Tu héroe', 'Skins y entrenamiento'],
-  arsenal: ['Arsenal', 'Desbloquea y sube tus armas'],
+  heroe: ['Tu héroe', 'Resumen y entrenamiento'],
+  arsenal: ['Arsenal', 'Armas, potenciadores y skins'],
   cofres: ['Cofres', 'Fragmentos para el Arsenal'],
   liga: ['Liga semanal', 'Compite contra otros 29 héroes'],
   eventos: ['Eventos', 'Lo que viene'],
@@ -750,8 +752,8 @@ $('#settings').addEventListener('click', showSettings);
 function renderDots() {
   const s = game.s;
   const dots: Record<string, boolean> = {
-    heroe: ARMS.some((a) => a.fam === 'skin' && armReady(a)) || UPGRADES.some((u) => game.canBuy(u.id)),
-    arsenal: ARMS.some((a) => a.fam !== 'skin' && armReady(a)),
+    heroe: UPGRADES.some((u) => game.canBuy(u.id)),
+    arsenal: ARMS.some((a) => armReady(a)),
     cofres: game.freeChestIn() === 0,
   };
   document.querySelectorAll<HTMLElement>('[data-dot]').forEach((d) => (d.hidden = !dots[d.dataset.dot!]));
@@ -789,9 +791,48 @@ function renderHeroSheet() {
       <span><small>Daño</small><b>⚔️ +${dmg}%</b></span>
       <span><small>Crítico</small><b>🎯 ${crit}%</b></span>
     </div>
-    ${section('Skins', `cada nivel +${Math.round(LEVEL_STAT.skin.per * 100)}% de vida`, `<div class="arm-row">${ARMS.filter((a) => a.fam === 'skin').map(armCard).join('')}</div>`)}
+    ${section('Equipado', 'toca para verlo en el Arsenal', `<div class="gear-row">${(['espada', 'escudo', 'rayo', 'skin'] as ArmFam[])
+      .map((f) => {
+        const d = armById(s.arms[f])!;
+        const lv = s.arsenal[d.id].lvl;
+        return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d, showTier(lv))}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
+      })
+      .join('')}</div>`)}
+    ${section('Estadísticas', 'todo lo que tienes activo', `<div class="stat-grid">${heroStats().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`)}
+    ${section('Habilidades activas', 'de lo que tienes equipado', activeSkills())}
     ${section('Entrenamiento', 'mejoras permanentes con oro', talents)}`;
   updateTalents();
+}
+
+/** Resumen de números del héroe: base + talentos + Arsenal. */
+function heroStats(): [string, string][] {
+  const s = game.s;
+  const m = game.mods;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  return [
+    ['❤️ Vida máxima', fmt(maxHp(s))],
+    ['⚔️ Daño extra', '+' + pct(damageMultiplier(s) * (1 + m.dmg) - 1)],
+    ['🎯 Crítico', pct(critChance(s))],
+    ['💥 Golpe crítico', `x${String(2 + m.critMult).replace('.', ',')}`],
+    ['🛡️ Escudo por fusión', '+' + pct(m.shield)],
+    ['🧱 Daño recibido', m.reduce ? '-' + pct(m.reduce) : '0%'],
+    ['🔰 Escudo al empezar', m.startShield ? pct(m.startShield) + ' de la vida' : 'no'],
+    ['⚡ Potenciador', `${String(BOOST_SECONDS + m.boostSec).replace('.', ',')} s · +${pct(m.boostMult)}`],
+    ['🔥 Tiempo de combo', `${String(COMBO_WINDOW + m.combo).replace('.', ',')} s`],
+    ['🧪 Curación', m.heal ? '+' + pct(m.heal) : 'normal'],
+  ];
+}
+
+/** Habilidades desbloqueadas de todo lo equipado. */
+function activeSkills(): string {
+  const items: string[] = [];
+  for (const f of ['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]) {
+    const d = armById(game.s.arms[f])!;
+    const lv = game.s.arsenal[d.id].lvl;
+    for (const sk of d.skills) if (lv >= sk.at) items.push(`<li><span class="t-icon">${armIcon(d, showTier(lv))}</span><span>${sk.text}</span><small>${d.name}</small></li>`);
+  }
+  if (!items.length) return `<p class="note">Todavía ninguna. Sube tus armas y tu skin al nivel 5 en el Arsenal para desbloquear la primera habilidad de cada una.</p>`;
+  return `<ul class="active-skills">${items.join('')}</ul>`;
 }
 
 function updateTalents() {
@@ -884,9 +925,10 @@ function openChestUi(id: string, free: boolean) {
   }
   save(game.s);
   refreshSheet();
-  const tab = chest.fams.includes('skin') ? 'heroe' : 'arsenal';
+  const tab = 'arsenal';
+  armTab = chest.fams[0];
   showModal(`<div class="result"><div class="big-ico chest-open">${chest.icon}</div><h2>¡${chest.name}!</h2>${shardList(got, 'Conseguiste')}
-    <div class="btns"><button data-close>Genial</button><button data-goto="${tab}" class="primary">Ver ${tab === 'heroe' ? 'skins' : 'arsenal'}</button></div></div>`);
+    <div class="btns"><button data-close>Genial</button><button data-goto="${tab}" class="primary">Ver en el Arsenal</button></div></div>`);
 }
 
 // ---------- Arsenal ----------
@@ -898,23 +940,10 @@ function showTier(lvl: number) {
   return Math.max(1, Math.min(10, 1 + Math.floor((lvl - 1) / 10)));
 }
 
-function armCard(def: ArmDef): string {
-  const st = game.s.arsenal[def.id];
-  const locked = st.lvl === 0;
-  const need = locked ? unlockShards(def.rarity) : upgradeShards(st.lvl);
-  const equipped = game.s.arms[def.fam] === def.id;
-  return `<button class="arm ${def.fam === 'skin' ? 'is-skin' : ''} ${locked ? 'locked' : ''} ${equipped ? 'on' : ''} ${armReady(def) ? 'ready' : ''}" data-arm="${def.id}" style="--rar:${RARITY_COLORS[def.rarity]}">
-    ${equipped ? '<span class="tag">En uso</span>' : ''}
-    <div class="arm-icon">${armIcon(def, locked ? 1 : showTier(st.lvl))}${locked ? '<span class="lock">🔒</span>' : ''}</div>
-    <b>${def.name}</b>
-    <small class="lv">${locked ? def.rarity : `Nivel ${st.lvl}`}</small>
-    <div class="shard-bar"><i style="width:${Math.min(100, (st.shards / need) * 100)}%"></i><span>🧩 ${st.shards}/${need}</span></div>
-  </button>`;
-}
 
 let armTab: ArmFam = 'espada';
 const armSel: Partial<Record<ArmFam, string>> = {};
-const ARM_TABS: [ArmFam, string][] = [['espada', '⚔️ Espadas'], ['escudo', '🛡️ Escudos'], ['rayo', '⚡ Potenciadores']];
+const ARM_TABS: [ArmFam, string, string][] = [['espada', '⚔️', 'Espadas'], ['escudo', '🛡️', 'Escudos'], ['rayo', '⚡', 'Poder'], ['skin', '🎭', 'Skins']];
 
 /** Botones de desbloquear / subir / usar de una variante. */
 function armButtons(def: ArmDef): string {
@@ -977,7 +1006,7 @@ function renderArsenal() {
   const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && tier >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
   $('#sheet-body').innerHTML = `
     <div class="seg">${ARM_TABS.map(
-      ([f, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}">${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
+      ([f, ico, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
     ).join('')}</div>
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
       <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def, tier)}<span class="sc-tier" style="--f:${pieceFrame(tier)}">${tier}</span>${locked ? '<span class="lock">🔒</span>' : ''}</div>
@@ -995,7 +1024,7 @@ function renderArsenal() {
       const tiles = items.map((x) => armTile(x, x.id === def.id)).join('') + (premium ? '<div class="tile soon"><span>👑</span><small>Pronto</small></div>'.repeat(Math.max(1, 5 - items.length)) : '');
       return `<div class="cat ${premium ? 'premium' : ''}"><small>${title}</small><div class="tiles">${tiles}</div></div>`;
     }).join('')}
-    <div class="designs"><small>Diseño de ${def.name} en el tablero, del nivel 1 al 10</small><div>${designs}</div></div>
+    <div class="designs ${fam === 'skin' ? 'skin' : ''}"><small>${fam === 'skin' ? `Cómo cambia ${def.name} cada 10 niveles` : `Diseño de ${def.name} en el tablero, del nivel 1 al 10`}</small><div>${designs}</div></div>
     <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
 }
 
@@ -1128,6 +1157,12 @@ $('#sheet-body').addEventListener('click', (ev) => {
     return;
   }
   if (armAction(t, false)) return;
+  const gotoArm = t.closest('[data-goto-arm]') as HTMLElement | null;
+  if (gotoArm) {
+    armTab = gotoArm.dataset.gotoArm as ArmFam;
+    openSheet('arsenal');
+    return;
+  }
   const tabEl = t.closest('[data-arm-tab]') as HTMLElement | null;
   if (tabEl) {
     armTab = tabEl.dataset.armTab as ArmFam;
@@ -1137,7 +1172,7 @@ $('#sheet-body').addEventListener('click', (ev) => {
   const arm = t.closest('[data-arm]') as HTMLElement | null;
   if (arm) {
     const def = armById(arm.dataset.arm!)!;
-    if (openTab === 'arsenal' && def.fam !== 'skin') {
+    if (openTab === 'arsenal') {
       armSel[def.fam] = def.id;
       renderArsenal();
       $('#sheet-body').scrollTo({ top: 0, behavior: 'smooth' });

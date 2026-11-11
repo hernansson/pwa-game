@@ -634,3 +634,22 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 .tile { min-height: 0; padding: 4px 3px 5px; border-radius: 10px; }
 .tile small { font-size: 9px; min-height: 10px; line-height: 10px; }
 .cat { grid-template-columns: 78px 1fr; } .cat > small { font-size: 9.5px; overflow-wrap: anywhere; }
+/* v13: Héroe como resumen, skins en el Arsenal */
+.seg { grid-template-columns: repeat(4, 1fr); }
+.seg button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; font-size: 12px; }
+.seg button span { font-size: 18px; }
+.gear-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.gear-slot { border-radius: 14px; border: 2px solid color-mix(in srgb, var(--rar) 60%, transparent); background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--rar) 25%, var(--card)), var(--card) 75%); padding: 6px 4px 7px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.gear-slot .t-icon { width: 80%; }
+.gear-slot b { font-size: 11px; line-height: 1.1; text-align: center; min-height: 2.2em; display: flex; align-items: center; }
+.gear-slot small { font-size: 11px; font-weight: 800; color: var(--rar); }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stat-grid div { background: var(--card); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; }
+.stat-grid span { font-size: 12px; color: var(--muted); }
+.stat-grid b { font-size: 15px; }
+.active-skills { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.active-skills li { display: flex; align-items: center; gap: 10px; background: rgba(70,224,138,.1); border: 1px solid rgba(70,224,138,.25); border-radius: 12px; padding: 6px 10px; font-size: 14px; }
+.active-skills .t-icon { width: 30px; flex: 0 0 30px; }
+.active-skills li > span:nth-child(2) { flex: 1; }
+.active-skills small { font-size: 11px; color: var(--muted); }
+.sc-art svg { overflow: visible; }
