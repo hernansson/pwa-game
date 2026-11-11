@@ -4,17 +4,17 @@ export const BASE_COLS = 5;
 export const BASE_ROWS = 6;
 export const MAX_EXTRA_COLS = 1;
 export const MAX_EXTRA_ROWS = 2;
-export const MAX_LEVEL = 6;
+export const MAX_LEVEL = 10;
 
-export type Family = 'espada' | 'escudo' | 'pocion' | 'orbe' | 'moneda';
-export const FAMILIES: Family[] = ['espada', 'escudo', 'pocion', 'orbe', 'moneda'];
+export type Family = 'espada' | 'escudo' | 'pocion' | 'orbe' | 'rayo';
+export const FAMILIES: Family[] = ['espada', 'escudo', 'pocion', 'orbe', 'rayo'];
 
 export const FAMILY_INFO: Record<Family, { name: string; effect: string; color: string; weight: number }> = {
   espada: { name: 'Espadas', effect: 'Daño al enemigo', color: '#c9d3dd', weight: 34 },
   escudo: { name: 'Escudos', effect: 'Bloquean golpes', color: '#5c9bff', weight: 18 },
   pocion: { name: 'Pociones', effect: 'Curan al héroe', color: '#ff5a8a', weight: 18 },
   orbe: { name: 'Orbes', effect: 'Frenan al enemigo', color: '#b77bff', weight: 15 },
-  moneda: { name: 'Monedas', effect: 'Oro extra', color: '#ffd25a', weight: 15 },
+  rayo: { name: 'Rayos', effect: 'Potencian el daño unos segundos', color: '#ffd25a', weight: 15 },
 };
 
 export interface Piece {
@@ -124,6 +124,13 @@ export function nearestPair(grid: Grid, at: Cell): Cell | undefined {
       }
     }
   return best;
+}
+
+/** Descarta una pieza (la tiraste hacia arriba). */
+export function discard(grid: Grid, at: Cell): boolean {
+  if (!grid[at.col]?.[at.row]) return false;
+  grid[at.col][at.row] = null;
+  return true;
 }
 
 export function hasPair(grid: Grid): boolean {

@@ -20,6 +20,9 @@ export interface Run {
   heroHp: number;
   shield: number; // vida extra de los escudos, absorbe golpes
   grid: Grid;
+  boost: number; // segundos que quedan de potenciador (rayos)
+  boostMult: number;
+  look: { sword?: number; shield?: number; glow?: number }; // cómo se ve el héroe en este combate
   combo: number;
   comboTimer: number;
   maxCombo: number;

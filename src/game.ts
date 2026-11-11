@@ -13,10 +13,12 @@ import {
   leaguePointsForClear,
   levelPower,
   pieceValue,
+  boostMultiplier,
+  boostSeconds,
   starsFor,
   upgradeCost,
 } from './balance';
-import { BASE_COLS, BASE_ROWS, Cell, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, MergeEvent, hasPair, makePiece, mergePair, randomPiece, refill, startingGrid } from './board';
+import { BASE_COLS, BASE_ROWS, Cell, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, MergeEvent, discard, hasPair, makePiece, mergePair, randomPiece, refill, startingGrid } from './board';
 import {
   GameState,
   Run,
@@ -59,6 +61,8 @@ export interface MergeResult {
   shield: number;
   heal: number;
   stun: number;
+  boost: number;
+  boostMult: number;
 }
 
 export type GameEvent =
@@ -67,6 +71,7 @@ export type GameEvent =
   | { type: 'kill'; gold: number; boss: boolean }
   | { type: 'wave'; wave: number; boss: boolean }
   | { type: 'spawn'; ids: number[] }
+  | { type: 'discard'; col: number; row: number }
   | { type: 'end'; report: ClearReport };
 
 type Listener = (e: GameEvent) => void;
@@ -123,6 +128,9 @@ export class Game {
       stun: 0,
       heroHp: maxHp(this.s),
       shield: 0,
+      boost: 0,
+      boostMult: 1,
+      look: {},
       grid: startingGrid(BASE_COLS + this.s.board.cols, BASE_ROWS + this.s.board.rows, pieceLevelTwoChance(this.s), this.rand),
       combo: 0,
       comboTimer: 0,
@@ -143,14 +151,16 @@ export class Game {
     if (this.fighting) this.finish(false);
   }
 
-  /** Junta dos piezas iguales. Devuelve true si se fusionaron. */
-  merge(from: Cell, to: Cell): boolean {
+  /** Tira una pieza que no quieres; cae otra nueva en su lugar. */
+  discardAt(at: Cell): boolean {
     const run = this.s.run;
-    if (!run || run.result) return false;
-    const ev = mergePair(run.grid, from, to);
-    if (!ev) return false;
-    this.applyMerge(run, ev);
-    // Caen piezas nuevas al instante para seguir juntando.
+    if (!run || run.result || !discard(run.grid, at)) return false;
+    this.emit({ type: 'discard', col: at.col, row: at.row });
+    this.afterChange(run);
+    return true;
+  }
+
+  private afterChange(run: Run) {
     const added = refill(run.grid, () => this.newPiece());
     if (!hasPair(run.grid)) {
       // Nunca dejar el tablero sin jugadas: copia una pieza en otra casilla.
@@ -161,6 +171,17 @@ export class Game {
     }
     run.drops += added.length;
     this.emit({ type: 'spawn', ids: added.map((p) => p.id) });
+  }
+
+  /** Junta dos piezas iguales. Devuelve true si se fusionaron. */
+  merge(from: Cell, to: Cell): boolean {
+    const run = this.s.run;
+    if (!run || run.result) return false;
+    const ev = mergePair(run.grid, from, to);
+    if (!ev) return false;
+    this.applyMerge(run, ev);
+    // Caen piezas nuevas al instante para seguir juntando.
+    if (!run.result) this.afterChange(run);
     return true;
   }
 
@@ -172,10 +193,14 @@ export class Game {
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
     const crit = this.rand() < 0.08;
-    const hit = BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1);
+    const boost = run.boost > 0 ? run.boostMult : 1;
+    const hit = BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1) * boost;
     const hp = maxHp(this.s);
-    const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0 };
+    const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
     const fam: Family = ev.fam;
+    if (fam === 'espada') run.look.sword = ev.lvl;
+    if (fam === 'escudo') run.look.shield = ev.lvl;
+    if (fam === 'pocion') run.look.glow = ev.lvl;
     if (fam === 'espada') r.dmg = hit;
     else {
       r.dmg = hit * (fam === 'orbe' ? 0.4 : 0.25);
@@ -188,10 +213,12 @@ export class Game {
       } else if (fam === 'orbe') {
         r.stun = Math.min(6 - run.stun, 0.8 * v);
         run.stun += r.stun;
-      } else if (fam === 'moneda') {
-        r.gold = enemyGold(run.level, false) * 0.6 * v * goldMultiplier(this.s);
-        run.gold += r.gold;
-        this.s.gold += r.gold;
+      } else if (fam === 'rayo') {
+        // Potenciador: corto en niveles bajos, largo y fuerte en los altos.
+        r.boost = boostSeconds(ev.lvl);
+        r.boostMult = boostMultiplier(ev.lvl);
+        run.boostMult = run.boost > 0 ? Math.max(run.boostMult, r.boostMult) : r.boostMult;
+        run.boost = Math.max(run.boost, r.boost);
       }
     }
     this.emit({ type: 'merge', r });
@@ -217,6 +244,7 @@ export class Game {
     const run = this.s.run;
     if (!run || run.result) return;
 
+    if (run.boost > 0) run.boost = Math.max(0, run.boost - dt);
     if (run.comboTimer > 0) {
       run.comboTimer -= dt;
       if (run.comboTimer <= 0) run.combo = 0;

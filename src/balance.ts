@@ -35,13 +35,23 @@ export function enemyAttackSeconds(boss: boolean): number {
 }
 
 export function enemyGold(level: number, boss: boolean): number {
-  const base = 2 * Math.pow(1.33, level - 1);
+  const base = 3 * Math.pow(1.33, level - 1);
   return boss ? base * 10 : base;
 }
 
 /** Fuerza de una fusión según el nivel que resulta y cuántas piezas juntó. */
 export function pieceValue(lvl: number, size: number): number {
   return Math.pow(2, lvl - 2) * (1 + 0.5 * (size - 2));
+}
+
+/** Duración del potenciador de un rayo: 0,1 s en nivel 2, unos 2,5 s en nivel 10. */
+export function boostSeconds(lvl: number): number {
+  return 0.1 * Math.pow(1.5, lvl - 2);
+}
+
+/** Cuánto multiplica el daño el potenciador. */
+export function boostMultiplier(lvl: number): number {
+  return 1 + 0.15 * (lvl - 1);
 }
 
 /** Segundos que tienes entre fusiones para no perder el combo. */

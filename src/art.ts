@@ -140,13 +140,33 @@ export function helmSvg(s: Skin): string {
     <rect x="48.5" y="18" width="3" height="20" fill="${s.trim}" opacity=".9"/>`;
 }
 
-/** Héroe mirando a la derecha, con el arma equipada en la mano. */
-export function heroSvg(skin: Skin, weaponLevel: number): string {
+export interface HeroFight {
+  shield?: number; // nivel del último escudo fusionado
+  glow?: number; // nivel de la última poción: brillo cada vez más fuerte
+}
+
+/** Escudo en el brazo de atrás; el color del marco sigue el nivel. */
+function heroShield(lvl: number): string {
+  const f = pieceFrame(lvl);
+  const s = 0.8 + Math.min(lvl, 10) * 0.04;
+  return `<g transform="translate(30 62) scale(${s}) translate(-30 -62)" class="hero-shield">
+    <path d="M30 44 L44 49 Q44 70 30 82 Q16 70 16 49Z" fill="#2b5fbf" stroke="${f}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M30 50 L39 53 Q39 67 30 75Z" fill="#fff" opacity=".25"/>
+    <circle cx="30" cy="61" r="${3 + Math.min(lvl, 10) * 0.4}" fill="${f}" stroke="#0d0f16" stroke-width="1.2"/>
+  </g>`;
+}
+
+/** Héroe mirando a la derecha, con el arma en la mano. En combate muestra escudo y brillo. */
+export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}): string {
   const aura = skin.aura
     ? `<ellipse cx="50" cy="62" rx="34" ry="40" fill="${skin.aura}" opacity=".18" class="aura"/>`
     : '';
+  const g = fight.glow ?? 0;
+  const glow = g
+    ? `<ellipse cx="50" cy="62" rx="${30 + g * 2.5}" ry="${38 + g * 2.5}" fill="${pieceFrame(g)}" opacity="${Math.min(0.55, 0.12 + g * 0.045)}" class="aura potion-glow"/>`
+    : '';
   return `<svg viewBox="0 0 120 110" class="hero-svg" aria-hidden="true">
-    ${aura}
+    ${glow}${aura}
     <ellipse cx="50" cy="104" rx="26" ry="5" fill="#000" opacity=".25"/>
     <path d="M38 42 Q22 70 26 98 L48 92 L46 44Z" fill="${skin.cape}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/>
     <rect x="40" y="78" width="9" height="22" rx="3" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
@@ -157,6 +177,7 @@ export function heroSvg(skin: Skin, weaponLevel: number): string {
     <path d="M42 50 L58 50 L56 70 L44 70Z" fill="${skin.armorDark}" opacity=".7"/>
     <rect x="34" y="72" width="32" height="5" fill="${skin.trim}"/>
     ${helmSvg(skin)}
+    ${fight.shield ? heroShield(fight.shield) : ''}
     <g class="hero-arm">
       <circle cx="64" cy="54" r="7" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
       <g transform="translate(41 25) scale(.62)">${weaponInner(weaponLevel)}</g>
@@ -245,8 +266,8 @@ export function itemIconSvg(slot: 'casco' | 'armadura' | 'capa' | 'arma', look: 
 
 // ---------- Piezas del tablero ----------
 
-/** Color del marco según el nivel de la pieza: hierro, bronce, plata, oro, jade, prisma. */
-export const PIECE_FRAMES = ['#5d6776', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#ff7af5'];
+/** Color del marco según el nivel de la pieza (1 a 10). */
+export const PIECE_FRAMES = ['#5d6776', '#c07a3a', '#dfe6ee', '#ffd25a', '#46f29a', '#4fb3ff', '#ff4d6a', '#b77bff', '#ff7a2f', '#a8fbff'];
 
 const PIECE_ICONS: Record<string, (c: string, d: string) => string> = {
   espada: (c, d) => `<g transform="rotate(-40 32 32)">
@@ -267,10 +288,9 @@ const PIECE_ICONS: Record<string, (c: string, d: string) => string> = {
     <circle cx="32" cy="30" r="11" fill="#fff" opacity=".18"/>
     <path d="M24 30 Q32 18 40 30 Q32 42 24 30Z" fill="#fff" opacity=".35"/>
     <circle cx="25" cy="22" r="4" fill="#fff" opacity=".7"/>`,
-  moneda: (c, d) => `<circle cx="32" cy="33" r="20" fill="${d}"/>
-    <circle cx="32" cy="31" r="20" fill="${c}" stroke="${d}" stroke-width="2"/>
-    <circle cx="32" cy="31" r="14" fill="none" stroke="${d}" stroke-width="2" opacity=".55"/>
-    <path d="M32 21 L35 28 L42 28 L36.5 32.5 L38.5 40 L32 35.5 L25.5 40 L27.5 32.5 L22 28 L29 28Z" fill="#fff" opacity=".6"/>`,
+  rayo: (c, d) => `<circle cx="32" cy="32" r="21" fill="${c}" opacity=".18"/>
+    <path d="M37 6 L18 36 L30 36 L25 58 L46 26 L34 26 L40 6Z" fill="${c}" stroke="${d}" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M36 10 L24 32 L31 32 L33 26Z" fill="#fff" opacity=".55"/>`,
 };
 
 const PIECE_DARK: Record<string, string> = {
@@ -278,14 +298,18 @@ const PIECE_DARK: Record<string, string> = {
   escudo: '#14306b',
   pocion: '#5a0f2a',
   orbe: '#2e1360',
-  moneda: '#6b4a00',
+  rayo: '#6b4a00',
 };
+
+export function pieceFrame(lvl: number): string {
+  return PIECE_FRAMES[Math.max(1, Math.min(lvl, PIECE_FRAMES.length)) - 1];
+}
 
 /** Pieza del tablero: el icono dice la familia y el marco y el número dicen el nivel. */
 export function pieceSvg(fam: string, lvl: number, color: string): string {
-  const frame = PIECE_FRAMES[Math.min(lvl, PIECE_FRAMES.length) - 1];
+  const frame = pieceFrame(lvl);
   const d = PIECE_DARK[fam] ?? '#222';
-  const scale = 0.78 + Math.min(lvl, 6) * 0.04;
+  const scale = 0.78 + Math.min(lvl, 10) * 0.025;
   const sparkle =
     lvl >= 4
       ? `<path d="M52 8 L54 13 L59 15 L54 17 L52 22 L50 17 L45 15 L50 13Z" fill="#fff" class="spark"/>`

@@ -12,7 +12,7 @@ import {
   upgradeCost,
 } from './balance';
 import { Skin, enemyName, enemySvg, heroSvg, itemIconSvg, pieceSvg, skinById } from './art';
-import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, nearestPair, rowsOf } from './board';
+import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ClearReport, Game, Loot, MergeResult } from './game';
 import {
   CHEST_GEMS,
@@ -116,6 +116,8 @@ document.querySelector('#app')!.innerHTML = `
         <div class="fx" id="fx"></div>
       </div>
       <div class="combo" id="combo"></div>
+      <div class="boost-label" id="boost-label"></div>
+      <div class="flash" id="flash"></div>
     </div>
   </section>
 
@@ -126,7 +128,7 @@ document.querySelector('#app')!.innerHTML = `
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
       </div>
-      <p class="hint" id="hint">Toca una pieza y se junta con su igual. También puedes arrastrarla.</p>
+      <p class="hint" id="hint">Arrastra una pieza sobre otra igual para juntarlas. Arrástrala hacia arriba, fuera del tablero, para tirarla.</p>
     </div>
   </section>
 
@@ -231,10 +233,14 @@ function startLevel(level: number) {
 
 let heroKeyCache = '';
 function renderHero() {
-  const key = JSON.stringify(game.s.equipped);
+  const look = game.s.run?.look ?? {};
+  const key = JSON.stringify(game.s.equipped) + JSON.stringify(look);
   if (key === heroKeyCache) return;
+  const changed = heroKeyCache !== '';
   heroKeyCache = key;
-  $('#hero').innerHTML = myHero();
+  // En combate, la espada y el escudo son los de la última fusión; las pociones dan brillo.
+  $('#hero').innerHTML = heroSvg(myLook(), look.sword ?? weaponTier(game.s.equipped), { shield: look.shield, glow: look.glow });
+  if (changed) restartAnim($('#hero'), 'gear-up');
 }
 
 let enemyKeyCache = '';
@@ -282,6 +288,10 @@ function renderScreen() {
   }
   $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
   $('#hero').classList.toggle('down', run.result === 'lose');
+  const boosted = run.boost > 0 && !run.result;
+  $('#stage').classList.toggle('boosted', boosted);
+  const bl = $('#boost-label');
+  bl.textContent = boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '';
   $('#run-title').textContent = `Nivel ${run.level}`;
   const route: string[] = [];
   for (let w = 0; w < WAVES_PER_LEVEL; w++) {
@@ -341,7 +351,17 @@ function onMergeFx(r: MergeResult) {
   if (r.shield >= 1) floatText('+' + fmt(r.shield) + ' 🛡️', 'shield', 22, 30);
   if (r.heal >= 1) floatText('+' + fmt(r.heal) + ' ❤️', 'heal', 22, 40);
   if (r.stun > 0) floatText(`🔮 ${r.stun.toFixed(1)}s`, 'stun', 74, 22);
-  if (r.gold > 0) floatText('+' + fmt(r.gold) + ' 🪙', 'gold', 74, 16);
+  if (r.boost > 0) {
+    floatText(`⚡ x${r.boostMult.toFixed(2).replace(/0$/, '')}`, 'boost', 50, 30);
+  }
+  // Cuanto más alto el nivel, más fuerte el efecto.
+  if (ev.lvl >= 5 || ev.burst) {
+    const f = $('#flash');
+    f.style.setProperty('--c', FAMILY_INFO[ev.fam].color);
+    f.style.setProperty('--a', String(Math.min(0.75, 0.15 + (ev.lvl - 4) * 0.1)));
+    restartAnim(f, 'on');
+  }
+  if (ev.lvl >= 7) restartAnim($('#board'), 'quake');
   if (ev.burst) toast(`¡Explosión de ${FAMILY_INFO[ev.fam].name.toLowerCase()}!`);
   if (navigator.vibrate) navigator.vibrate(ev.burst ? 40 : 12);
 }
@@ -360,6 +380,8 @@ function wireGame() {
       floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
     } else if (e.type === 'wave') {
       if (e.boss) toast('¡Llegó el jefe!');
+    } else if (e.type === 'discard') {
+      // La pieza sale volando por arriba.
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
@@ -421,7 +443,7 @@ $('#legend').innerHTML = FAMILIES.map(
   (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color)}<small>${legendWord(f)}</small></span>`,
 ).join('');
 function legendWord(f: Family) {
-  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', orbe: 'frena', moneda: 'oro' }[f];
+  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', orbe: 'frena', rayo: 'poder' }[f];
 }
 
 function resetBoardView() {
@@ -471,6 +493,7 @@ function renderBoard() {
       if (!el) {
         el = document.createElement('div');
         el.className = 'pc';
+        el.dataset.k = p.fam + p.lvl;
         el.dataset.col = String(c);
         el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color);
         el.style.left = pos.left;
@@ -555,17 +578,23 @@ function endDrag(ev: PointerEvent) {
   d.el.classList.remove('lifting');
   d.el.style.transform = '';
   markMatches(null);
-  if (ev.type === 'pointercancel') return;
-  if (d.moved) {
-    const to = cellFromPoint(ev.clientX, ev.clientY);
-    if (to && doMerge(d.from, to)) return;
-    if (to) restartAnim(d.el, 'nope');
+  if (ev.type === 'pointercancel' || !d.moved) return;
+  const top = piecesEl.getBoundingClientRect().top;
+  if (ev.clientY < top - 10) {
+    // Arrastrada hacia arriba, fuera del tablero: se descarta.
+    const fly = d.el.cloneNode(true) as HTMLElement;
+    fly.classList.remove('lifting', 'match');
+    fly.classList.add('tossed');
+    fly.style.transform = `translate(${ev.clientX - d.x}px, ${ev.clientY - d.y}px)`;
+    piecesEl.appendChild(fly);
+    setTimeout(() => fly.remove(), 400);
+    d.el.style.visibility = 'hidden';
+    if (game.discardAt(d.from)) track(game.s, 'discard');
     return;
   }
-  const run = game.s.run;
-  const pair = run && nearestPair(run.grid, d.from);
-  if (pair) doMerge(d.from, pair);
-  else restartAnim(d.el, 'nope');
+  const to = cellFromPoint(ev.clientX, ev.clientY);
+  if (to && doMerge(d.from, to)) return;
+  if (to) restartAnim(d.el, 'nope');
 }
 window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
@@ -1005,7 +1034,7 @@ if (rolloverLeague(game.s)) showLeagueResult();
 if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
-    <p>Recorre niveles cortos y vence al jefe del final. <b>Toca una pieza y se junta con otra igual</b> (mismo dibujo y mismo número). Al juntarlas actúan y caen piezas nuevas al instante.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · 🔮 orbes frenan · 🪙 monedas dan oro. Si juntas rápido, haces combo.</p>
+    <p>Recorre niveles cortos y vence al jefe del final. <b>Arrastra una pieza sobre otra igual</b> (mismo dibujo y mismo número) para juntarlas. Al juntarlas actúan y caen piezas nuevas al instante. Si una pieza no te sirve, tírala hacia arriba.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · 🔮 orbes frenan · ⚡ rayos potencian tu daño unos segundos. Si juntas rápido, haces combo.</p>
     <p>Gana equipo para tu héroe y hazlo cada vez más fuerte.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,
