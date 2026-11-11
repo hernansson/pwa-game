@@ -190,7 +190,7 @@ export function enemySvg(wave: number, boss: boolean): string {
   }
   if (kind === 1) {
     // Murciélago
-    return `<svg viewBox="0 0 110 100" class="enemy-svg float" aria-hidden="true">
+    return `<svg viewBox="0 0 110 100" class="enemy-svg bob" aria-hidden="true">
       <ellipse cx="55" cy="94" rx="22" ry="4" fill="#000" opacity=".2"/>
       <path d="M55 40 Q30 20 6 34 Q20 44 18 58 Q34 50 42 62Z M55 40 Q80 20 104 34 Q90 44 92 58 Q76 50 68 62Z" fill="${color}" stroke="#1a0f24" stroke-width="2.5" stroke-linejoin="round"/>
       <circle cx="55" cy="58" r="20" fill="${color}" stroke="#1a0f24" stroke-width="2.5"/>

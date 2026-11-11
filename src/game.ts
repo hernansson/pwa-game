@@ -1,34 +1,50 @@
 import {
-  BOSS_TIME,
-  PRESTIGE_MIN_WAVE,
+  BOSS_CHEST,
+  DROP_CHANCE,
+  ENEMIES_PER_WAVE,
+  ENERGY_COST,
   UpgradeId,
+  WAVES_PER_LEVEL,
+  dropLevel,
+  enemyDps,
   enemyGold,
   enemyHp,
-  isBoss,
-  killsPerWave,
-  leaguePointsForKill,
-  soulsForPrestige,
+  firstClearGems,
+  forgeCost,
+  leaguePointsForClear,
+  starsFor,
   upgradeCost,
 } from './balance';
 import {
   GameState,
+  Run,
   attackRate,
   damagePerHit,
-  forgeSeconds,
   goldMultiplier,
-  newState,
-  spawnLevel,
+  maxHp,
+  regenEnergy,
   track,
   upgradeDef,
 } from './state';
 
+export interface ClearReport {
+  level: number;
+  win: boolean;
+  stars: number;
+  gold: number;
+  gems: number;
+  points: number;
+  drops: number;
+  firstClear: boolean;
+}
+
 export type GameEvent =
   | { type: 'hit'; dmg: number; crit: boolean }
+  | { type: 'hurt'; dmg: number }
   | { type: 'kill'; gold: number; boss: boolean }
   | { type: 'wave'; wave: number; boss: boolean }
-  | { type: 'bossFail' }
-  | { type: 'spawn'; index: number }
-  | { type: 'gems'; amount: number; reason: string };
+  | { type: 'drop'; indexes: number[]; lost: number }
+  | { type: 'end'; report: ClearReport };
 
 type Listener = (e: GameEvent) => void;
 
@@ -36,6 +52,7 @@ export class Game {
   s: GameState;
   private attackClock = 0;
   private respawnDelay = 0;
+  private endDelay = 0;
   private listeners: Listener[] = [];
 
   constructor(s: GameState) {
@@ -54,110 +71,175 @@ export class Game {
     return this.respawnDelay > 0;
   }
 
-  tick(dt: number) {
-    const s = this.s;
-    // Forja: cae un arma nueva cada cierto tiempo si hay lugar.
-    s.forgeProgress += dt / forgeSeconds(s);
-    if (s.forgeProgress >= 1) {
-      const idx = s.board.indexOf(null);
-      if (idx !== -1) {
-        s.board[idx] = spawnLevel(s);
-        s.forgeProgress -= 1;
-        this.emit({ type: 'spawn', index: idx });
-      } else {
-        s.forgeProgress = 1; // espera a que haya lugar
-      }
-    }
+  isBossWave(run: Run) {
+    return run.wave >= WAVES_PER_LEVEL;
+  }
 
+  canStart(level: number): boolean {
+    regenEnergy(this.s);
+    return !this.s.run && level <= this.s.unlocked && this.s.energy >= ENERGY_COST;
+  }
+
+  start(level: number): boolean {
+    if (!this.canStart(level)) return false;
+    this.s.energy -= ENERGY_COST;
+    this.s.run = {
+      level,
+      wave: 0,
+      enemyInWave: 0,
+      enemyHp: enemyHp(level, false),
+      heroHp: maxHp(this.s),
+      gold: 0,
+      drops: 0,
+      result: null,
+    };
+    this.attackClock = 0;
+    this.respawnDelay = 0.6;
+    this.endDelay = 0;
+    track(this.s, `start:${level}`);
+    this.emit({ type: 'wave', wave: 0, boss: false });
+    return true;
+  }
+
+  /** Abandona el nivel actual (la energía no se devuelve). */
+  abandon() {
+    const run = this.s.run;
+    if (!run || run.result) return;
+    this.finish(false);
+  }
+
+  tick(dt: number) {
+    regenEnergy(this.s);
+    const run = this.s.run;
+    if (!run) return;
+    if (run.result) {
+      this.endDelay -= dt;
+      return;
+    }
     if (this.respawnDelay > 0) {
       this.respawnDelay -= dt;
       return;
     }
+    const boss = this.isBossWave(run);
 
-    if (isBoss(s.wave) && !s.farming) {
-      s.bossTimer -= dt;
-      if (s.bossTimer <= 0) {
-        // Perdió contra el jefe: vuelve a la oleada anterior a juntar fuerza.
-        s.farming = true;
-        s.wave -= 1;
-        s.killsInWave = 0;
-        s.enemyHp = enemyHp(s.wave);
-        this.emit({ type: 'bossFail' });
-        this.emit({ type: 'wave', wave: s.wave, boss: false });
-        return;
-      }
+    // El enemigo golpea al héroe de forma continua.
+    const incoming = enemyDps(run.level, boss) * dt;
+    run.heroHp -= incoming;
+    if (Math.random() < dt * 1.2) this.emit({ type: 'hurt', dmg: enemyDps(run.level, boss) / 1.2 });
+    if (run.heroHp <= 0) {
+      run.heroHp = 0;
+      this.finish(false);
+      return;
     }
 
     this.attackClock += dt;
-    const interval = 1 / attackRate(s);
-    while (this.attackClock >= interval) {
+    const interval = 1 / attackRate(this.s);
+    while (this.attackClock >= interval && !run.result) {
       this.attackClock -= interval;
-      this.attack();
+      this.attack(run);
       if (this.respawnDelay > 0) break;
     }
   }
 
-  private attack() {
-    const s = this.s;
+  private attack(run: Run) {
     const crit = Math.random() < 0.1;
-    const dmg = damagePerHit(s) * (crit ? 2.5 : 1);
-    s.enemyHp -= dmg;
+    const dmg = damagePerHit(this.s) * (crit ? 2.5 : 1);
+    run.enemyHp -= dmg;
     this.emit({ type: 'hit', dmg, crit });
-    if (s.enemyHp <= 0) this.kill();
+    if (run.enemyHp <= 0) this.kill(run);
   }
 
-  private kill() {
-    const s = this.s;
-    const boss = isBoss(s.wave) && !s.farming;
-    const gold = enemyGold(s.wave) * goldMultiplier(s);
-    s.gold += gold;
-    s.league.points += leaguePointsForKill(s.wave);
-    s.stats.kills++;
+  private dropWeapons(count: number, level: number): void {
+    const indexes: number[] = [];
+    let lost = 0;
+    for (let i = 0; i < count; i++) {
+      const idx = this.s.board.indexOf(null);
+      if (idx === -1) {
+        lost++;
+        continue;
+      }
+      this.s.board[idx] = level;
+      indexes.push(idx);
+    }
+    if (this.s.run) this.s.run.drops += indexes.length;
+    this.emit({ type: 'drop', indexes, lost });
+  }
+
+  private kill(run: Run) {
+    const boss = this.isBossWave(run);
+    const gold = enemyGold(run.level, boss) * goldMultiplier(this.s);
+    run.gold += gold;
+    this.s.gold += gold;
+    this.s.stats.kills++;
     this.emit({ type: 'kill', gold, boss });
-    this.respawnDelay = 0.35;
+    const lvl = dropLevel(run.level, this.s.upgrades.calidad);
 
     if (boss) {
-      s.stats.bossesBeaten++;
-      if (!s.bossFirstClears.includes(s.wave)) {
-        s.bossFirstClears.push(s.wave);
-        const gems = 3 + Math.floor(s.wave / 20);
-        s.gems += gems;
-        this.emit({ type: 'gems', amount: gems, reason: `Primer triunfo contra el jefe ${s.wave}` });
-      }
-    }
-
-    s.killsInWave++;
-    if (s.farming) {
-      // Mientras junta fuerza, reintenta al jefe automáticamente cada 3 oleadas completas.
-      if (s.killsInWave >= killsPerWave(s.wave) * 3) {
-        s.farming = false;
-        this.advance();
-      } else {
-        s.enemyHp = enemyHp(s.wave);
-      }
+      this.dropWeapons(BOSS_CHEST, lvl + 1);
+      this.finish(true);
       return;
     }
-    if (s.killsInWave >= killsPerWave(s.wave)) this.advance();
-    else s.enemyHp = enemyHp(s.wave);
+    if (Math.random() < DROP_CHANCE) this.dropWeapons(1, lvl);
+
+    this.respawnDelay = 1.0; // el héroe camina hasta el siguiente enemigo
+    run.enemyInWave++;
+    if (run.enemyInWave >= ENEMIES_PER_WAVE) {
+      run.wave++;
+      run.enemyInWave = 0;
+      // Pequeña curación entre oleadas.
+      run.heroHp = Math.min(maxHp(this.s), run.heroHp + maxHp(this.s) * 0.15);
+      this.respawnDelay = 1.8;
+      this.emit({ type: 'wave', wave: run.wave, boss: this.isBossWave(run) });
+    }
+    run.enemyHp = enemyHp(run.level, this.isBossWave(run));
   }
 
-  private advance() {
-    const s = this.s;
-    s.wave += 1;
-    s.killsInWave = 0;
-    s.enemyHp = enemyHp(s.wave);
-    if (isBoss(s.wave)) s.bossTimer = BOSS_TIME;
-    s.maxWave = Math.max(s.maxWave, s.wave);
-    s.bestWaveEver = Math.max(s.bestWaveEver, s.wave);
-    this.emit({ type: 'wave', wave: s.wave, boss: isBoss(s.wave) });
+  private finish(win: boolean) {
+    const run = this.s.run!;
+    run.result = win ? 'win' : 'lose';
+    this.endDelay = 1.2;
+    let stars = 0;
+    let gems = 0;
+    let points = 0;
+    let firstClear = false;
+    if (win) {
+      stars = starsFor(run.heroHp / maxHp(this.s));
+      firstClear = !this.s.stars[run.level];
+      if (firstClear) {
+        gems = firstClearGems(run.level);
+        this.s.gems += gems;
+      }
+      this.s.stars[run.level] = Math.max(this.s.stars[run.level] ?? 0, stars);
+      this.s.unlocked = Math.max(this.s.unlocked, run.level + 1);
+      points = leaguePointsForClear(run.level, stars);
+      this.s.league.points += points;
+      this.s.stats.clears++;
+      track(this.s, `clear:${run.level}:${stars}`);
+    } else {
+      this.s.stats.fails++;
+      track(this.s, `fail:${run.level}:${run.wave}`);
+    }
+    this.emit({
+      type: 'end',
+      report: { level: run.level, win, stars, gold: run.gold, gems, points, drops: run.drops, firstClear },
+    });
   }
 
-  /** Reintento manual del jefe mientras está juntando fuerza. */
-  retryBoss() {
-    const s = this.s;
-    if (!s.farming) return;
-    s.farming = false;
-    this.advance();
+  /** Cierra la pantalla de resultado y vuelve al mapa. */
+  leave() {
+    this.s.run = null;
+  }
+
+  get forgePrice(): number {
+    return forgeCost(this.s.forged, this.s.unlocked);
+  }
+
+  forge(): boolean {
+    if (this.s.gold < this.forgePrice || !this.s.board.includes(null)) return false;
+    this.s.gold -= this.forgePrice;
+    this.s.forged++;
+    this.dropWeapons(1, dropLevel(this.s.unlocked, this.s.upgrades.calidad));
+    return true;
   }
 
   /** Mueve o fusiona armas. Devuelve 'merge', 'move', 'swap' o null. */
@@ -179,6 +261,16 @@ export class Game {
     return 'swap';
   }
 
+  /** Vende un arma por oro (para liberar lugar). */
+  sell(index: number): number {
+    const lvl = this.s.board[index];
+    if (lvl === null) return 0;
+    const value = Math.ceil(3 * Math.pow(2, lvl - 1));
+    this.s.board[index] = null;
+    this.s.gold += value;
+    return value;
+  }
+
   canBuy(id: UpgradeId): boolean {
     const def = upgradeDef(id);
     const lvl = this.s.upgrades[id];
@@ -191,34 +283,5 @@ export class Game {
     this.s.gold -= upgradeCost(def, this.s.upgrades[id]);
     this.s.upgrades[id]++;
     return true;
-  }
-
-  prestigeSouls(): number {
-    return soulsForPrestige(this.s.maxWave);
-  }
-
-  canPrestige(): boolean {
-    return this.s.maxWave >= PRESTIGE_MIN_WAVE && this.prestigeSouls() > 0;
-  }
-
-  prestige() {
-    if (!this.canPrestige()) return;
-    const old = this.s;
-    const fresh = newState();
-    // Se conserva lo permanente.
-    fresh.playerName = old.playerName;
-    fresh.gems = old.gems;
-    fresh.souls = old.souls + this.prestigeSouls();
-    fresh.bestWaveEver = old.bestWaveEver;
-    fresh.skin = old.skin;
-    fresh.ownedSkins = old.ownedSkins;
-    fresh.league = old.league;
-    fresh.stats = { ...old.stats, prestiges: old.stats.prestiges + 1 };
-    fresh.bossFirstClears = old.bossFirstClears;
-    fresh.events = old.events;
-    track(fresh, `prestige:${old.maxWave}`);
-    this.s = fresh;
-    this.attackClock = 0;
-    this.respawnDelay = 0;
   }
 }

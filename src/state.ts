@@ -1,35 +1,38 @@
 import {
   BOARD_SIZE,
+  ENERGY_MAX,
+  ENERGY_REGEN_SECONDS,
   UPGRADES,
   UpgradeId,
   attacksPerSecond,
-  enemyGold,
-  enemyHp,
-  forgeInterval,
-  killsPerWave,
-  leaguePointsForKill,
-  soulMultiplier,
+  heroMaxHp,
   weaponDamage,
-  OFFLINE_CAP_HOURS,
-  OFFLINE_RATE,
 } from './balance';
+
+export interface Run {
+  level: number;
+  wave: number; // 0..WAVES_PER_LEVEL-1 oleadas normales, WAVES_PER_LEVEL = jefe
+  enemyInWave: number;
+  enemyHp: number;
+  heroHp: number;
+  gold: number;
+  drops: number;
+  result: null | 'win' | 'lose';
+}
 
 export interface GameState {
   version: number;
   playerName: string;
   gold: number;
   gems: number;
-  souls: number;
-  wave: number;
-  maxWave: number; // récord de esta vuelta (se reinicia con prestigio)
-  bestWaveEver: number;
-  killsInWave: number;
-  enemyHp: number;
-  bossTimer: number;
-  farming: boolean; // si perdió con un jefe, se queda en la oleada anterior
+  energy: number;
+  energyAt: number; // momento del último cálculo de recarga
+  unlocked: number; // nivel más alto disponible
+  stars: Record<number, number>;
   board: (number | null)[]; // nivel del arma en cada casilla
   upgrades: Record<UpgradeId, number>;
-  forgeProgress: number;
+  forged: number;
+  run: Run | null;
   skin: string;
   ownedSkins: string[];
   league: {
@@ -39,13 +42,12 @@ export interface GameState {
     joinedAt: number; // si entró a mitad de semana, los rivales cuentan desde ahí
     lastResult: { week: number; rank: number; moved: -1 | 0 | 1; gems: number } | null;
   };
-  stats: { kills: number; merges: number; prestiges: number; bossesBeaten: number };
-  bossFirstClears: number[];
+  stats: { kills: number; merges: number; clears: number; fails: number };
   lastSeen: number;
   events: { t: number; e: string }[];
 }
 
-const SAVE_KEY = 'heroes-forja-save-v1';
+const SAVE_KEY = 'heroes-forja-save-v2';
 
 export function currentWeek(now = Date.now()): number {
   // Semanas que arrancan el lunes 00:00 UTC.
@@ -59,29 +61,26 @@ export function weekStart(week: number): number {
 
 export function newState(): GameState {
   const board: (number | null)[] = Array(BOARD_SIZE).fill(null);
-  board[0] = 1;
+  board[0] = 2;
   board[1] = 1;
+  board[2] = 1;
   return {
-    version: 1,
+    version: 2,
     playerName: '',
     gold: 0,
     gems: 20,
-    souls: 0,
-    wave: 1,
-    maxWave: 1,
-    bestWaveEver: 1,
-    killsInWave: 0,
-    enemyHp: enemyHp(1),
-    bossTimer: 0,
-    farming: false,
+    energy: ENERGY_MAX,
+    energyAt: Date.now(),
+    unlocked: 1,
+    stars: {},
     board,
-    upgrades: { fuerza: 0, velocidad: 0, forja: 0, calidad: 0, codicia: 0 },
-    forgeProgress: 0,
+    upgrades: { fuerza: 0, vida: 0, velocidad: 0, calidad: 0, codicia: 0 },
+    forged: 0,
+    run: null,
     skin: 'caballero',
     ownedSkins: ['caballero'],
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
-    stats: { kills: 0, merges: 0, prestiges: 0, bossesBeaten: 0 },
-    bossFirstClears: [],
+    stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
     lastSeen: Date.now(),
     events: [],
   };
@@ -123,6 +122,25 @@ export function track(s: GameState, e: string): void {
   if (s.events.length > 300) s.events.splice(0, s.events.length - 300);
 }
 
+/** Suma la energía recargada desde el último cálculo. */
+export function regenEnergy(s: GameState, now = Date.now()): void {
+  if (s.energy >= ENERGY_MAX) {
+    s.energyAt = now;
+    return;
+  }
+  const gained = Math.floor((now - s.energyAt) / 1000 / ENERGY_REGEN_SECONDS);
+  if (gained > 0) {
+    s.energy = Math.min(ENERGY_MAX, s.energy + gained);
+    s.energyAt += gained * ENERGY_REGEN_SECONDS * 1000;
+    if (s.energy >= ENERGY_MAX) s.energyAt = now;
+  }
+}
+
+export function secondsToNextEnergy(s: GameState, now = Date.now()): number {
+  if (s.energy >= ENERGY_MAX) return 0;
+  return Math.max(0, ENERGY_REGEN_SECONDS - (now - s.energyAt) / 1000);
+}
+
 export function bestWeapon(s: GameState): number {
   let best = 1;
   for (const w of s.board) if (w !== null && w > best) best = w;
@@ -130,9 +148,7 @@ export function bestWeapon(s: GameState): number {
 }
 
 export function damagePerHit(s: GameState): number {
-  return (
-    weaponDamage(bestWeapon(s)) * (1 + s.upgrades.fuerza * 0.15) * soulMultiplier(s.souls)
-  );
+  return weaponDamage(bestWeapon(s)) * (1 + s.upgrades.fuerza * 0.15);
 }
 
 export function attackRate(s: GameState): number {
@@ -140,58 +156,17 @@ export function attackRate(s: GameState): number {
 }
 
 export function goldMultiplier(s: GameState): number {
-  return (1 + s.upgrades.codicia * 0.2) * soulMultiplier(s.souls);
+  return 1 + s.upgrades.codicia * 0.2;
+}
+
+export function maxHp(s: GameState): number {
+  return heroMaxHp(s.upgrades.vida);
 }
 
 export function dps(s: GameState): number {
   return damagePerHit(s) * attackRate(s);
 }
 
-export function forgeSeconds(s: GameState): number {
-  return forgeInterval(s.upgrades.forja);
-}
-
-export function spawnLevel(s: GameState): number {
-  return 1 + s.upgrades.calidad;
-}
-
 export function upgradeDef(id: UpgradeId) {
   return UPGRADES.find((u) => u.id === id)!;
 }
-
-export interface OfflineReport {
-  seconds: number;
-  gold: number;
-  points: number;
-  weapons: number;
-}
-
-/**
- * Calcula lo ganado mientras el jugador no estaba. Se asume que el héroe
- * sigue luchando en la oleada actual (sin avanzar) a la mitad de rendimiento.
- */
-export function applyOffline(s: GameState, now = Date.now()): OfflineReport | null {
-  const elapsed = Math.min((now - s.lastSeen) / 1000, OFFLINE_CAP_HOURS * 3600);
-  if (elapsed < 20) return null;
-  const farmWave = s.farming || s.wave % 10 === 0 ? Math.max(1, s.wave - 1) : s.wave;
-  const timePerKill = Math.max(enemyHp(farmWave) / dps(s), 1 / attackRate(s)) + 0.35;
-  const kills = (elapsed / timePerKill) * OFFLINE_RATE;
-  const gold = kills * enemyGold(farmWave) * goldMultiplier(s);
-  // Los puntos de liga solo cuentan dentro de la semana actual.
-  const weekElapsed = Math.min(elapsed, (now - weekStart(currentWeek(now))) / 1000);
-  const points = Math.floor((weekElapsed / timePerKill) * OFFLINE_RATE * leaguePointsForKill(farmWave));
-  let weapons = 0;
-  const forged = Math.floor((elapsed / forgeSeconds(s)) * OFFLINE_RATE);
-  for (let i = 0; i < forged; i++) {
-    const idx = s.board.indexOf(null);
-    if (idx === -1) break;
-    s.board[idx] = spawnLevel(s);
-    weapons++;
-  }
-  s.gold += gold;
-  s.league.points += points;
-  s.stats.kills += Math.floor(kills);
-  return { seconds: elapsed, gold, points, weapons };
-}
-
-export { killsPerWave };
