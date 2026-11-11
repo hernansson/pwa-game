@@ -170,11 +170,23 @@ export function upgradeGold(lvl: number): number {
   return Math.ceil(15 * Math.pow(1.09, lvl));
 }
 
+/**
+ * Contra el power creep: una variante más rara arranca como si fuera una básica de más nivel,
+ * pero todas suben lo mismo por nivel. Así una avanzada nueva nunca supera a una básica muy trabajada:
+ * una épica nivel 1 equivale a una básica nivel 16, y una básica nivel 40 le gana hasta que la épica llega al 25.
+ * Las habilidades de cada rareza son distintas (otro estilo), no simplemente más fuertes.
+ */
+export const RARITY_LEVEL_BONUS: Record<Rarity, number> = { común: 0, rara: 7, épica: 15, legendaria: 25 };
+
+/** Cuánto suma el stat de nivel de una variante (0,03 = +3%). */
+export function armStat(def: ArmDef, lvl: number): number {
+  return lvl <= 0 ? 0 : LEVEL_STAT[def.fam].per * (lvl - 1 + RARITY_LEVEL_BONUS[def.rarity]);
+}
+
 /** Suma los modificadores de una variante a cierto nivel. */
 export function armMods(def: ArmDef, lvl: number, into: Mods = { ...NO_MODS }): Mods {
   if (lvl <= 0) return into;
-  const st = LEVEL_STAT[def.fam];
-  into[st.key] += st.per * (lvl - 1);
+  into[LEVEL_STAT[def.fam].key] += armStat(def, lvl);
   for (const sk of def.skills) if (lvl >= sk.at) for (const k in sk.mod) into[k as keyof Mods] += sk.mod[k as keyof Mods]!;
   return into;
 }

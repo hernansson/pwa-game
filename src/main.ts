@@ -33,7 +33,7 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { ARMS, ArmDef, ArmFam, CHESTS, LEVEL_STAT, MAX_ARM_LEVEL, armById, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, ArmDef, ArmFam, CHESTS, LEVEL_STAT, MAX_ARM_LEVEL, RARITY_LEVEL_BONUS, armById, armStat, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
   exportCode,
@@ -1241,7 +1241,7 @@ function renderArsenal() {
   const st = game.s.arsenal[def.id];
   const locked = st.lvl === 0;
   const stat = LEVEL_STAT[fam];
-  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
+  const total = Math.round(armStat(def, st.lvl) * 100);
   $('#sheet-body').innerHTML = `
     <div class="seg">${ARM_TABS.map(
       ([f, ico, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
@@ -1251,7 +1251,7 @@ function renderArsenal() {
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
-        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}<br><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></p>
+        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}<br><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel${RARITY_LEVEL_BONUS[def.rarity] ? ` · arranca como una básica nivel ${1 + RARITY_LEVEL_BONUS[def.rarity]}` : ''}</span></p>
         <ul class="skills mini">${armSkills(def, false)}</ul>
       </div>
     </div>
@@ -1333,7 +1333,7 @@ function showArm(id: string) {
   const st = game.s.arsenal[id];
   const locked = st.lvl === 0;
   const stat = LEVEL_STAT[def.fam];
-  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
+  const total = Math.round(armStat(def, st.lvl) * 100);
   const isSkin = def.fam === 'skin';
   showModal(`<div class="arm-detail" style="--rar:${RARITY_COLORS[def.rarity]}">
     <button class="x" data-close aria-label="Cerrar">✕</button>
