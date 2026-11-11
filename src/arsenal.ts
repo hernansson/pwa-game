@@ -187,12 +187,14 @@ export function rollShards(total: number, fams: ArmFam[] = ['espada', 'escudo', 
   const out: Record<string, number> = {};
   const pool = ARMS.filter((a) => fams.includes(a.fam));
   const parts = total >= 12 ? 3 : 2;
-  const sum = pool.reduce((a, d) => a + SHARD_WEIGHT[d.rarity], 0);
   let left = total;
   for (let i = 0; i < parts; i++) {
-    let r = rand() * sum;
-    let pick = pool[0];
-    for (const d of pool) {
+    // Cada parte va a una variante distinta mientras haya de dónde elegir.
+    const avail = pool.filter((d) => !(d.id in out));
+    const from = avail.length ? avail : pool;
+    let r = rand() * from.reduce((a, d) => a + SHARD_WEIGHT[d.rarity], 0);
+    let pick = from[0];
+    for (const d of from) {
       r -= SHARD_WEIGHT[d.rarity];
       if (r <= 0) {
         pick = d;

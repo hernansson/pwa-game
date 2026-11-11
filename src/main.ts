@@ -944,13 +944,13 @@ function renderChests() {
   const free = CHESTS.find((c) => c.id === 'armas')!;
   $('#sheet-body').innerHTML = `
     <div class="free-chest ${wait ? '' : 'ready'}">
-      <div class="chest-art">🎁</div>
+      <div class="chest-art">${chestSvg('armas')}</div>
       <div class="fc-main"><small>Cofre gratis</small><b>${free.name}</b><span data-free-timer>${wait ? `Listo en ${timeText(wait)}` : `${Math.round(free.shards / 2)} fragmentos de regalo`}</span></div>
       <button data-free-chest ${wait ? 'disabled' : ''}>${wait ? 'Esperando' : 'Abrir'}</button>
     </div>
     <div class="chests">${CHESTS.map(
       (c) => `<div class="chest-card c-${c.id}">
-        <div class="chest-art">${c.icon}</div>
+        <div class="chest-art">${chestSvg(c.id)}</div>
         <b>${c.name}</b>
         <p>${c.desc}</p>
         <small>${c.shards} fragmentos</small>
@@ -960,8 +960,50 @@ function renderChests() {
     <p class="note">También ganas fragmentos al superar niveles. Los jefes de mundo (cada 10 niveles) dan el doble y además fragmentos de skin.</p>`;
 }
 
+const CHEST_PAL: Record<string, [string, string, string]> = {
+  armas: ['#5f86e8', '#2b3f86', '#c9d6ff'],
+  skins: ['#b56be8', '#552a86', '#f0d2ff'],
+  poder: ['#f2b53a', '#8a5410', '#fff1b8'],
+};
+
+/** Cofre dibujado: cuerpo y tapa por separado para poder animar la apertura. */
+function chestSvg(id: string): string {
+  const [c, d, l] = CHEST_PAL[id] ?? CHEST_PAL.armas;
+  return `<svg viewBox="0 0 200 180" class="chest-svg">
+    <ellipse cx="100" cy="168" rx="78" ry="9" fill="rgba(0,0,0,.45)"/>
+    <g class="ch-body">
+      <rect x="22" y="78" width="156" height="86" rx="12" fill="${d}" stroke="#120a22" stroke-width="5"/>
+      <rect x="30" y="84" width="140" height="18" rx="6" fill="rgba(0,0,0,.25)"/>
+      <rect x="40" y="78" width="16" height="86" fill="#e8b54a" stroke="#120a22" stroke-width="4"/>
+      <rect x="144" y="78" width="16" height="86" fill="#e8b54a" stroke="#120a22" stroke-width="4"/>
+      <rect x="22" y="128" width="156" height="10" fill="${c}" opacity=".55"/>
+    </g>
+    <ellipse class="ch-light" cx="100" cy="82" rx="70" ry="14" fill="${l}"/>
+    <g class="ch-lid">
+      <path d="M22 84 V60 Q22 22 100 22 Q178 22 178 60 V84 Z" fill="${c}" stroke="#120a22" stroke-width="5"/>
+      <path d="M34 60 Q38 34 100 32 Q162 34 166 60" fill="none" stroke="${l}" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+      <path d="M40 84 V40 M56 84 V30" stroke="#120a22" stroke-width="4"/>
+      <rect x="40" y="26" width="16" height="58" fill="#e8b54a" stroke="#120a22" stroke-width="4"/>
+      <rect x="144" y="26" width="16" height="58" fill="#e8b54a" stroke="#120a22" stroke-width="4"/>
+      <rect x="84" y="68" width="32" height="34" rx="6" fill="#ffd25c" stroke="#120a22" stroke-width="4"/>
+      <circle cx="100" cy="82" r="5" fill="#120a22"/><rect x="98" y="84" width="4" height="10" fill="#120a22"/>
+    </g>
+  </svg>`;
+}
+
+const RAR_RANK: Record<string, number> = { común: 0, rara: 1, épica: 2, legendaria: 3 };
+const RAR_LABEL: Record<string, string> = { común: 'Común', rara: 'Rara', épica: 'Épica', legendaria: 'Legendaria' };
+
+/** Fragmentos que le faltan a una variante para el próximo paso (desbloquear o subir). */
+function shardGoal(id: string): number {
+  const st = game.s.arsenal[id];
+  return st.lvl === 0 ? unlockShards(armById(id)!.rarity) : upgradeShards(st.lvl);
+}
+
 function openChestUi(id: string, free: boolean) {
   const chest = CHESTS.find((c) => c.id === id)!;
+  const before: Record<string, number> = {};
+  for (const a of ARMS) before[a.id] = game.s.arsenal[a.id].shards;
   const got = game.openChest(id, free);
   if (!got) {
     if (!free) {
@@ -972,10 +1014,165 @@ function openChestUi(id: string, free: boolean) {
   }
   save(game.s);
   refreshSheet();
-  const tab = 'arsenal';
-  armTab = chest.fams[0];
-  showModal(`<div class="result"><div class="big-ico chest-open">${chest.icon}</div><h2>¡${chest.name}!</h2>${shardList(got, 'Conseguiste')}
-    <div class="btns"><button data-close>Genial</button><button data-goto="${tab}" class="primary">Ver en el Arsenal</button></div></div>`);
+  chestShow(chest.id, chest.name, got, before, free);
+}
+
+/**
+ * La apertura del cofre: cae, se toca 3 veces (cada toque brilla más y deja adivinar la rareza),
+ * explota y van saliendo las cartas boca abajo, de la menos rara a la más rara.
+ */
+function chestShow(id: string, name: string, got: Record<string, number>, before: Record<string, number>, free: boolean) {
+  const cards = Object.keys(got)
+    .map((k) => ({ def: armById(k)!, n: got[k] }))
+    .sort((a, b) => RAR_RANK[a.def.rarity] - RAR_RANK[b.def.rarity]);
+  const best = cards[cards.length - 1].def.rarity;
+  const bestCol = RARITY_COLORS[best];
+  const total = cards.reduce((a, c) => a + c.n, 0);
+  const el = document.createElement('div');
+  el.className = 'chest-ov';
+  el.style.setProperty('--rar', '#8ea0ff');
+  el.innerHTML = `<div class="cel-rays"></div><div class="co-flash"></div>
+    <button class="co-skip">Saltar ⏭</button>
+    <div class="co-stage">
+      <div class="co-title"><small>${free ? 'Cofre gratis' : 'Cofre'}</small><b>${name}</b></div>
+      <div class="co-chest" data-hits="0">${chestSvg(id)}<div class="cel-sparks"></div></div>
+      <div class="co-hint">Toca el cofre para abrirlo</div>
+      <div class="co-cards"></div>
+      <div class="co-count"></div>
+    </div>`;
+  document.body.appendChild(el);
+  const chestEl = el.querySelector('.co-chest') as HTMLElement;
+  const hint = el.querySelector('.co-hint') as HTMLElement;
+  const cardsEl = el.querySelector('.co-cards') as HTMLElement;
+  const countEl = el.querySelector('.co-count') as HTMLElement;
+  let hits = 0;
+  let phase: 'chest' | 'cards' | 'done' = 'chest';
+  let shown = 0;
+  const vib = (p: number | number[]) => navigator.vibrate?.(p);
+  const sparks = (n: number, color: string) =>
+    Array.from({ length: n }, (_, i) => `<i style="--a:${(i * 360) / n}deg;--d:${120 + (i % 4) * 35}px;--t:${(i % 5) * 0.04}s;background:${color};box-shadow:0 0 12px ${color}"></i>`).join('');
+
+  const hit = () => {
+    hits++;
+    chestEl.dataset.hits = String(hits);
+    chestEl.classList.remove('shake');
+    void chestEl.offsetWidth;
+    chestEl.classList.add('shake');
+    // En el segundo toque el brillo ya toma el color de la mejor carta: la intriga.
+    if (hits >= 2) el.style.setProperty('--rar', bestCol);
+    vib(hits === 3 ? 60 : 25);
+    hint.textContent = hits === 1 ? '¡Otra vez!' : hits === 2 ? (RAR_RANK[best] >= 2 ? '¡Algo brilla adentro…!' : '¡Una más!') : '';
+    if (hits >= 3) setTimeout(burst, 260);
+  };
+
+  const burst = () => {
+    chestEl.classList.add('open');
+    el.classList.add('opened');
+    hint.textContent = '';
+    (chestEl.querySelector('.cel-sparks') as HTMLElement).innerHTML = sparks(24, bestCol) + sparks(12, '#ffd25c');
+    vib([40, 40, 80]);
+    setTimeout(() => {
+      phase = 'cards';
+      cardsEl.innerHTML = cards
+        .map(
+          (c, i) => `<div class="co-card" style="--rar:${RARITY_COLORS[c.def.rarity]};--i:${i};z-index:${cards.length - i}">
+            <div class="co-back"><span>?</span></div>
+            <div class="co-front"></div>
+          </div>`,
+        )
+        .join('');
+      // La primera carta queda arriba: se muestran en orden inverso al apilado.
+      [...cardsEl.children].forEach((n, i) => ((n as HTMLElement).style.zIndex = String(cards.length - i)));
+      countEl.textContent = `${cards.length} cartas · toca para darlas vuelta`;
+    }, 650);
+  };
+
+  const flip = () => {
+    const c = cards[shown];
+    const node = cardsEl.children[shown] as HTMLElement;
+    const st = game.s.arsenal[c.def.id];
+    const goal = shardGoal(c.def.id);
+    const was = before[c.def.id];
+    const ready = st.shards >= goal && st.lvl < MAX_ARM_LEVEL;
+    const locked = st.lvl === 0;
+    const tag = ready ? (locked ? '¡Lista para desbloquear!' : '¡Puede subir de nivel!') : locked ? 'Bloqueada' : `Nivel ${st.lvl}`;
+    (node.querySelector('.co-front') as HTMLElement).innerHTML = `
+      <div class="co-rar">${RAR_LABEL[c.def.rarity]}</div>
+      <div class="co-art">${armShowcase(c.def)}</div>
+      <b>${c.def.name}</b>
+      <div class="co-n">+${c.n} 🧩</div>
+      <div class="co-bar"><i style="--from:${Math.min(100, (was / goal) * 100)}%;--to:${Math.min(100, (st.shards / goal) * 100)}%"></i><span>${st.shards}/${goal}</span></div>
+      <div class="co-tag ${ready ? 'ready' : ''}">${tag}</div>`;
+    node.classList.add('flipped');
+    if (RAR_RANK[c.def.rarity] >= 2) {
+      el.classList.remove('epic');
+      void el.offsetWidth;
+      el.classList.add('epic');
+      vib([50, 50, 120]);
+    } else vib(20);
+    shown++;
+    // La carta anterior se corre para dejar ver la siguiente.
+    if (shown > 1) (cardsEl.children[shown - 2] as HTMLElement).classList.add('gone');
+    countEl.textContent = shown < cards.length ? `${cards.length - shown} más · toca para seguir` : 'Toca para ver el resumen';
+  };
+
+  const summary = () => {
+    if (phase === 'done') return;
+    phase = 'done';
+    const chest = CHESTS.find((c) => c.id === id)!;
+    const canMore = game.s.gems >= chest.gems;
+    const readyIds = cards.filter((c) => game.s.arsenal[c.def.id].shards >= shardGoal(c.def.id)).map((c) => c.def.id);
+    el.classList.add('summary');
+    (el.querySelector('.co-stage') as HTMLElement).innerHTML = `
+      <div class="co-title"><small>Conseguiste</small><b>${total} fragmentos</b></div>
+      <div class="co-sum">${cards
+        .map((c) => {
+          const st = game.s.arsenal[c.def.id];
+          const goal = shardGoal(c.def.id);
+          const r = st.shards >= goal;
+          return `<div class="co-mini ${r ? 'ready' : ''}" style="--rar:${RARITY_COLORS[c.def.rarity]}">
+            <div class="co-mini-art">${armIcon(c.def)}</div>
+            <b>+${c.n}</b><small>${c.def.name}</small>
+            <div class="co-bar sm"><i style="--from:${Math.min(100, (st.shards / goal) * 100)}%;--to:${Math.min(100, (st.shards / goal) * 100)}%"></i></div>
+            ${r ? '<em>¡Lista!</em>' : ''}
+          </div>`;
+        })
+        .join('')}</div>
+      <div class="co-btns">
+        ${readyIds.length ? `<button class="primary" data-co-arm="${readyIds[readyIds.length - 1]}">Mejorar ahora</button>` : `<button class="primary" data-co-arm="${cards[cards.length - 1].def.id}">Ver en el Arsenal</button>`}
+        <button data-co-again class="${canMore ? 'can' : ''}">Abrir otro · 💠 ${chest.gems}</button>
+        <button data-co-close class="co-ghost">Listo</button>
+      </div>`;
+  };
+
+  el.addEventListener('click', (ev) => {
+    const t = ev.target as HTMLElement;
+    if (t.closest('.co-skip')) {
+      summary();
+      return;
+    }
+    const arm = t.closest('[data-co-arm]') as HTMLElement | null;
+    if (arm) {
+      const def = armById(arm.dataset.coArm)!;
+      armTab = def.fam;
+      armSel[def.fam] = def.id;
+      el.remove();
+      openSheet('arsenal');
+      return;
+    }
+    if (t.closest('[data-co-again]')) {
+      el.remove();
+      openChestUi(id, false);
+      return;
+    }
+    if (t.closest('[data-co-close]')) {
+      el.remove();
+      return;
+    }
+    if (phase === 'chest' && hits < 3) hit();
+    else if (phase === 'cards') shown < cards.length ? flip() : summary();
+  });
+  track(game.s, `chest_show:${id}:${best}`);
 }
 
 // ---------- Arsenal ----------
