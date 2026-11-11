@@ -1,0 +1,32 @@
+# Arma el juego y lo publica en GitHub Pages (rama gh-pages) en cada cambio.
+name: Publicar juego
+
+on:
+  push:
+    branches: [main, niveles-con-jefe]
+    paths: ["src/**", "public/**", "index.html", "package.json", "vite.config.ts", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: pages-deploy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: touch dist/.nojekyll
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          commit_message: "Publicar el juego"

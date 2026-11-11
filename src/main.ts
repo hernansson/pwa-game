@@ -2,6 +2,7 @@ import './style.css';
 import {
   ENEMIES_PER_WAVE,
   ENERGY_COST,
+  REFILL_GEMS,
   ENERGY_MAX,
   BOOST_SECONDS,
   CAPS,
@@ -50,11 +51,51 @@ import {
   damageMultiplier,
   passActive,
   passDaysLeft,
+  migrate,
+  GameState,
 } from './state';
+import { act, errorText, fetchState, loginWithGoogle, logout, me, mountGoogleButton, online } from './net';
+import { seeded } from './rng';
 
 let game = new Game(load());
+
+// ---------- Servidor ----------
+// Con sesión iniciada, el servidor es el dueño del progreso: cada acción se hace también allá y lo que
+// responde reemplaza lo del celu. Sin sesión se juega como invitado, solo en este dispositivo.
+const PROD = location.hostname === 'hernansson.github.io';
+const LOGIN_HERE = PROD || location.hostname === 'localhost';
+const GUEST_KEY = 'heroes-forja-guest';
+/** Las herramientas de prueba: solo la cuenta admin (o fuera de la página publicada, para probar). */
+const testTools = () => (online() ? !!me()?.admin : !PROD);
+let runId: string | null = null;
+
+function applyServer(state: GameState) {
+  const s = migrate(state);
+  s.run = game.s.run; // si hay una pelea en pantalla, sigue
+  game.setState(s);
+  save(game.s);
+  lobbyKey = heroKeyCache = enemyKeyCache = '';
+  renderLegend();
+  refreshSheet();
+}
+
+function resync() {
+  if (!online()) return;
+  fetchState().then((a) => applyServer(a.state), () => {});
+}
+
+/** Manda al servidor una acción que el celu ya hizo; si el servidor no la acepta, vuelve a su versión. */
+function sync(type: string, data: Record<string, unknown> = {}) {
+  if (!online()) return;
+  act(type, data).then(
+    (a) => applyServer(a.state),
+    (e) => {
+      toast(errorText(e));
+      resync();
+    },
+  );
+}
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
-const REFILL_GEMS = 30;
 const WORLD_NAMES = ['Bosque Viscoso', 'Cuevas del Eco', 'Picos de Piedra'];
 
 function worldOf(level: number) {
@@ -298,12 +339,54 @@ function startLevel(level: number) {
     showEnergyModal();
     return;
   }
+  if (online()) {
+    // El servidor cobra la energía y da la semilla de la pelea; al terminar, la rejuega él.
+    if (starting) return;
+    starting = true;
+    act<{ runId: string; seed: number }>('run_start', { level }).then(
+      (a) => {
+        starting = false;
+        runId = a.result.runId;
+        game.rand = seeded(a.result.seed);
+        beginRun(level);
+      },
+      (e) => {
+        starting = false;
+        toast(errorText(e));
+        resync();
+      },
+    );
+    return;
+  }
+  game.rand = Math.random;
+  beginRun(level);
+}
+let starting = false;
+
+function beginRun(level: number) {
   if (game.start(level)) {
     heroKeyCache = enemyKeyCache = '';
     resetBoardView();
     closeSheet();
     hideModal();
   }
+}
+
+/** Al terminar una pelea con sesión iniciada: el servidor la rejuega y da las recompensas de verdad. */
+function finishOnline(local: ClearReport) {
+  if (!runId) return;
+  const id = runId;
+  runId = null;
+  act<{ report: ClearReport }>('run_finish', { runId: id, log: game.log }).then(
+    (a) => {
+      applyServer(a.state);
+      if (JSON.stringify(a.result.report) !== JSON.stringify(local)) toast('El servidor ajustó el resultado de la pelea');
+    },
+    (e) => {
+      toast(errorText(e));
+      resync();
+    },
+  );
 }
 
 // ---------- Combate ----------
@@ -521,6 +604,7 @@ function wireGame() {
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
+      finishOnline(e.report);
       setTimeout(() => showResult(e.report), 1100);
     }
   });
@@ -934,7 +1018,7 @@ function renderVip() {
     <div class="vip-card pass${passActive(s) ? ' on' : ''}">
       <div class="vip-ico">✨</div>
       <div class="vip-main"><b>Pase mensual</b><p>Durante 30 días, ${Math.round(PASS.lvl2 * 100)}% de las piezas nuevas llegan en nivel 2 y ${Math.round(PASS.lvl3 * 100)}% en nivel 3. Fusiones más fuertes desde el primer toque.</p>
-      ${passActive(s) ? `<div class="pass-on">✅ Activo · quedan ${passDaysLeft(s)} días</div><button data-pass>Sumar 30 días (prueba)</button>` : `<button data-pass class="can">Activar (prueba gratis)</button>`}</div>
+      ${passActive(s) ? `<div class="pass-on">✅ Activo · quedan ${passDaysLeft(s)} días</div>` : ''}${testTools() ? `<button data-pass class="${passActive(s) ? '' : 'can'}">${passActive(s) ? 'Sumar 30 días (prueba)' : 'Activar (prueba)'}</button>` : passActive(s) ? '' : `<button data-interest="pass" class="money">Muy pronto <span>US$ 4,99 / mes</span></button>`}</div>
     </div>
     <div class="vip-card">
       <div class="vip-ico">💠</div>
@@ -1015,6 +1099,24 @@ function openChestUi(id: string, free: boolean) {
   const chest = CHESTS.find((c) => c.id === id)!;
   const before: Record<string, number> = {};
   for (const a of ARMS) before[a.id] = game.s.arsenal[a.id].shards;
+  if (online()) {
+    // Los dados del cofre los tira el servidor.
+    if (free ? game.freeChestIn() > 0 : game.s.gems < chest.gems) {
+      if (!free) toast(`Te faltan ${chest.gems - game.s.gems} 💠`);
+      return;
+    }
+    act<{ got: Record<string, number> }>('chest', { id, free }).then(
+      (a) => {
+        applyServer(a.state);
+        chestShow(chest.id, chest.name, a.result.got, before, free);
+      },
+      (e) => {
+        toast(errorText(e));
+        resync();
+      },
+    );
+    return;
+  }
   const got = game.openChest(id, free);
   if (!got) {
     if (!free) {
@@ -1326,6 +1428,7 @@ function armAction(t: HTMLElement, inModal: boolean): boolean {
     }
   } else ok = game.equipArm(id);
   if (ok) {
+    sync(upEl ? 'arm_up' : 'arm_equip', { id });
     lobbyKey = heroKeyCache = '';
     renderLegend();
     save(game.s);
@@ -1430,6 +1533,7 @@ $('#sheet-body').addEventListener('click', (ev) => {
     if (game.buy(up.dataset.up as UpgradeId)) {
       restartAnim(up, 'bought');
       lobbyKey = '';
+      sync('buy', { id: up.dataset.up });
     }
     updateTalents();
     return;
@@ -1458,6 +1562,17 @@ $('#sheet-body').addEventListener('click', (ev) => {
     return;
   }
   if (t.closest('[data-pass]')) {
+    if (online()) {
+      act(me()?.admin ? 'admin_pass' : 'pass').then(
+        (a) => {
+          applyServer(a.state);
+          toast('✨ ¡Pase mensual activo! Tus piezas llegan más fuertes');
+        },
+        (e) => toast(errorText(e)),
+      );
+      return;
+    }
+    if (!testTools()) return toast('Muy pronto se va a poder comprar.');
     game.activatePass();
     toast('✨ ¡Pase mensual activo! Tus piezas llegan más fuertes');
     refreshSheet();
@@ -1486,17 +1601,19 @@ function showSettings() {
   showModal(`<div class="settings">
     <button class="x" data-close aria-label="Cerrar">✕</button>
     <h2>Ajustes</h2>
+    ${accountBox()}
     <label class="start-label">Nombre en la liga<input id="name-input" maxlength="14" value="${esc(game.s.playerName)}"></label>
-    <div class="set-box">
-      <b>Guardar progreso</b>
+    ${online() ? '' : `<div class="set-box">
+      <b>Copiar progreso</b>
       <p>Tu progreso se guarda en este dispositivo. Para pasarlo a otro, copia tu código y cárgalo allá.</p>
       <div class="btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
-    </div>
-    <div class="set-box test"><b>Versión de prueba</b><p>Para probar todo sin esperar. En la versión final esto se compra.</p>
+    </div>`}
+    ${testTools() ? `<div class="set-box test"><b>Herramientas de administrador</b><p>${online() ? 'Solo tu cuenta las ve. Los cambios se hacen en el servidor.' : 'Solo fuera de la página publicada, para probar.'}</p>
       <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div>
-      <div class="btns"><button data-test-board="rows">${game.s.board.rows ? 'Quitar' : 'Poner'} +1 fila</button><button data-test-board="cols">${game.s.board.cols ? 'Quitar' : 'Poner'} +1 columna</button></div></div>
-    <details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>
+      <div class="btns"><button data-test-board="rows">${game.s.board.rows ? 'Quitar' : 'Poner'} +1 fila</button><button data-test-board="cols">${game.s.board.cols ? 'Quitar' : 'Poner'} +1 columna</button></div></div>` : ''}
+    ${!online() || me()?.admin ? `<details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>` : ''}
   </div>`);
+  wireLogin();
 }
 
 $('#modal').addEventListener('change', (ev) => {
@@ -1505,6 +1622,7 @@ $('#modal').addEventListener('change', (ev) => {
     game.s.playerName = t.value.trim().slice(0, 14);
     lobbyKey = '';
     save(game.s);
+    sync('name', { name: game.s.playerName });
   }
 });
 
@@ -1524,6 +1642,20 @@ $('#modal').addEventListener('click', (ev) => {
     showModal(`<h2>Cargar progreso</h2><p>Pega tu código. <b>Reemplaza</b> el progreso de este dispositivo.</p>
       <textarea class="code" id="import-code" placeholder="FORJA-..."></textarea>
       <div class="btns"><button data-close>Cancelar</button><button data-do-import class="primary">Cargar</button></div>`);
+  } else if (t.closest('[data-logout]')) {
+    doLogout();
+  } else if (online() && t.closest('[data-test-gems], [data-test-gold], [data-test-board]')) {
+    const b = t.closest('[data-test-board]') as HTMLElement | null;
+    const type = b ? 'admin_board' : t.closest('[data-test-gems]') ? 'admin_gems' : 'admin_gold';
+    const kind = b?.dataset.testBoard as 'rows' | 'cols' | undefined;
+    act(type, kind ? { kind, on: !game.s.board[kind] } : {}).then(
+      (a) => {
+        applyServer(a.state);
+        if (b && kind) b.textContent = `${game.s.board[kind] ? 'Quitar' : 'Poner'} +1 ${kind === 'rows' ? 'fila' : 'columna'}`;
+        toast('Hecho en el servidor ✓');
+      },
+      (e) => toast(errorText(e)),
+    );
   } else if (t.closest('[data-test-gems]')) {
     game.s.gems += 1000;
     track(game.s, 'test_gems');
@@ -1544,11 +1676,79 @@ $('#modal').addEventListener('click', (ev) => {
     toast('+50.000 🪙 de prueba');
   } else if (t.closest('[data-reset]')) {
     if (confirm('¿Seguro? Se borra todo tu progreso.')) {
+      if (online()) {
+        act('admin_reset').then((a) => (applyServer(a.state), hideModal(), toast('Progreso borrado')), (e) => toast(errorText(e)));
+        return;
+      }
       resetSave();
       location.reload();
     }
   }
 });
+
+// ---------- Cuenta ----------
+
+function accountBox(): string {
+  if (online()) {
+    const m = me()!;
+    return `<div class="set-box account"><b>Tu cuenta ${m.admin ? '<span class="admin-tag">ADMIN</span>' : ''}</b>
+      <p>${esc(m.name)}<br><small>${esc(m.email)}</small></p><p>Tu progreso se guarda en el servidor y lo puedes seguir en cualquier dispositivo.</p>
+      <div class="btns"><button data-logout>Cerrar sesión</button></div></div>`;
+  }
+  if (!LOGIN_HERE) return '';
+  return `<div class="set-box account"><b>Guarda tu progreso</b>
+    <p>Entra con Google para guardar tu progreso en la nube, jugar en cualquier dispositivo y competir en la liga de verdad.</p>
+    <p class="muted">Tu cuenta empieza de cero: el progreso de invitado queda en este dispositivo.</p>
+    <div id="gbtn" class="gbtn"></div></div>`;
+}
+
+/** Monta el botón de Google si la ventana de ajustes lo tiene. */
+function wireLogin() {
+  const el = document.getElementById('gbtn');
+  if (!el) return;
+  mountGoogleButton(
+    el,
+    (cred) => {
+      el.textContent = 'Entrando…';
+      loginWithGoogle(cred).then(
+        () => {
+          try {
+            localStorage.setItem(GUEST_KEY, JSON.stringify(game.s)); // el progreso de invitado queda guardado aparte
+          } catch {
+            /* sin almacenamiento */
+          }
+          return fetchState().then((a) => {
+            applyServer(a.state);
+            viewLevel = game.s.unlocked;
+            hideModal();
+            toast(`¡Hola, ${me()?.name.split(' ')[0] ?? ''}! Tu progreso ya se guarda en la nube`);
+          });
+        },
+        (e) => {
+          el.textContent = errorText(e);
+        },
+      );
+    },
+    () => (el.textContent = 'No se pudo cargar el ingreso con Google.'),
+  );
+}
+
+function doLogout() {
+  logout().then(() => {
+    let guest: GameState | null = null;
+    try {
+      guest = JSON.parse(localStorage.getItem(GUEST_KEY) || 'null');
+    } catch {
+      guest = null;
+    }
+    game.setState(guest ? migrate(guest) : migrate({}));
+    save(game.s);
+    lobbyKey = heroKeyCache = enemyKeyCache = '';
+    viewLevel = game.s.unlocked;
+    hideModal();
+    toast('Sesión cerrada. Ahora juegas como invitado.');
+  });
+}
 
 // ---------- Ventanas ----------
 
@@ -1587,10 +1787,8 @@ $('#modal').addEventListener('click', (ev) => {
     backHome();
     startLevel(Math.min(lvl, game.s.unlocked));
   } else if (t.closest('[data-refill]')) {
-    if (game.s.gems >= REFILL_GEMS) {
-      game.s.gems -= REFILL_GEMS;
-      game.s.energy = ENERGY_MAX;
-      track(game.s, 'energy_refill');
+    if (game.refillEnergy()) {
+      sync('refill');
       toast('Energía recargada ⚡');
       hideModal();
     } else {
@@ -1598,6 +1796,7 @@ $('#modal').addEventListener('click', (ev) => {
       toast(`Te faltan ${REFILL_GEMS - game.s.gems} 💠`);
     }
   } else if (t.closest('[data-do-import]')) {
+    if (online()) return toast('Con tu cuenta el progreso se guarda solo en el servidor');
     const loaded = importCode(($('#import-code') as HTMLTextAreaElement).value);
     if (!loaded) {
       toast('Ese código no es válido');
@@ -1616,6 +1815,7 @@ $('#modal').addEventListener('click', (ev) => {
     const v = ($('#start-name') as HTMLInputElement).value.trim().slice(0, 14);
     game.s.playerName = v || 'Héroe' + Math.floor(Math.random() * 900 + 100);
     save(game.s);
+    sync('name', { name: game.s.playerName });
     hideModal();
   } else if (ev.target === $('#modal') && !modalBlocking) hideModal();
 });
@@ -1681,7 +1881,7 @@ let saveClock = 0;
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  game.tick(dt);
+  game.advance(dt);
   renderTop();
   renderScreen();
   sheetClock += dt;
@@ -1707,9 +1907,18 @@ window.addEventListener('pagehide', () => save(game.s));
 
 // Si se cerró la página en medio de un nivel, ese intento se pierde.
 if (game.s.run) game.leave();
+// Con sesión: lo que vale es lo del servidor.
+if (online())
+  fetchState().then(
+    (a) => {
+      applyServer(a.state);
+      viewLevel = game.s.unlocked;
+    },
+    (e) => toast(errorText(e)),
+  );
 regenEnergy(game.s);
 if (rolloverLeague(game.s)) showLeagueResult();
-if (!game.s.playerName) {
+if (!game.s.playerName && !online()) {
   showModal(
     `<h2>Héroes de la Forja</h2>
     <p>Recorre niveles cortos y vence al jefe del final. <b>Arrastra una pieza sobre otra igual</b> (mismo dibujo y mismo número) para juntarlas. Al juntarlas actúan y caen piezas nuevas al instante. Si una pieza no te sirve, tírala hacia arriba.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · ⚡ rayos potencian tu daño unos segundos. Si juntas rápido, haces combo.</p>

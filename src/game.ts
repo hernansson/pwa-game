@@ -36,7 +36,7 @@ import {
   upgradeDef,
 } from './state';
 import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
-import { LEVELS_PER_WORLD, PASS } from './balance';
+import { ENERGY_MAX, LEVELS_PER_WORLD, PASS, REFILL_GEMS } from './balance';
 
 export interface ClearReport {
   level: number;
@@ -75,11 +75,24 @@ export type GameEvent =
 
 type Listener = (e: GameEvent) => void;
 
+/** Jugada anotada: [paso, 0 juntar, de col, de fila, a col, a fila] · [paso, 1 tirar, col, fila] · [paso, 2 abandonar]. */
+export type RunAction = number[];
+
 export class Game {
   s: GameState;
   private respawnDelay = 0;
   private listeners: Listener[] = [];
   rand = Math.random;
+
+  /**
+   * La pelea avanza en pasos fijos de 1/30 s y cada jugada se anota con el paso en que ocurrió.
+   * Así el servidor puede rejugar la pelea exacta (misma semilla + mismas jugadas = mismo resultado)
+   * y calcular él las recompensas: el celu no puede inventarlas.
+   */
+  static readonly STEP = 1 / 30;
+  step = 0;
+  log: RunAction[] = [];
+  private acc = 0;
 
   constructor(s: GameState) {
     this.s = s;
@@ -141,6 +154,9 @@ export class Game {
       result: null,
     };
     this.respawnDelay = 0.6;
+    this.step = 0;
+    this.acc = 0;
+    this.log = [];
     track(this.s, `start:${level}`);
     this.emit({ type: 'wave', wave: 0, boss: false });
     return true;
@@ -148,13 +164,16 @@ export class Game {
 
   /** Abandona el nivel actual (la energía no se devuelve). */
   abandon() {
-    if (this.fighting) this.finish(false);
+    if (!this.fighting) return;
+    this.log.push([this.step, 2]);
+    this.finish(false);
   }
 
   /** Tira una pieza que no quieres; cae otra nueva en su lugar. */
   discardAt(at: Cell): boolean {
     const run = this.s.run;
     if (!run || run.result || !discard(run.grid, at)) return false;
+    this.log.push([this.step, 1, at.col, at.row]);
     this.emit({ type: 'discard', col: at.col, row: at.row });
     this.afterChange(run);
     return true;
@@ -179,6 +198,7 @@ export class Game {
     if (!run || run.result) return false;
     const ev = mergePair(run.grid, from, to);
     if (!ev) return false;
+    this.log.push([this.step, 0, from.col, from.row, to.col, to.row]);
     this.applyMerge(run, ev);
     // Caen piezas nuevas al instante para seguir juntando.
     if (!run.result) this.afterChange(run);
@@ -236,6 +256,22 @@ export class Game {
       run.heroHp = 0;
       this.finish(false);
     }
+  }
+
+  /** Avanza el tiempo real en pasos fijos (lo que usa la pantalla). */
+  advance(dt: number) {
+    this.acc += dt;
+    while (this.acc >= Game.STEP) {
+      this.acc -= Game.STEP;
+      this.stepOnce();
+    }
+  }
+
+  /** Un paso fijo de la pelea. El servidor usa esto mismo para rejugarla. */
+  stepOnce() {
+    const was = this.fighting;
+    this.tick(Game.STEP);
+    if (was) this.step++;
   }
 
   tick(dt: number) {
@@ -372,6 +408,22 @@ export class Game {
   activatePass(now = Date.now()) {
     this.s.passUntil = Math.max(now, this.s.passUntil) + PASS.days * 86400000;
     track(this.s, 'pass:activate');
+  }
+
+  /** Reemplaza el progreso (por ejemplo, con el que manda el servidor). */
+  setState(s: GameState) {
+    this.s = s;
+    this.modsCache = null;
+  }
+
+  /** Llena la energía pagando gemas. */
+  refillEnergy(): boolean {
+    regenEnergy(this.s);
+    if (this.s.run || this.s.gems < REFILL_GEMS) return false;
+    this.s.gems -= REFILL_GEMS;
+    this.s.energy = ENERGY_MAX;
+    track(this.s, 'energy_refill');
+    return true;
   }
 
   /** Modificadores del Arsenal. Se recalculan al empezar cada nivel. */

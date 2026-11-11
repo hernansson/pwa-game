@@ -5,6 +5,8 @@ export const ENEMIES_PER_WAVE = 3;
 export const LEVELS_PER_WORLD = 10;
 export const ENERGY_MAX = 30;
 export const ENERGY_COST = 5;
+/** Gemas para llenar la energía. */
+export const REFILL_GEMS = 30;
 export const ENERGY_REGEN_SECONDS = 5 * 60; // 1 de energía cada 5 minutos
 export const BASE_DAMAGE = 7;
 
