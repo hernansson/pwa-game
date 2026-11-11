@@ -34,14 +34,8 @@ import {
   track,
   upgradeDef,
 } from './state';
-import { MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
-import { CHEST_GEMS, Item, LEVELS_PER_WORLD_ITEMS, duplicateGold, rollItem } from './items';
-
-export interface Loot {
-  item: Item;
-  duplicate: boolean;
-  gold: number;
-}
+import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { LEVELS_PER_WORLD } from './balance';
 
 export interface ClearReport {
   level: number;
@@ -52,7 +46,6 @@ export interface ClearReport {
   points: number;
   maxCombo: number;
   firstClear: boolean;
-  loot: Loot | null;
   shards: Record<string, number>; // fragmentos del Arsenal ganados
 }
 
@@ -304,7 +297,6 @@ export class Game {
     let gems = 0;
     let points = 0;
     let firstClear = false;
-    const loot: Loot | null = null;
     let shards: Record<string, number> = {};
     if (win) {
       stars = starsFor(run.heroHp / maxHp(this.s));
@@ -314,9 +306,11 @@ export class Game {
         this.s.gems += gems;
       }
       // Fragmentos del Arsenal: más en la primera victoria y en los jefes de mundo.
-      const worldBoss = run.level % LEVELS_PER_WORLD_ITEMS === 0;
+      const worldBoss = run.level % LEVELS_PER_WORLD === 0;
       const total = (firstClear ? 10 + run.level * 2 : 3 + stars + Math.floor(run.level / 3)) * (worldBoss ? 2 : 1);
-      shards = rollShards(total, this.rand);
+      shards = rollShards(total, ['espada', 'escudo', 'rayo'], this.rand);
+      // Los jefes de mundo además dejan fragmentos de skin.
+      if (worldBoss) for (const [id, n] of Object.entries(rollShards(10, ['skin'], this.rand))) shards[id] = (shards[id] ?? 0) + n;
       for (const id in shards) this.s.arsenal[id].shards += shards[id];
       this.s.stars[run.level] = Math.max(this.s.stars[run.level] ?? 0, stars);
       this.s.unlocked = Math.max(this.s.unlocked, run.level + 1);
@@ -330,32 +324,30 @@ export class Game {
     }
     this.emit({
       type: 'end',
-      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, loot, shards },
+      report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, shards },
     });
   }
 
-  /** Entrega una pieza; si ya la tenía, se convierte en oro. */
-  private grant(item: Item, level: number): Loot {
-    if (this.s.items.includes(item.id)) {
-      const gold = duplicateGold(item, level);
-      this.s.gold += gold;
-      return { item, duplicate: true, gold };
+  /** Milisegundos que faltan para el cofre gratis (0 si ya está listo). */
+  freeChestIn(now = Date.now()): number {
+    return Math.max(0, this.s.freeChestAt + FREE_CHEST_HOURS * 3600_000 - now);
+  }
+
+  /** Abre un cofre de la tienda. El de armas puede ser gratis cada pocas horas. */
+  openChest(id: string, free = false): Record<string, number> | null {
+    const chest = CHESTS.find((c) => c.id === id);
+    if (!chest || this.s.run) return null;
+    if (free) {
+      if (id !== 'armas' || this.freeChestIn() > 0) return null;
+      this.s.freeChestAt = Date.now();
+    } else {
+      if (this.s.gems < chest.gems) return null;
+      this.s.gems -= chest.gems;
     }
-    this.s.items.push(item.id);
-    track(this.s, `item:${item.id}`);
-    return { item, duplicate: false, gold: 0 };
-  }
-
-  /** Cofre de equipo pagado con gemas: siempre rara o mejor. */
-  openChest(): Loot | null {
-    if (this.s.gems < CHEST_GEMS) return null;
-    this.s.gems -= CHEST_GEMS;
-    track(this.s, 'chest');
-    return this.grant(rollItem(0.6, 'rara', this.s.items), this.s.unlocked);
-  }
-
-  equip(id: string, slot: Item['slot']) {
-    if (this.s.items.includes(id)) this.s.equipped[slot] = id;
+    const shards = rollShards(free ? Math.round(chest.shards / 2) : chest.shards, chest.fams, this.rand);
+    for (const k in shards) this.s.arsenal[k].shards += shards[k];
+    track(this.s, `chest:${id}${free ? ':free' : ''}`);
+    return shards;
   }
 
   /** Cierra la pantalla de resultado y vuelve al mapa. */

@@ -63,7 +63,7 @@ export function weaponSvg(level: number, size = 56): string {
 export interface Skin {
   id: string;
   name: string;
-  rarity: 'común' | 'épica' | 'legendaria';
+  rarity: 'común' | 'rara' | 'épica' | 'legendaria';
   price: number; // en gemas, 0 = incluida
   armor: string;
   armorDark: string;
@@ -92,7 +92,7 @@ export const SKINS: Skin[] = [
   {
     id: 'samurai',
     name: 'Samurái Carmesí',
-    rarity: 'épica',
+    rarity: 'rara',
     price: 150,
     armor: '#b3263a',
     armorDark: '#6e1322',
@@ -105,7 +105,7 @@ export const SKINS: Skin[] = [
   {
     id: 'cyber',
     name: 'Ronin Neón',
-    rarity: 'legendaria',
+    rarity: 'épica',
     price: 400,
     armor: '#1e2236',
     armorDark: '#11131f',

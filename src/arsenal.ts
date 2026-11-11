@@ -1,6 +1,10 @@
 // Arsenal: variantes de cada familia del tablero. Se desbloquean y suben de nivel con fragmentos.
 
 import { Family } from './board';
+
+/** Lo que se puede equipar: tres familias del tablero y la skin del héroe. Las pociones no tienen variantes por ahora. */
+export type ArmFam = Exclude<Family, 'pocion'> | 'skin';
+export const ARM_FAMS: ArmFam[] = ['espada', 'escudo', 'rayo', 'skin'];
 import { Rarity } from './items';
 
 /** Modificadores que dan el nivel y las habilidades de lo que tienes equipado. */
@@ -15,9 +19,10 @@ export interface Mods {
   boostSec: number; // segundos extra del potenciador
   boostMult: number; // % de potencia extra del potenciador
   combo: number; // segundos extra para mantener el combo
+  hp: number; // % de vida extra
 }
 
-export const NO_MODS: Mods = { dmg: 0, crit: 0, critMult: 0, shield: 0, reduce: 0, startShield: 0, heal: 0, boostSec: 0, boostMult: 0, combo: 0 };
+export const NO_MODS: Mods = { dmg: 0, crit: 0, critMult: 0, shield: 0, reduce: 0, startShield: 0, heal: 0, boostSec: 0, boostMult: 0, combo: 0, hp: 0 };
 
 export interface Skill {
   at: number;
@@ -27,10 +32,11 @@ export interface Skill {
 
 export interface ArmDef {
   id: string;
-  fam: Family;
+  fam: ArmFam;
   name: string;
   rarity: Rarity;
   shape: number; // 0, 1 o 2: el diseño de la pieza
+  skin?: string; // para las skins: qué apariencia usa
   skills: Skill[];
 }
 
@@ -39,11 +45,11 @@ export const SKILL_LEVELS = [5, 10, 20, 40];
 export const MAX_ARM_LEVEL = 100;
 
 /** Lo que sube cada nivel, por familia. */
-export const LEVEL_STAT: Record<Family, { key: keyof Mods; per: number; label: string }> = {
+export const LEVEL_STAT: Record<ArmFam, { key: keyof Mods; per: number; label: string }> = {
   espada: { key: 'dmg', per: 0.03, label: 'daño' },
   escudo: { key: 'shield', per: 0.03, label: 'escudo' },
-  pocion: { key: 'heal', per: 0.03, label: 'curación' },
   rayo: { key: 'boostMult', per: 0.02, label: 'potencia' },
+  skin: { key: 'hp', per: 0.03, label: 'vida' },
 };
 
 const s = (at: number, text: string, mod: Partial<Mods>): Skill => ({ at, text, mod });
@@ -87,25 +93,6 @@ export const ARMS: ArmDef[] = [
     s(20, '+30% de escudo', { shield: 0.3 }),
     s(40, '-12% de daño recibido', { reduce: 0.12 }),
   ] },
-  // Pociones
-  { id: 'frasco', fam: 'pocion', name: 'Frasco rojo', rarity: 'común', shape: 0, skills: [
-    s(5, '+20% de curación', { heal: 0.2 }),
-    s(10, '+5% de daño', { dmg: 0.05 }),
-    s(20, '+30% de curación', { heal: 0.3 }),
-    s(40, '+50% de curación', { heal: 0.5 }),
-  ] },
-  { id: 'vial', fam: 'pocion', name: 'Vial alto', rarity: 'rara', shape: 1, skills: [
-    s(5, '+25% de curación', { heal: 0.25 }),
-    s(10, 'Empiezas el nivel con escudo (10% de la vida)', { startShield: 0.1 }),
-    s(20, '+40% de curación', { heal: 0.4 }),
-    s(40, '-5% de daño recibido', { reduce: 0.05 }),
-  ] },
-  { id: 'corazon', fam: 'pocion', name: 'Elixir corazón', rarity: 'épica', shape: 2, skills: [
-    s(5, '+30% de curación', { heal: 0.3 }),
-    s(10, '+5% de daño', { dmg: 0.05 }),
-    s(20, '+50% de curación', { heal: 0.5 }),
-    s(40, '+15% de daño', { dmg: 0.15 }),
-  ] },
   // Rayos
   { id: 'chispa', fam: 'rayo', name: 'Chispa', rarity: 'común', shape: 0, skills: [
     s(5, 'El potenciador dura +0,5 s', { boostSec: 0.5 }),
@@ -125,9 +112,46 @@ export const ARMS: ArmDef[] = [
     s(20, '+5% de crítico', { crit: 0.05 }),
     s(40, '+40% de potencia', { boostMult: 0.4 }),
   ] },
+  // Skins del héroe
+  { id: 'caballero', fam: 'skin', name: 'Caballero', rarity: 'común', shape: 0, skin: 'caballero', skills: [
+    s(5, '+5% de vida', { hp: 0.05 }),
+    s(10, 'Empiezas el nivel con escudo (10% de la vida)', { startShield: 0.1 }),
+    s(20, '+10% de vida', { hp: 0.1 }),
+    s(40, '-5% de daño recibido', { reduce: 0.05 }),
+  ] },
+  { id: 'samurai', fam: 'skin', name: 'Samurái Carmesí', rarity: 'rara', shape: 1, skin: 'samurai', skills: [
+    s(5, '+8% de daño', { dmg: 0.08 }),
+    s(10, '+5% de crítico', { crit: 0.05 }),
+    s(20, '+15% de daño', { dmg: 0.15 }),
+    s(40, 'Los críticos pegan x2,5', { critMult: 0.5 }),
+  ] },
+  { id: 'cyber', fam: 'skin', name: 'Ronin Neón', rarity: 'épica', shape: 2, skin: 'cyber', skills: [
+    s(5, 'El potenciador dura +0,5 s', { boostSec: 0.5 }),
+    s(10, '+10% de daño', { dmg: 0.1 }),
+    s(20, '+1 s para mantener el combo', { combo: 1 }),
+    s(40, '+20% de potencia', { boostMult: 0.2 }),
+  ] },
 ];
 
-export const STARTER_ARMS: Record<Family, string> = { espada: 'espada_recta', escudo: 'escudo_redondo', pocion: 'frasco', rayo: 'chispa' };
+/** Cofres de la tienda. */
+export interface ChestDef {
+  id: string;
+  name: string;
+  desc: string;
+  fams: ArmFam[];
+  gems: number;
+  shards: number;
+  icon: string;
+}
+
+export const CHESTS: ChestDef[] = [
+  { id: 'armas', name: 'Cofre de armas', desc: 'Fragmentos de espadas y escudos', fams: ['espada', 'escudo'], gems: 40, shards: 30, icon: '⚔️' },
+  { id: 'skins', name: 'Cofre de skins', desc: 'Fragmentos de skins del héroe', fams: ['skin'], gems: 60, shards: 20, icon: '🎭' },
+  { id: 'poder', name: 'Cofre de potenciadores', desc: 'Fragmentos de rayos', fams: ['rayo'], gems: 30, shards: 25, icon: '⚡' },
+];
+export const FREE_CHEST_HOURS = 4;
+
+export const STARTER_ARMS: Record<ArmFam, string> = { espada: 'espada_recta', escudo: 'escudo_redondo', rayo: 'chispa', skin: 'caballero' };
 
 export function armById(id: string | undefined): ArmDef | undefined {
   return ARMS.find((a) => a.id === id);
@@ -158,16 +182,17 @@ export function armMods(def: ArmDef, lvl: number, into: Mods = { ...NO_MODS }): 
 /** Peso de cada rareza al repartir fragmentos. */
 export const SHARD_WEIGHT: Record<Rarity, number> = { común: 50, rara: 35, épica: 15, legendaria: 5 };
 
-/** Reparte `total` fragmentos entre 2 o 3 variantes al azar. */
-export function rollShards(total: number, rand = Math.random): Record<string, number> {
+/** Reparte `total` fragmentos entre 2 o 3 variantes al azar de esas familias. */
+export function rollShards(total: number, fams: ArmFam[] = ['espada', 'escudo', 'rayo'], rand = Math.random): Record<string, number> {
   const out: Record<string, number> = {};
+  const pool = ARMS.filter((a) => fams.includes(a.fam));
   const parts = total >= 12 ? 3 : 2;
-  const sum = ARMS.reduce((a, d) => a + SHARD_WEIGHT[d.rarity], 0);
+  const sum = pool.reduce((a, d) => a + SHARD_WEIGHT[d.rarity], 0);
   let left = total;
   for (let i = 0; i < parts; i++) {
     let r = rand() * sum;
-    let pick = ARMS[0];
-    for (const d of ARMS) {
+    let pick = pool[0];
+    for (const d of pool) {
       r -= SHARD_WEIGHT[d.rarity];
       if (r <= 0) {
         pick = d;

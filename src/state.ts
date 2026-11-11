@@ -8,9 +8,8 @@ import {
   LEVEL_TWO_CHANCE,
 } from './balance';
 import { Grid } from './board';
-import { LEGACY_SETS, OLD_WEAPONS, STARTER, Slot, bonusOf, slotItem } from './items';
-import { ARMS, Mods, NO_MODS, STARTER_ARMS, armById, armMods } from './arsenal';
-import { Family } from './board';
+import { ITEMS, LEGACY_SETS, OLD_WEAPONS, STARTER } from './items';
+import { ARMS, ArmFam, Mods, NO_MODS, STARTER_ARMS, armById, armMods } from './arsenal';
 
 export interface Run {
   level: number;
@@ -47,10 +46,8 @@ export interface GameState {
   run: Run | null;
   board: { rows: number; cols: number }; // ampliaciones del tablero compradas
   arsenal: Record<string, { lvl: number; shards: number }>; // lvl 0 = bloqueada
-  arms: Record<Family, string>; // variante equipada de cada familia
-  items: string[]; // piezas de equipo que tiene
-  equipped: Record<Slot, string>;
-  skin?: string; // solo para migrar guardados viejos
+  arms: Record<ArmFam, string>; // variante equipada de cada familia y skin
+  freeChestAt: number; // cuándo se abrió el último cofre gratis
   ownedSkins?: string[];
   league: {
     week: number;
@@ -93,8 +90,7 @@ export function newState(): GameState {
     board: { rows: 0, cols: 0 },
     arsenal: Object.fromEntries(ARMS.map((a) => [a.id, { lvl: Object.values(STARTER_ARMS).includes(a.id) ? 1 : 0, shards: 0 }])),
     arms: { ...STARTER_ARMS },
-    items: Object.values(STARTER),
-    equipped: { ...STARTER },
+    freeChestAt: 0,
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
     stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
     lastSeen: Date.now(),
@@ -128,36 +124,42 @@ export function migrate(raw: unknown): GameState {
     s.energy = ENERGY_MAX;
     s.energyAt = Date.now();
   }
-  // Las skins viejas pasan a ser conjuntos de equipo.
-  if (!Array.isArray(old.items)) {
-    s.items = Object.values(STARTER);
-    s.equipped = { ...STARTER };
-    for (const skin of old.ownedSkins ?? []) for (const id of LEGACY_SETS[skin] ?? []) if (!s.items.includes(id)) s.items.push(id);
-    const set = LEGACY_SETS[old.skin ?? ''];
-    if (set) {
-      s.equipped.casco = set[0];
-      s.equipped.armadura = set[1];
-      s.equipped.capa = set[2];
-    }
-  }
-  s.equipped = { ...STARTER, ...(s.equipped ?? {}) };
-  delete (s.equipped as Record<string, string>).arma;
-  // Arsenal: completa variantes nuevas y convierte las espadas viejas en fragmentos.
-  s.arsenal = { ...base.arsenal, ...(old.arsenal ?? {}) };
-  s.arms = { ...STARTER_ARMS, ...(old.arms ?? {}) };
-  for (const f of Object.keys(s.arms) as Family[]) if (!armById(s.arms[f]) || !s.arsenal[s.arms[f]]?.lvl) s.arms[f] = STARTER_ARMS[f];
-  if (!old.arsenal) {
+  // Arsenal: completa variantes nuevas y quita las que ya no existen.
+  s.arsenal = { ...base.arsenal };
+  for (const [id, v] of Object.entries(old.arsenal ?? {})) if (base.arsenal[id]) s.arsenal[id] = v;
+  // Equipo y skins de versiones anteriores: las espadas y la ropa se convierten en fragmentos,
+  // y los conjuntos samurái y neón desbloquean esas skins.
+  const owned = new Set<string>([...((old.items as string[] | undefined) ?? []), ...((old.ownedSkins as string[] | undefined) ?? [])]);
+  if (owned.size) {
     const bonus = { común: 4, rara: 8, épica: 16, legendaria: 30 };
-    let extra = 0;
-    for (const id of s.items ?? []) if (OLD_WEAPONS[id]) extra += bonus[OLD_WEAPONS[id]];
-    if (extra) {
-      s.arsenal.cimitarra.shards += Math.ceil(extra / 2);
-      s.arsenal.mandoble.shards += Math.floor(extra / 2);
+    let swords = 0;
+    let clothes = 0;
+    for (const id of owned) {
+      if (OLD_WEAPONS[id]) swords += bonus[OLD_WEAPONS[id]];
+      const it = ITEMS.find((i) => i.id === id);
+      if (it && !Object.values(STARTER).includes(id)) clothes += bonus[it.rarity];
+    }
+    for (const [skin, set] of Object.entries(LEGACY_SETS)) {
+      if (owned.has(skin) || set.every((id) => owned.has(id))) {
+        if (!s.arsenal[skin].lvl) s.arsenal[skin].lvl = 1;
+      }
+    }
+    if (!old.arsenal && swords) {
+      s.arsenal.cimitarra.shards += Math.ceil(swords / 2);
+      s.arsenal.mandoble.shards += Math.floor(swords / 2);
+    }
+    if (clothes) {
+      s.arsenal.samurai.shards += Math.ceil(clothes / 2);
+      s.arsenal.cyber.shards += Math.floor(clothes / 2);
     }
   }
-  s.items = (s.items ?? []).filter((id) => !OLD_WEAPONS[id]);
-  delete s.skin;
-  delete s.ownedSkins;
+  s.arms = { ...STARTER_ARMS };
+  for (const [f, id] of Object.entries((old.arms as Record<string, string> | undefined) ?? {})) {
+    const def = armById(id);
+    if (def && def.fam === f && s.arsenal[id]?.lvl) s.arms[f as ArmFam] = id;
+  }
+  if (typeof s.freeChestAt !== 'number') s.freeChestAt = 0;
+  for (const k of ['items', 'equipped', 'skin', 'ownedSkins']) delete (s as unknown as Record<string, unknown>)[k];
   // Campos de versiones anteriores que ya no se usan.
   const b = old.board as unknown;
   s.board = b && !Array.isArray(b) && typeof b === 'object' ? { rows: 0, cols: 0, ...(b as object) } : { rows: 0, cols: 0 };
@@ -246,9 +248,6 @@ export function secondsToNextEnergy(s: GameState, now = Date.now()): number {
   return Math.max(0, ENERGY_REGEN_SECONDS - (now - s.energyAt) / 1000);
 }
 
-function gearBonus(s: GameState, slot: Slot): number {
-  return bonusOf(slotItem(s.equipped[slot], slot));
-}
 
 export function damageMultiplier(s: GameState): number {
   return 1 + s.upgrades.fuerza * 0.15;
@@ -264,21 +263,21 @@ export function arsenalMods(s: GameState): Mods {
   return m;
 }
 
-export function armShape(s: GameState, fam: Family): number {
+export function armShape(s: GameState, fam: ArmFam): number {
   return armById(s.arms[fam])?.shape ?? 0;
 }
 
 /** Material que se ve en el inicio: sube un tono cada 10 niveles de la variante. */
-export function armTier(s: GameState, fam: Family): number {
+export function armTier(s: GameState, fam: ArmFam): number {
   return Math.min(10, 1 + Math.floor(((s.arsenal[s.arms[fam]]?.lvl ?? 1) - 1) / 10));
 }
 
 export function goldMultiplier(s: GameState): number {
-  return (1 + s.upgrades.codicia * 0.2) * (1 + gearBonus(s, 'capa'));
+  return 1 + s.upgrades.codicia * 0.2;
 }
 
 export function maxHp(s: GameState): number {
-  return heroMaxHp(s.upgrades.vida) * (1 + gearBonus(s, 'casco') + gearBonus(s, 'armadura'));
+  return heroMaxHp(s.upgrades.vida) * (1 + arsenalMods(s).hp);
 }
 
 export function comboTime(s: GameState): number {
