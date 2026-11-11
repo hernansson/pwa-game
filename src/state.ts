@@ -3,7 +3,8 @@ import {
   ENERGY_REGEN_SECONDS,
   UPGRADES,
   UpgradeId,
-  comboWindow,
+  COMBO_WINDOW,
+  BASE_CRIT,
   heroMaxHp,
   LEVEL_TWO_CHANCE,
 } from './balance';
@@ -85,7 +86,7 @@ export function newState(): GameState {
     energyAt: Date.now(),
     unlocked: 1,
     stars: {},
-    upgrades: { fuerza: 0, vida: 0, calma: 0, codicia: 0 },
+    upgrades: { fuerza: 0, vida: 0, critico: 0 },
     run: null,
     board: { rows: 0, cols: 0 },
     arsenal: Object.fromEntries(ARMS.map((a) => [a.id, { lvl: Object.values(STARTER_ARMS).includes(a.id) ? 1 : 0, shards: 0 }])),
@@ -109,13 +110,15 @@ export function migrate(raw: unknown): GameState {
   const s: GameState = { ...base, ...old } as GameState;
   s.upgrades = { ...base.upgrades, ...(old.upgrades ?? {}) };
   const legacy = old.upgrades as Record<string, number> | undefined;
-  // Versiones viejas: velocidad → lluvia de armas → calma.
-  const oldRain = legacy?.lluvia ?? legacy?.velocidad;
-  if (typeof oldRain === 'number' && !legacy?.calma) s.upgrades.calma = Math.min(15, oldRain);
+  // Ritmo (calma) y Codicia se quitaron: se devuelve el oro que costaron.
+  const calma = Math.min(15, legacy?.calma ?? legacy?.lluvia ?? legacy?.velocidad ?? 0);
+  for (let i = 0; i < calma; i++) s.gold += Math.ceil(40 * Math.pow(1.8, i));
+  const codicia = Math.min(60, legacy?.codicia ?? 0);
+  for (let i = 0; i < codicia; i++) s.gold += Math.ceil(30 * Math.pow(1.55, i));
   // El talento Calidad se quitó: se devuelve el oro que costó.
   const cal = Math.min(10, legacy?.calidad ?? 0);
   for (let i = 0; i < cal; i++) s.gold += Math.ceil(120 * Math.pow(2.2, i));
-  for (const k of ['velocidad', 'forja', 'lluvia', 'calidad']) delete (s.upgrades as Record<string, number>)[k];
+  for (const k of ['velocidad', 'forja', 'lluvia', 'calidad', 'calma', 'codicia']) delete (s.upgrades as Record<string, number>)[k];
   s.league = { ...base.league, ...(old.league ?? {}) };
   s.stats = { ...base.stats, ...(old.stats ?? {}) };
   if (typeof s.unlocked !== 'number') s.unlocked = 1;
@@ -272,16 +275,17 @@ export function armTier(s: GameState, fam: ArmFam): number {
   return Math.min(10, 1 + Math.floor(((s.arsenal[s.arms[fam]]?.lvl ?? 1) - 1) / 10));
 }
 
-export function goldMultiplier(s: GameState): number {
-  return 1 + s.upgrades.codicia * 0.2;
+/** Probabilidad de crítico: base + talento + Arsenal. */
+export function critChance(s: GameState): number {
+  return BASE_CRIT + s.upgrades.critico * 0.01 + arsenalMods(s).crit;
 }
 
 export function maxHp(s: GameState): number {
   return heroMaxHp(s.upgrades.vida) * (1 + arsenalMods(s).hp);
 }
 
-export function comboTime(s: GameState): number {
-  return comboWindow(s.upgrades.calma);
+export function comboTime(_s: GameState): number {
+  return COMBO_WINDOW;
 }
 
 export function pieceLevelTwoChance(_s: GameState): number {
@@ -291,7 +295,7 @@ export function pieceLevelTwoChance(_s: GameState): number {
 /** Número único para mostrar qué tan fuerte es el héroe. */
 export function power(s: GameState): number {
   const m = arsenalMods(s);
-  return Math.round(Math.sqrt(damageMultiplier(s) * (1 + m.dmg) * (maxHp(s) / 100) * (1 + m.shield / 2 + m.heal / 4)) * 100);
+  return Math.round(Math.sqrt(damageMultiplier(s) * (1 + m.dmg) * ((1 + critChance(s) * (1 + m.critMult)) / 1.08) * (maxHp(s) / 100) * (1 + m.shield / 2 + m.heal / 4)) * 100);
 }
 
 export function upgradeDef(id: UpgradeId) {

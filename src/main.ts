@@ -34,7 +34,7 @@ import {
   armShape,
   armTier,
   exportCode,
-  goldMultiplier,
+  critChance,
   importCode,
   load,
   maxHp,
@@ -756,7 +756,7 @@ function section(title: string, sub: string, inner: string): string {
 function renderHeroSheet() {
   const s = game.s;
   const dmg = Math.round((damageMultiplier(s) * (1 + game.mods.dmg) - 1) * 100);
-  const gold = Math.round((goldMultiplier(s) - 1) * 100);
+  const crit = Math.round(critChance(s) * 100);
   const skin = armById(s.arms.skin)!;
   const skinLvl = s.arsenal[skin.id].lvl;
   const talents = UPGRADES.map(
@@ -778,7 +778,7 @@ function renderHeroSheet() {
     <div class="chips">
       <span><small>Vida</small><b>❤️ ${fmt(maxHp(s))}</b></span>
       <span><small>Daño</small><b>⚔️ +${dmg}%</b></span>
-      <span><small>Oro</small><b>🪙 +${gold}%</b></span>
+      <span><small>Crítico</small><b>🎯 ${crit}%</b></span>
     </div>
     ${section('Skins', `cada nivel +${Math.round(LEVEL_STAT.skin.per * 100)}% de vida`, `<div class="arm-row">${ARMS.filter((a) => a.fam === 'skin').map(armCard).join('')}</div>`)}
     ${section('Entrenamiento', 'mejoras permanentes con oro', talents)}`;

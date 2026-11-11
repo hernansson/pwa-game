@@ -69,9 +69,10 @@ export function shieldReduction(lvl = 1): number {
 }
 
 /** Segundos que tienes entre fusiones para no perder el combo. */
-export function comboWindow(ritmo: number): number {
-  return 1.5 + ritmo * 0.1;
-}
+export const COMBO_WINDOW = 2.5;
+
+/** Probabilidad base de crítico; el talento Crítico suma 1% por nivel. */
+export const BASE_CRIT = 0.08;
 
 /** Probabilidad de que una pieza nueva llegue ya en nivel 2 (por ahora siempre 0; más adelante puede ser una mejora paga). */
 export const LEVEL_TWO_CHANCE = 0;
@@ -100,7 +101,7 @@ export interface UpgradeDef {
   icon: string;
 }
 
-export type UpgradeId = 'fuerza' | 'vida' | 'calma' | 'codicia';
+export type UpgradeId = 'fuerza' | 'vida' | 'critico';
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -122,22 +123,13 @@ export const UPGRADES: UpgradeDef[] = [
     icon: '❤️',
   },
   {
-    id: 'calma',
-    name: 'Ritmo',
-    desc: (l) => `Tienes ${comboWindow(l).toFixed(1)} s entre fusiones para mantener el combo`,
-    baseCost: 40,
-    growth: 1.8,
-    max: 15,
-    icon: '🔥',
-  },
-  {
-    id: 'codicia',
-    name: 'Codicia',
-    desc: (l) => `+20% de oro (ahora +${l * 20}%)`,
-    baseCost: 30,
+    id: 'critico',
+    name: 'Crítico',
+    desc: (l) => `+1% de probabilidad de crítico por nivel (ahora ${Math.round((BASE_CRIT + l * 0.01) * 100)}%)`,
+    baseCost: 20,
     growth: 1.55,
-    max: 999,
-    icon: '🪙',
+    max: 40,
+    icon: '🎯',
   },
 ];
 

@@ -26,7 +26,7 @@ import {
   Run,
   comboTime,
   damageMultiplier,
-  goldMultiplier,
+  critChance,
   maxHp,
   pieceLevelTwoChance,
   regenEnergy,
@@ -192,7 +192,7 @@ export class Game {
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
     const m = this.mods;
-    const crit = this.rand() < 0.08 + m.crit;
+    const crit = this.rand() < critChance(this.s);
     // La mejor espada y el mejor escudo del nivel quedan en el héroe y dan un bonus fijo.
     if (ev.fam === 'espada') run.look.sword = Math.max(run.look.sword ?? 1, ev.lvl);
     if (ev.fam === 'escudo') run.look.shield = Math.max(run.look.shield ?? 1, ev.lvl);
@@ -266,7 +266,7 @@ export class Game {
 
   private kill(run: Run) {
     const boss = this.isBossWave(run);
-    const gold = enemyGold(run.level, boss) * goldMultiplier(this.s);
+    const gold = enemyGold(run.level, boss);
     run.gold += gold;
     this.s.gold += gold;
     this.s.stats.kills++;
