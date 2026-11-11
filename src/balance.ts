@@ -18,14 +18,25 @@ function earlyEase(level: number): number {
   return Math.min(1, 0.55 + 0.15 * (level - 1));
 }
 
+/**
+ * Crecimiento por nivel. Hasta el nivel LATE.from los enemigos crecen rápido (el enganche inicial);
+ * después crecen más despacio para que el avance siga siendo constante en mundos lejanos.
+ */
+export const LATE = { from: 30, hp: 1.33, hit: 1.21, gold: 1.33 };
+function grow(level: number, early: number, late: number): number {
+  const a = Math.min(level, LATE.from) - 1;
+  const b = Math.max(0, level - LATE.from);
+  return Math.pow(early, a) * Math.pow(late, b);
+}
+
 export function enemyHp(level: number, boss: boolean): number {
-  const base = 140 * Math.pow(1.33, level - 1) * earlyEase(level);
+  const base = 140 * grow(level, 1.33, LATE.hp) * earlyEase(level);
   return boss ? base * 4 : base;
 }
 
 /** Daño de cada golpe del enemigo. */
 export function enemyHit(level: number, boss: boolean): number {
-  const base = 14 * Math.pow(1.21, level - 1) * earlyEase(level);
+  const base = 14 * grow(level, 1.21, LATE.hit) * earlyEase(level);
   return boss ? base * 1.6 : base;
 }
 
@@ -35,7 +46,7 @@ export function enemyAttackSeconds(boss: boolean): number {
 }
 
 export function enemyGold(level: number, boss: boolean): number {
-  const base = 3 * Math.pow(1.33, level - 1);
+  const base = 3 * grow(level, 1.33, LATE.gold);
   return boss ? base * 10 : base;
 }
 

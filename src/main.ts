@@ -1064,6 +1064,44 @@ function renderArsenal() {
 }
 
 /** Desbloquear, subir o usar una variante. Devuelve true si el clic era de esto. */
+/**
+ * Festejo al subir algo. Los niveles comunes muestran un aviso corto con lo que ganaste;
+ * desbloquear o llegar a un nivel con habilidad (5, 10, 20, 40) muestra una pantalla completa.
+ */
+function celebrate(def: ArmDef, kind: 'unlock' | 'up') {
+  const lvl = game.s.arsenal[def.id].lvl;
+  const stat = LEVEL_STAT[def.fam];
+  const skill = def.skills.find((sk) => sk.at === lvl);
+  const el = document.createElement('div');
+  const art = `<div class="cel-art">${armShowcase(def)}</div>`;
+  if (kind === 'up' && !skill) {
+    el.className = 'cel small';
+    el.style.setProperty('--rar', RARITY_COLORS[def.rarity]);
+    el.innerHTML = `<div class="cel-card">${art}<div><small>${def.name}</small><b>Nivel ${lvl}</b><span>+${Math.round(stat.per * 100)}% de ${stat.label}</span></div></div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1600);
+    if (navigator.vibrate) navigator.vibrate(15);
+    return;
+  }
+  el.className = 'cel big';
+  el.style.setProperty('--rar', RARITY_COLORS[def.rarity]);
+  const sparks = Array.from({ length: 18 }, (_, i) => `<i style="--a:${i * 20}deg;--d:${110 + (i % 3) * 30}px;--t:${0.15 + (i % 4) * 0.05}s"></i>`).join('');
+  el.innerHTML = `<div class="cel-rays"></div><div class="cel-sparks">${sparks}</div>
+    <div class="cel-body">
+      <small class="cel-kicker">${kind === 'unlock' ? '¡Desbloqueada!' : '¡Nueva habilidad!'}</small>
+      ${art}
+      <h2>${def.name}</h2>
+      ${kind === 'unlock' ? `<p class="cel-rar">${def.rarity.toUpperCase()} · ya la tienes en uso</p><p>Llega al nivel 5 para su primera habilidad: <b>${def.skills[0].text}</b></p>` : `<p class="cel-lvl">Nivel ${lvl}</p><div class="cel-skill">${skill!.text}</div>`}
+      <button data-cel-close>¡Genial!</button>
+    </div>`;
+  el.addEventListener('click', (ev) => {
+    if ((ev.target as HTMLElement).closest('[data-cel-close]') || ev.target === el) el.remove();
+  });
+  document.body.appendChild(el);
+  if (navigator.vibrate) navigator.vibrate([30, 60, 40]);
+  track(game.s, `celebrate:${kind}:${def.id}:${lvl}`);
+}
+
 function armAction(t: HTMLElement, inModal: boolean): boolean {
   const upEl = t.closest('[data-arm-up]') as HTMLElement | null;
   const eqEl = t.closest('[data-arm-equip]') as HTMLElement | null;
@@ -1073,8 +1111,8 @@ function armAction(t: HTMLElement, inModal: boolean): boolean {
   if (upEl) {
     const r = game.upgradeArm(id);
     if (r) {
-      toast(r === 'unlock' ? `¡Desbloqueaste ${armById(id)!.name}!` : `${armById(id)!.name} subió a nivel ${game.s.arsenal[id].lvl}`);
       if (r === 'unlock') game.equipArm(id);
+      celebrate(armById(id)!, r);
       ok = true;
     }
   } else ok = game.equipArm(id);
@@ -1254,6 +1292,8 @@ function showSettings() {
       <p>Tu progreso se guarda en este dispositivo. Para pasarlo a otro, copia tu código y cárgalo allá.</p>
       <div class="btns"><button data-export>Copiar mi código</button><button data-import>Cargar un código</button></div>
     </div>
+    <div class="set-box test"><b>Versión de prueba</b><p>Para probar todo sin esperar. En la versión final esto se compra.</p>
+      <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div></div>
     <details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>
   </div>`);
 }
@@ -1283,6 +1323,16 @@ $('#modal').addEventListener('click', (ev) => {
     showModal(`<h2>Cargar progreso</h2><p>Pega tu código. <b>Reemplaza</b> el progreso de este dispositivo.</p>
       <textarea class="code" id="import-code" placeholder="FORJA-..."></textarea>
       <div class="btns"><button data-close>Cancelar</button><button data-do-import class="primary">Cargar</button></div>`);
+  } else if (t.closest('[data-test-gems]')) {
+    game.s.gems += 1000;
+    track(game.s, 'test_gems');
+    save(game.s);
+    toast('+1.000 💠 de prueba');
+  } else if (t.closest('[data-test-gold]')) {
+    game.s.gold += 50000;
+    track(game.s, 'test_gold');
+    save(game.s);
+    toast('+50.000 🪙 de prueba');
   } else if (t.closest('[data-reset]')) {
     if (confirm('¿Seguro? Se borra todo tu progreso.')) {
       resetSave();
