@@ -13,7 +13,7 @@ import {
   enemyHp,
   upgradeCost,
 } from './balance';
-import { Skin, enemyName, enemySvg, heroSvg, pieceFrame, pieceSvg, skinById } from './art';
+import { Skin, enemyName, enemySvg, famIcon, heroSvg, pieceFrame, pieceSvg, skinById } from './art';
 import { Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ClearReport, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
@@ -77,6 +77,11 @@ function armIcon(def: ArmDef, tier: number): string {
   if (def.fam === 'skin') return heroSvg(skinLook(def, tier), 1);
   return pieceSvg(def.fam, tier, FAMILY_INFO[def.fam].color, def.shape);
 }
+/** El arma sola, sin el marco de la pieza, para la vitrina del Arsenal. */
+function armShowcase(def: ArmDef, tier: number): string {
+  if (def.fam === 'skin') return armIcon(def, tier);
+  return `<svg viewBox="4 4 56 56" aria-hidden="true">${famIcon(def.fam, def.shape, tier, FAMILY_INFO[def.fam].color)}</svg>`;
+}
 function boardShape(f: Family): number {
   return f === 'pocion' ? 0 : armShape(game.s, f);
 }
@@ -88,7 +93,11 @@ function armReady(def: ArmDef): boolean {
 }
 const VIP_FROM = 8; // la zona VIP aparece después de superar el nivel 7
 function myHero(): string {
-  return heroSvg(myLook(), armTier(game.s, 'espada'), { swordShape: armShape(game.s, 'espada') });
+  return heroSvg(myLook(), armTier(game.s, 'espada'), {
+    swordShape: armShape(game.s, 'espada'),
+    shield: armTier(game.s, 'escudo'),
+    shieldShape: armShape(game.s, 'escudo'),
+  });
 }
 
 // ---------- Estructura de la pantalla ----------
@@ -173,7 +182,7 @@ document.querySelector('#app')!.innerHTML = `
 
 let homeKey = '';
 function renderHome() {
-  const key = `${JSON.stringify(game.s.arms)}:${armTier(game.s, 'skin')}:${armTier(game.s, 'espada')}:${game.s.playerName}:${power(game.s)}`;
+  const key = `${JSON.stringify(game.s.arms)}:${armTier(game.s, 'skin')}:${armTier(game.s, 'espada')}:${armTier(game.s, 'escudo')}:${game.s.playerName}:${power(game.s)}`;
   if (key === homeKey) return;
   homeKey = key;
   $('#home-hero').innerHTML = myHero();
@@ -903,29 +912,16 @@ function armCard(def: ArmDef): string {
   </button>`;
 }
 
-function renderArsenal() {
-  $('#sheet-body').innerHTML =
-    `<p class="note">Consigue fragmentos superando niveles o abriendo cofres. Con ellos desbloqueas y subes cada arma. La que tengas en uso define cómo se ven sus piezas en el tablero.</p>` +
-    (['espada', 'escudo', 'rayo'] as ArmFam[])
-      .map((f) => {
-        const st = LEVEL_STAT[f];
-        return section(FAM_TITLES[f], `cada nivel +${Math.round(st.per * 100)}% de ${st.label}`, `<div class="arm-row">${ARMS.filter((a) => a.fam === f).map(armCard).join('')}</div>`);
-      })
-      .join('');
-}
+let armTab: ArmFam = 'espada';
+const armSel: Partial<Record<ArmFam, string>> = {};
+const ARM_TABS: [ArmFam, string][] = [['espada', '⚔️ Espadas'], ['escudo', '🛡️ Escudos'], ['rayo', '⚡ Potenciadores']];
 
-function showArm(id: string) {
-  const def = armById(id)!;
+/** Botones de desbloquear / subir / usar de una variante. */
+function armButtons(def: ArmDef): string {
+  const id = def.id;
   const st = game.s.arsenal[id];
   const locked = st.lvl === 0;
-  const stat = LEVEL_STAT[def.fam];
-  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
   const equipped = game.s.arms[def.fam] === id;
-  const isSkin = def.fam === 'skin';
-  const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && showTier(st.lvl) >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
-  const skills = def.skills
-    .map((sk) => `<li class="${st.lvl >= sk.at ? 'got' : ''}"><b>Nv ${sk.at}</b><span>${sk.text}</span><i>${st.lvl >= sk.at ? '✓' : '🔒'}</i></li>`)
-    .join('');
   let action = '';
   if (locked) {
     const need = unlockShards(def.rarity);
@@ -936,6 +932,81 @@ function showArm(id: string) {
     const can = st.shards >= sh && game.s.gold >= g;
     action = `<button data-arm-up="${id}" class="primary" ${can ? '' : 'disabled'}>Subir a Nv ${st.lvl + 1}<small>🧩 ${st.shards}/${sh} · 🪙 ${fmt(g)}</small></button>`;
   } else action = `<button disabled>Nivel máximo</button>`;
+  const use = !locked && !equipped ? `<button data-arm-equip="${id}">Usar</button>` : equipped ? `<button disabled>En uso ✓</button>` : '';
+  return use + action;
+}
+
+function armSkills(def: ArmDef): string {
+  const lvl = game.s.arsenal[def.id].lvl;
+  const stat = LEVEL_STAT[def.fam];
+  return (
+    def.skills.map((sk) => `<li class="${lvl >= sk.at ? 'got' : ''}"><b>Nv ${sk.at}</b><span>${sk.text}</span><i>${lvl >= sk.at ? '✓' : '🔒'}</i></li>`).join('') +
+    `<li class="more"><b>41+</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li>`
+  );
+}
+
+function renderArsenal() {
+  const fam = armTab;
+  const list = ARMS.filter((a) => a.fam === fam);
+  const def = armById(armSel[fam] ?? game.s.arms[fam]) ?? list[0];
+  const st = game.s.arsenal[def.id];
+  const locked = st.lvl === 0;
+  const stat = LEVEL_STAT[fam];
+  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
+  const tier = locked ? 1 : showTier(st.lvl);
+  const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && tier >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
+  $('#sheet-body').innerHTML = `
+    <div class="seg">${ARM_TABS.map(
+      ([f, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}">${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
+    ).join('')}</div>
+    <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
+      <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def, tier)}<span class="sc-tier" style="--f:${pieceFrame(tier)}">${tier}</span>${locked ? '<span class="lock">🔒</span>' : ''}</div>
+      <div class="sc-info">
+        <small class="rar">${def.rarity.toUpperCase()}</small>
+        <h3>${def.name}</h3>
+        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}</p>
+        <ul class="skills mini">${armSkills(def)}</ul>
+      </div>
+    </div>
+    <div class="sc-btns btns">${armButtons(def)}</div>
+    <div class="designs"><small>Su diseño en el tablero, del nivel 1 al 10</small><div>${designs}</div></div>
+    ${section('Variantes', `cada nivel +${Math.round(stat.per * 100)}% de ${stat.label}`, `<div class="arm-row">${list.map((a) => armCard(a).replace('class="arm ', `class="arm ${a.id === def.id ? 'sel ' : ''}`)).join('')}</div>`)}
+    <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
+}
+
+/** Desbloquear, subir o usar una variante. Devuelve true si el clic era de esto. */
+function armAction(t: HTMLElement, inModal: boolean): boolean {
+  const upEl = t.closest('[data-arm-up]') as HTMLElement | null;
+  const eqEl = t.closest('[data-arm-equip]') as HTMLElement | null;
+  if (!upEl && !eqEl) return false;
+  const id = (upEl?.dataset.armUp ?? eqEl!.dataset.armEquip)!;
+  let ok = false;
+  if (upEl) {
+    const r = game.upgradeArm(id);
+    if (r) {
+      toast(r === 'unlock' ? `¡Desbloqueaste ${armById(id)!.name}!` : `${armById(id)!.name} subió a nivel ${game.s.arsenal[id].lvl}`);
+      if (r === 'unlock') game.equipArm(id);
+      ok = true;
+    }
+  } else ok = game.equipArm(id);
+  if (ok) {
+    homeKey = heroKeyCache = '';
+    renderLegend();
+    save(game.s);
+    if (inModal) showArm(id);
+    refreshSheet();
+  }
+  return true;
+}
+
+function showArm(id: string) {
+  const def = armById(id)!;
+  const st = game.s.arsenal[id];
+  const locked = st.lvl === 0;
+  const stat = LEVEL_STAT[def.fam];
+  const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
+  const isSkin = def.fam === 'skin';
+  const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && showTier(st.lvl) >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
   showModal(`<div class="arm-detail" style="--rar:${RARITY_COLORS[def.rarity]}">
     <button class="x" data-close aria-label="Cerrar">✕</button>
     <div class="arm-big ${isSkin ? 'skin' : ''}">${armIcon(def, locked ? 1 : showTier(st.lvl))}</div>
@@ -943,8 +1014,8 @@ function showArm(id: string) {
     <h2>${def.name}</h2>
     <p class="muted">${locked ? 'Bloqueada' : `Nivel ${st.lvl} de ${MAX_ARM_LEVEL} · +${total}% de ${stat.label}`}</p>
     <div class="designs ${isSkin ? 'skin' : ''}"><small>${isSkin ? 'Cambia cada 10 niveles' : 'Su diseño en el tablero, del nivel 1 al 10'}</small><div>${designs}</div></div>
-    <ul class="skills">${skills}<li class="more"><b>41+</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li></ul>
-    <div class="btns">${!locked && !equipped ? `<button data-arm-equip="${id}">Usar</button>` : equipped ? `<button disabled>En uso ✓</button>` : ''}${action}</div>
+    <ul class="skills">${armSkills(def)}</ul>
+    <div class="btns">${armButtons(def)}</div>
   </div>`);
 }
 
@@ -1031,9 +1102,21 @@ $('#sheet-body').addEventListener('click', (ev) => {
     updateTalents();
     return;
   }
+  if (armAction(t, false)) return;
+  const tabEl = t.closest('[data-arm-tab]') as HTMLElement | null;
+  if (tabEl) {
+    armTab = tabEl.dataset.armTab as ArmFam;
+    renderArsenal();
+    return;
+  }
   const arm = t.closest('[data-arm]') as HTMLElement | null;
   if (arm) {
-    showArm(arm.dataset.arm!);
+    const def = armById(arm.dataset.arm!)!;
+    if (openTab === 'arsenal' && def.fam !== 'skin') {
+      armSel[def.fam] = def.id;
+      renderArsenal();
+      $('#sheet-body').scrollTo({ top: 0, behavior: 'smooth' });
+    } else showArm(def.id);
     return;
   }
   const ex = t.closest('[data-expand]') as HTMLElement | null;
@@ -1136,27 +1219,8 @@ function backHome() {
 $('#modal').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
   if (t.closest('[data-close]')) hideModal();
-  else if (t.closest('[data-arm-up]')) {
-    const id = (t.closest('[data-arm-up]') as HTMLElement).dataset.armUp!;
-    const r = game.upgradeArm(id);
-    if (r) {
-      toast(r === 'unlock' ? `¡Desbloqueaste ${armById(id)!.name}!` : `${armById(id)!.name} subió a nivel ${game.s.arsenal[id].lvl}`);
-      if (r === 'unlock') game.equipArm(id);
-      homeKey = '';
-      save(game.s);
-      heroKeyCache = '';
-      showArm(id);
-      refreshSheet();
-    }
-  } else if (t.closest('[data-arm-equip]')) {
-    const id = (t.closest('[data-arm-equip]') as HTMLElement).dataset.armEquip!;
-    if (game.equipArm(id)) {
-      homeKey = '';
-      heroKeyCache = '';
-      renderLegend();
-      showArm(id);
-      refreshSheet();
-    }
+  else if (armAction(t, true)) {
+    /* hecho */
   } else if (t.closest('[data-goto]')) {
     hideModal();
     openSheet((t.closest('[data-goto]') as HTMLElement).dataset.goto as Tab);

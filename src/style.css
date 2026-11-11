@@ -572,3 +572,31 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 .start-label input { display: block; width: 100%; margin-top: 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; user-select: text; -webkit-user-select: text; }
 .arm.locked .arm-icon svg { filter: grayscale(.85) brightness(.75); opacity: .7; }
 .arm .lock { font-size: 22px; filter: drop-shadow(0 2px 3px #000); }
+/* v11: Arsenal con pestañas y vitrina */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: rgba(0,0,0,.35); border-radius: 14px; border: 1px solid var(--line); }
+.seg button { position: relative; border: 0; border-radius: 10px; padding: 9px 2px; font-weight: 800; font-size: 13px; background: none; color: var(--muted); }
+.seg button.on { background: linear-gradient(180deg, var(--card2), var(--panel)); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+.seg .dot { position: absolute; top: 4px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+.showcase { display: flex; gap: 12px; align-items: center; margin-top: 12px; padding: 14px 12px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--rar) 55%, var(--line));
+  background: radial-gradient(60% 80% at 25% 50%, color-mix(in srgb, var(--rar) 30%, transparent), transparent 70%), var(--card); }
+.sc-art { position: relative; flex: 0 0 44%; aspect-ratio: 1; display: grid; place-items: center; animation: idle 3s ease-in-out infinite; }
+.sc-art svg { width: 100%; height: 100%; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--rar) 70%, transparent)) drop-shadow(0 8px 10px rgba(0,0,0,.5)); }
+.sc-art.locked svg { filter: grayscale(.85) brightness(.75); opacity: .7; }
+.sc-art .lock { position: absolute; font-size: 34px; filter: drop-shadow(0 2px 4px #000); }
+.sc-info { flex: 1; min-width: 0; }
+.sc-info .rar { color: var(--rar); font-weight: 900; font-size: 11px; letter-spacing: 1px; }
+.sc-info h3 { margin: 1px 0 2px; font-size: 20px; line-height: 1.1; }
+.sc-lvl { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.skills.mini { margin: 0; }
+.skills.mini li { font-size: 12px; padding: 5px 7px; gap: 6px; margin-bottom: 3px; }
+.skills.mini li b { min-width: 34px; font-size: 11px; }
+.sc-btns { display: flex; gap: 8px; margin-top: 10px; }
+.sc-btns button { flex: 1; border: 0; border-radius: 12px; padding: 11px 6px; font-weight: 900; font-size: 15px; background: var(--panel2); color: var(--text); }
+.sc-btns button.primary { background: var(--accent); color: #1a0f00; box-shadow: 0 3px 0 #a04e00; }
+.sc-btns button:disabled { opacity: .55; box-shadow: none; }
+.sc-btns button small { display: block; font-size: 12px; font-weight: 700; opacity: .85; margin-top: 2px; }
+.arm.sel { border-color: var(--rar); box-shadow: 0 0 0 2px var(--rar), 0 0 16px color-mix(in srgb, var(--rar) 50%, transparent); transform: translateY(-2px); }
+.arm.on.sel { box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(255,210,90,.35); }
+.sc-art::before { content: ''; position: absolute; inset: 8%; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--rar) 35%, transparent), transparent 70%); }
+.sc-art svg { position: relative; }
+.sc-tier { position: absolute; left: 2%; top: 2%; width: 28px; height: 28px; border-radius: 50%; background: var(--f); color: #1a1020; font-weight: 900; display: grid; place-items: center; font-size: 14px; border: 2px solid #0008; }
