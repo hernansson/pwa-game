@@ -936,13 +936,33 @@ function armButtons(def: ArmDef): string {
   return use + action;
 }
 
-function armSkills(def: ArmDef): string {
+function armSkills(def: ArmDef, more = true): string {
   const lvl = game.s.arsenal[def.id].lvl;
   const stat = LEVEL_STAT[def.fam];
   return (
     def.skills.map((sk) => `<li class="${lvl >= sk.at ? 'got' : ''}"><b>Nv ${sk.at}</b><span>${sk.text}</span><i>${lvl >= sk.at ? '✓' : '🔒'}</i></li>`).join('') +
-    `<li class="more"><b>41+</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li>`
+    (more ? `<li class="more"><b>41+</b><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></li>` : '')
   );
+}
+
+/** Categorías de variantes: las últimas son las pagas. */
+const ARM_CATS: [string, string[], boolean][] = [
+  ['Básicas', ['común'], false],
+  ['Avanzadas', ['rara', 'épica'], false],
+  ['Premium 👑', ['legendaria'], true],
+];
+
+/** Variante en chiquito, para que entren muchas. */
+function armTile(def: ArmDef, sel: boolean): string {
+  const st = game.s.arsenal[def.id];
+  const locked = st.lvl === 0;
+  const need = locked ? unlockShards(def.rarity) : upgradeShards(st.lvl);
+  const equipped = game.s.arms[def.fam] === def.id;
+  return `<button class="tile ${locked ? 'locked' : ''} ${equipped ? 'on' : ''} ${sel ? 'sel' : ''} ${armReady(def) ? 'ready' : ''}" data-arm="${def.id}" style="--rar:${RARITY_COLORS[def.rarity]}" title="${esc(def.name)}">
+    <div class="t-icon">${armIcon(def, locked ? 1 : showTier(st.lvl))}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+    <small>${locked ? '' : `Nv ${st.lvl}`}</small>
+    <i class="t-bar"><i style="width:${Math.min(100, (st.shards / need) * 100)}%"></i></i>
+  </button>`;
 }
 
 function renderArsenal() {
@@ -964,13 +984,18 @@ function renderArsenal() {
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
-        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}</p>
-        <ul class="skills mini">${armSkills(def)}</ul>
+        <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · +${total}% de ${stat.label}`}<br><span>+${Math.round(stat.per * 100)}% de ${stat.label} por nivel</span></p>
+        <ul class="skills mini">${armSkills(def, false)}</ul>
       </div>
     </div>
     <div class="sc-btns btns">${armButtons(def)}</div>
-    <div class="designs"><small>Su diseño en el tablero, del nivel 1 al 10</small><div>${designs}</div></div>
-    ${section('Variantes', `cada nivel +${Math.round(stat.per * 100)}% de ${stat.label}`, `<div class="arm-row">${list.map((a) => armCard(a).replace('class="arm ', `class="arm ${a.id === def.id ? 'sel ' : ''}`)).join('')}</div>`)}
+    <div class="sec-head var-head"><b>Variantes</b><small>cada nivel +${Math.round(stat.per * 100)}% de ${stat.label}</small></div>
+    ${ARM_CATS.map(([title, rars, premium]) => {
+      const items = list.filter((x) => rars.includes(x.rarity));
+      const tiles = items.map((x) => armTile(x, x.id === def.id)).join('') + (premium ? '<div class="tile soon"><span>👑</span><small>Pronto</small></div>'.repeat(Math.max(1, 5 - items.length)) : '');
+      return `<div class="cat ${premium ? 'premium' : ''}"><small>${title}</small><div class="tiles">${tiles}</div></div>`;
+    }).join('')}
+    <div class="designs"><small>Diseño de ${def.name} en el tablero, del nivel 1 al 10</small><div>${designs}</div></div>
     <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
 }
 
