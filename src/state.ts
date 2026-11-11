@@ -5,7 +5,7 @@ import {
   UpgradeId,
   comboWindow,
   heroMaxHp,
-  levelTwoChance,
+  LEVEL_TWO_CHANCE,
 } from './balance';
 import { Grid } from './board';
 import { LEGACY_SETS, STARTER, Slot, bonusOf, slotItem } from './items';
@@ -16,7 +16,7 @@ export interface Run {
   enemyInWave: number;
   enemyHp: number;
   enemyTimer: number; // segundos hasta el próximo golpe del enemigo
-  stun: number; // segundos que el enemigo queda frenado (orbes)
+  stun: number; // segundos que el enemigo queda frenado (sin uso por ahora)
   heroHp: number;
   shield: number; // vida extra de los escudos, absorbe golpes
   grid: Grid;
@@ -84,7 +84,7 @@ export function newState(): GameState {
     energyAt: Date.now(),
     unlocked: 1,
     stars: {},
-    upgrades: { fuerza: 0, vida: 0, calma: 0, calidad: 0, codicia: 0 },
+    upgrades: { fuerza: 0, vida: 0, calma: 0, codicia: 0 },
     run: null,
     board: { rows: 0, cols: 0 },
     items: Object.values(STARTER),
@@ -107,11 +107,13 @@ export function migrate(raw: unknown): GameState {
   const s: GameState = { ...base, ...old } as GameState;
   s.upgrades = { ...base.upgrades, ...(old.upgrades ?? {}) };
   const legacy = old.upgrades as Record<string, number> | undefined;
-  // Versiones viejas: velocidad → lluvia de armas → calma. La calidad cambió de efecto y se acota.
+  // Versiones viejas: velocidad → lluvia de armas → calma.
   const oldRain = legacy?.lluvia ?? legacy?.velocidad;
   if (typeof oldRain === 'number' && !legacy?.calma) s.upgrades.calma = Math.min(15, oldRain);
-  s.upgrades.calidad = Math.min(10, s.upgrades.calidad);
-  for (const k of ['velocidad', 'forja', 'lluvia']) delete (s.upgrades as Record<string, number>)[k];
+  // El talento Calidad se quitó: se devuelve el oro que costó.
+  const cal = Math.min(10, legacy?.calidad ?? 0);
+  for (let i = 0; i < cal; i++) s.gold += Math.ceil(120 * Math.pow(2.2, i));
+  for (const k of ['velocidad', 'forja', 'lluvia', 'calidad']) delete (s.upgrades as Record<string, number>)[k];
   s.league = { ...base.league, ...(old.league ?? {}) };
   s.stats = { ...base.stats, ...(old.stats ?? {}) };
   if (typeof s.unlocked !== 'number') s.unlocked = 1;
@@ -243,13 +245,13 @@ export function comboTime(s: GameState): number {
   return comboWindow(s.upgrades.calma);
 }
 
-export function pieceLevelTwoChance(s: GameState): number {
-  return levelTwoChance(s.upgrades.calidad);
+export function pieceLevelTwoChance(_s: GameState): number {
+  return LEVEL_TWO_CHANCE;
 }
 
 /** Número único para mostrar qué tan fuerte es el héroe. */
 export function power(s: GameState): number {
-  return Math.round(Math.sqrt(damageMultiplier(s) * (maxHp(s) / 100)) * 100 * (1 + s.upgrades.calidad * 0.05));
+  return Math.round(Math.sqrt(damageMultiplier(s) * (maxHp(s) / 100)) * 100);
 }
 
 export function upgradeDef(id: UpgradeId) {

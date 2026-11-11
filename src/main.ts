@@ -443,7 +443,7 @@ $('#legend').innerHTML = FAMILIES.map(
   (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color)}<small>${legendWord(f)}</small></span>`,
 ).join('');
 function legendWord(f: Family) {
-  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', orbe: 'frena', rayo: 'poder' }[f];
+  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', rayo: 'poder' }[f];
 }
 
 function resetBoardView() {
@@ -1034,7 +1034,7 @@ if (rolloverLeague(game.s)) showLeagueResult();
 if (!game.s.playerName) {
   showModal(
     `<h2>Héroes de la Forja</h2>
-    <p>Recorre niveles cortos y vence al jefe del final. <b>Arrastra una pieza sobre otra igual</b> (mismo dibujo y mismo número) para juntarlas. Al juntarlas actúan y caen piezas nuevas al instante. Si una pieza no te sirve, tírala hacia arriba.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · 🔮 orbes frenan · ⚡ rayos potencian tu daño unos segundos. Si juntas rápido, haces combo.</p>
+    <p>Recorre niveles cortos y vence al jefe del final. <b>Arrastra una pieza sobre otra igual</b> (mismo dibujo y mismo número) para juntarlas. Al juntarlas actúan y caen piezas nuevas al instante. Si una pieza no te sirve, tírala hacia arriba.</p><p>⚔️ Espadas pegan · 🛡️ escudos protegen · 🧪 pociones curan · ⚡ rayos potencian tu daño unos segundos. Si juntas rápido, haces combo.</p>
     <p>Gana equipo para tu héroe y hazlo cada vez más fuerte.</p>
     <label class="start-label">¿Cómo te llamas en la liga?<input id="start-name" maxlength="14" placeholder="Tu nombre"></label>
     <button data-start>Empezar</button>`,

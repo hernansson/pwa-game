@@ -25,7 +25,7 @@ export function enemyHp(level: number, boss: boolean): number {
 
 /** Daño de cada golpe del enemigo. */
 export function enemyHit(level: number, boss: boolean): number {
-  const base = 14 * Math.pow(1.23, level - 1) * earlyEase(level);
+  const base = 14 * Math.pow(1.21, level - 1) * earlyEase(level);
   return boss ? base * 1.6 : base;
 }
 
@@ -63,10 +63,8 @@ export function comboWindow(ritmo: number): number {
   return 1.5 + ritmo * 0.1;
 }
 
-/** Probabilidad de que una pieza nueva llegue ya en nivel 2. */
-export function levelTwoChance(calidad: number): number {
-  return Math.min(0.5, calidad * 0.05);
-}
+/** Probabilidad de que una pieza nueva llegue ya en nivel 2 (por ahora siempre 0; más adelante puede ser una mejora paga). */
+export const LEVEL_TWO_CHANCE = 0;
 
 export function firstClearGems(level: number): number {
   return level % LEVELS_PER_WORLD === 0 ? 30 : 5;
@@ -92,7 +90,7 @@ export interface UpgradeDef {
   icon: string;
 }
 
-export type UpgradeId = 'fuerza' | 'vida' | 'calma' | 'calidad' | 'codicia';
+export type UpgradeId = 'fuerza' | 'vida' | 'calma' | 'codicia';
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -121,15 +119,6 @@ export const UPGRADES: UpgradeDef[] = [
     growth: 1.8,
     max: 15,
     icon: '🔥',
-  },
-  {
-    id: 'calidad',
-    name: 'Calidad',
-    desc: (l) => `${Math.round(levelTwoChance(l) * 100)}% de piezas que llegan en nivel 2`,
-    baseCost: 120,
-    growth: 2.2,
-    max: 10,
-    icon: '💎',
   },
   {
     id: 'codicia',

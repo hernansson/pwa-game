@@ -203,18 +203,15 @@ export class Game {
     if (fam === 'pocion') run.look.glow = ev.lvl;
     if (fam === 'espada') r.dmg = hit;
     else {
-      r.dmg = hit * (fam === 'orbe' ? 0.4 : 0.25);
+      r.dmg = hit * 0.25;
       if (fam === 'escudo') {
         r.shield = Math.min(hp - run.shield, hp * 0.05 * v);
         run.shield += r.shield;
       } else if (fam === 'pocion') {
         r.heal = Math.min(hp - run.heroHp, hp * 0.04 * v);
         run.heroHp += r.heal;
-      } else if (fam === 'orbe') {
-        r.stun = Math.min(6 - run.stun, 0.8 * v);
-        run.stun += r.stun;
       } else if (fam === 'rayo') {
-        // Potenciador: corto en niveles bajos, largo y fuerte en los altos.
+        // Potenciador: siempre dura lo mismo; el nivel sube cuánto multiplica.
         r.boost = boostSeconds(ev.lvl);
         r.boostMult = boostMultiplier(ev.lvl);
         run.boostMult = run.boost > 0 ? Math.max(run.boostMult, r.boostMult) : r.boostMult;

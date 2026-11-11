@@ -6,15 +6,14 @@ export const MAX_EXTRA_COLS = 1;
 export const MAX_EXTRA_ROWS = 2;
 export const MAX_LEVEL = 10;
 
-export type Family = 'espada' | 'escudo' | 'pocion' | 'orbe' | 'rayo';
-export const FAMILIES: Family[] = ['espada', 'escudo', 'pocion', 'orbe', 'rayo'];
+export type Family = 'espada' | 'escudo' | 'pocion' | 'rayo';
+export const FAMILIES: Family[] = ['espada', 'escudo', 'pocion', 'rayo'];
 
 export const FAMILY_INFO: Record<Family, { name: string; effect: string; color: string; weight: number }> = {
-  espada: { name: 'Espadas', effect: 'Daño al enemigo', color: '#c9d3dd', weight: 34 },
-  escudo: { name: 'Escudos', effect: 'Bloquean golpes', color: '#5c9bff', weight: 18 },
-  pocion: { name: 'Pociones', effect: 'Curan al héroe', color: '#ff5a8a', weight: 18 },
-  orbe: { name: 'Orbes', effect: 'Frenan al enemigo', color: '#b77bff', weight: 15 },
-  rayo: { name: 'Rayos', effect: 'Potencian el daño unos segundos', color: '#ffd25a', weight: 15 },
+  espada: { name: 'Espadas', effect: 'Daño al enemigo', color: '#c9d3dd', weight: 42 },
+  escudo: { name: 'Escudos', effect: 'Bloquean golpes', color: '#5c9bff', weight: 26 },
+  pocion: { name: 'Pociones', effect: 'Curan al héroe', color: '#ff5a8a', weight: 10 },
+  rayo: { name: 'Rayos', effect: 'Potencian el daño unos segundos', color: '#ffd25a', weight: 20 },
 };
 
 export interface Piece {
@@ -59,7 +58,7 @@ export function randomPiece(levelTwoChance: number, rand = Math.random): Piece {
       break;
     }
   }
-  // Nivel 1 casi siempre; el talento Calidad sube la chance de nivel 2.
+  // Siempre nivel 1 salvo que una mejora suba la chance de nivel 2.
   const lvl = rand() < levelTwoChance ? 2 : 1;
   return makePiece(fam, lvl);
 }
