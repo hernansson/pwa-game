@@ -34,7 +34,6 @@ import { esc, fmt } from './format';
 import { ARMS, ArmDef, ArmFam, CHESTS, LEVEL_STAT, MAX_ARM_LEVEL, armById, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
-  armTier,
   exportCode,
   critChance,
   importCode,
@@ -64,25 +63,18 @@ function worldName(w: number) {
 function enemyKey(level: number) {
   return (worldOf(level) - 1) * 10 + 1;
 }
-/** Apariencia de una skin a cierto nivel: cada 10 niveles cambia el material de los detalles y aparece un aura. */
-function skinLook(def: ArmDef | undefined, tier: number): Skin {
-  const base = skinById(def?.skin ?? 'caballero');
-  if (tier <= 1) return base;
-  const trim = pieceFrame(tier);
-  return { ...base, trim, aura: tier >= 4 ? (base.aura ?? trim) : base.aura };
-}
 function myLook(): Skin {
-  return skinLook(armById(game.s.arms.skin), armTier(game.s, 'skin'));
+  return skinById(armById(game.s.arms.skin)?.skin ?? 'caballero');
 }
-/** Dibujo de una variante del Arsenal: la pieza del tablero o, para las skins, el héroe. */
-function armIcon(def: ArmDef, tier: number): string {
-  if (def.fam === 'skin') return heroSvg(skinLook(def, tier), 1);
-  return pieceSvg(def.fam, tier, FAMILY_INFO[def.fam].color, def.shape);
+/** Dibujo de una variante del Arsenal en su diseño base. Los diseños de niveles más altos se descubren jugando. */
+function armIcon(def: ArmDef): string {
+  if (def.fam === 'skin') return heroSvg(skinById(def.skin ?? 'caballero'), 1);
+  return pieceSvg(def.fam, 1, FAMILY_INFO[def.fam].color, def.shape);
 }
 /** El arma sola, sin el marco de la pieza, para la vitrina del Arsenal. */
-function armShowcase(def: ArmDef, tier: number): string {
-  if (def.fam === 'skin') return armIcon(def, tier);
-  return `<svg viewBox="4 4 56 56" aria-hidden="true">${famIcon(def.fam, def.shape, tier, FAMILY_INFO[def.fam].color)}</svg>`;
+function armShowcase(def: ArmDef): string {
+  if (def.fam === 'skin') return armIcon(def);
+  return `<svg viewBox="4 4 56 56" aria-hidden="true">${famIcon(def.fam, def.shape, 1, FAMILY_INFO[def.fam].color)}</svg>`;
 }
 function boardShape(f: Family): number {
   return f === 'pocion' ? 0 : armShape(game.s, f);
@@ -95,9 +87,9 @@ function armReady(def: ArmDef): boolean {
 }
 const VIP_FROM = 8; // la zona VIP aparece después de superar el nivel 7
 function myHero(): string {
-  return heroSvg(myLook(), armTier(game.s, 'espada'), {
+  return heroSvg(myLook(), 1, {
     swordShape: armShape(game.s, 'espada'),
-    shield: armTier(game.s, 'escudo'),
+    shield: 1,
     shieldShape: armShape(game.s, 'escudo'),
   });
 }
@@ -184,7 +176,7 @@ document.querySelector('#app')!.innerHTML = `
 
 let homeKey = '';
 function renderHome() {
-  const key = `${JSON.stringify(game.s.arms)}:${armTier(game.s, 'skin')}:${armTier(game.s, 'espada')}:${armTier(game.s, 'escudo')}:${game.s.playerName}:${power(game.s)}`;
+  const key = `${JSON.stringify(game.s.arms)}:${game.s.playerName}:${power(game.s)}`;
   if (key === homeKey) return;
   homeKey = key;
   $('#home-hero').innerHTML = myHero();
@@ -265,7 +257,7 @@ function startLevel(level: number) {
 let heroKeyCache = '';
 function renderHero() {
   const look = game.s.run?.look ?? {};
-  const key = JSON.stringify(game.s.arms) + armTier(game.s, 'skin') + JSON.stringify(look);
+  const key = JSON.stringify(game.s.arms) + JSON.stringify(look);
   if (key === heroKeyCache) return;
   const changed = heroKeyCache !== '';
   heroKeyCache = key;
@@ -492,7 +484,7 @@ function shardList(sh: Record<string, number>, title = 'Fragmentos para el Arsen
   return `<div class="shards-won"><small>${title}</small><div>${ids
     .map((id) => {
       const def = armById(id)!;
-      return `<span style="--rar:${RARITY_COLORS[def.rarity]}" class="${def.fam === 'skin' ? 'skin' : ''}">${armIcon(def, 1)}<b>+${sh[id]}</b><small>${def.name}</small></span>`;
+      return `<span style="--rar:${RARITY_COLORS[def.rarity]}" class="${def.fam === 'skin' ? 'skin' : ''}">${armIcon(def)}<b>+${sh[id]}</b><small>${def.name}</small></span>`;
     })
     .join('')}</div></div>`;
 }
@@ -795,7 +787,7 @@ function renderHeroSheet() {
       .map((f) => {
         const d = armById(s.arms[f])!;
         const lv = s.arsenal[d.id].lvl;
-        return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d, showTier(lv))}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
+        return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d)}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
       })
       .join('')}</div>`)}
     ${section('Estadísticas', 'todo lo que tienes activo', `<div class="stat-grid">${heroStats().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`)}
@@ -829,7 +821,7 @@ function activeSkills(): string {
   for (const f of ['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]) {
     const d = armById(game.s.arms[f])!;
     const lv = game.s.arsenal[d.id].lvl;
-    for (const sk of d.skills) if (lv >= sk.at) items.push(`<li><span class="t-icon">${armIcon(d, showTier(lv))}</span><span>${sk.text}</span><small>${d.name}</small></li>`);
+    for (const sk of d.skills) if (lv >= sk.at) items.push(`<li><span class="t-icon">${armIcon(d)}</span><span>${sk.text}</span><small>${d.name}</small></li>`);
   }
   if (!items.length) return `<p class="note">Todavía ninguna. Sube tus armas y tu skin al nivel 5 en el Arsenal para desbloquear la primera habilidad de cada una.</p>`;
   return `<ul class="active-skills">${items.join('')}</ul>`;
@@ -935,10 +927,6 @@ function openChestUi(id: string, free: boolean) {
 
 const FAM_TITLES: Record<ArmFam, string> = { espada: 'Espadas', escudo: 'Escudos', rayo: 'Potenciadores', skin: 'Skins' };
 
-/** Nivel de pieza (1 a 10) con el que se muestra una variante según su nivel en el Arsenal. */
-function showTier(lvl: number) {
-  return Math.max(1, Math.min(10, 1 + Math.floor((lvl - 1) / 10)));
-}
 
 
 let armTab: ArmFam = 'espada';
@@ -988,7 +976,7 @@ function armTile(def: ArmDef, sel: boolean): string {
   const need = locked ? unlockShards(def.rarity) : upgradeShards(st.lvl);
   const equipped = game.s.arms[def.fam] === def.id;
   return `<button class="tile ${locked ? 'locked' : ''} ${equipped ? 'on' : ''} ${sel ? 'sel' : ''} ${armReady(def) ? 'ready' : ''}" data-arm="${def.id}" style="--rar:${RARITY_COLORS[def.rarity]}" title="${esc(def.name)}">
-    <div class="t-icon">${armIcon(def, locked ? 1 : showTier(st.lvl))}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+    <div class="t-icon">${armIcon(def)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
     <small>${locked ? '' : `Nv ${st.lvl}`}</small>
     <i class="t-bar"><i style="width:${Math.min(100, (st.shards / need) * 100)}%"></i></i>
   </button>`;
@@ -1002,14 +990,12 @@ function renderArsenal() {
   const locked = st.lvl === 0;
   const stat = LEVEL_STAT[fam];
   const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
-  const tier = locked ? 1 : showTier(st.lvl);
-  const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && tier >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
   $('#sheet-body').innerHTML = `
     <div class="seg">${ARM_TABS.map(
       ([f, ico, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
     ).join('')}</div>
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
-      <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def, tier)}<span class="sc-tier" style="--f:${pieceFrame(tier)}">${tier}</span>${locked ? '<span class="lock">🔒</span>' : ''}</div>
+      <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
@@ -1024,7 +1010,6 @@ function renderArsenal() {
       const tiles = items.map((x) => armTile(x, x.id === def.id)).join('') + (premium ? '<div class="tile soon"><span>👑</span><small>Pronto</small></div>'.repeat(Math.max(1, 5 - items.length)) : '');
       return `<div class="cat ${premium ? 'premium' : ''}"><small>${title}</small><div class="tiles">${tiles}</div></div>`;
     }).join('')}
-    <div class="designs ${fam === 'skin' ? 'skin' : ''}"><small>${fam === 'skin' ? `Cómo cambia ${def.name} cada 10 niveles` : `Diseño de ${def.name} en el tablero, del nivel 1 al 10`}</small><div>${designs}</div></div>
     <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
 }
 
@@ -1060,14 +1045,12 @@ function showArm(id: string) {
   const stat = LEVEL_STAT[def.fam];
   const total = Math.round(stat.per * Math.max(0, st.lvl - 1) * 100);
   const isSkin = def.fam === 'skin';
-  const designs = Array.from({ length: 10 }, (_, i) => `<span class="${!locked && showTier(st.lvl) >= i + 1 ? 'got' : ''}">${armIcon(def, i + 1)}</span>`).join('');
   showModal(`<div class="arm-detail" style="--rar:${RARITY_COLORS[def.rarity]}">
     <button class="x" data-close aria-label="Cerrar">✕</button>
-    <div class="arm-big ${isSkin ? 'skin' : ''}">${armIcon(def, locked ? 1 : showTier(st.lvl))}</div>
+    <div class="arm-big ${isSkin ? 'skin' : ''}">${armIcon(def)}</div>
     <small class="rar">${def.rarity.toUpperCase()} · ${FAM_TITLES[def.fam]}</small>
     <h2>${def.name}</h2>
     <p class="muted">${locked ? 'Bloqueada' : `Nivel ${st.lvl} de ${MAX_ARM_LEVEL} · +${total}% de ${stat.label}`}</p>
-    <div class="designs ${isSkin ? 'skin' : ''}"><small>${isSkin ? 'Cambia cada 10 niveles' : 'Su diseño en el tablero, del nivel 1 al 10'}</small><div>${designs}</div></div>
     <ul class="skills">${armSkills(def)}</ul>
     <div class="btns">${armButtons(def)}</div>
   </div>`);

@@ -270,10 +270,6 @@ export function armShape(s: GameState, fam: ArmFam): number {
   return armById(s.arms[fam])?.shape ?? 0;
 }
 
-/** Material que se ve en el inicio: sube un tono cada 10 niveles de la variante. */
-export function armTier(s: GameState, fam: ArmFam): number {
-  return Math.min(10, 1 + Math.floor(((s.arsenal[s.arms[fam]]?.lvl ?? 1) - 1) / 10));
-}
 
 /** Probabilidad de crítico: base + talento + Arsenal. */
 export function critChance(s: GameState): number {
