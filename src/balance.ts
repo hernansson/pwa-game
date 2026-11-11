@@ -19,7 +19,7 @@ function earlyEase(level: number): number {
 }
 
 export function enemyHp(level: number, boss: boolean): number {
-  const base = 100 * Math.pow(1.33, level - 1) * earlyEase(level);
+  const base = 140 * Math.pow(1.33, level - 1) * earlyEase(level);
   return boss ? base * 4 : base;
 }
 
@@ -56,6 +56,16 @@ export function boostSeconds(_lvl: number): number {
 /** Cuánto multiplica el daño el potenciador: x1,3 en nivel 2, x3,4 en nivel 9, x4 en nivel 10. */
 export function boostMultiplier(lvl: number): number {
   return 1 + 0.3 * (lvl - 1);
+}
+
+/** Bonus de daño de la mejor espada armada en el nivel: +10% por nivel. */
+export function swordBonus(lvl = 1): number {
+  return 1 + 0.1 * (lvl - 1);
+}
+
+/** El mejor escudo armado en el nivel reduce cada golpe del enemigo: 5% por nivel (45% en nivel 10). */
+export function shieldReduction(lvl = 1): number {
+  return 0.05 * (lvl - 1);
 }
 
 /** Segundos que tienes entre fusiones para no perder el combo. */

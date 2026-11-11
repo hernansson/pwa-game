@@ -437,3 +437,5 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 @keyframes slash { 0% { transform: rotate(-35deg) scaleX(.2); opacity: 1; } 60% { transform: rotate(-35deg) scaleX(1.1); opacity: 1; } 100% { transform: rotate(-35deg) scaleX(1.2); opacity: 0; } }
 .slash i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); animation: spark .45s ease-out forwards; }
 @keyframes spark { from { transform: rotate(var(--a)) translateX(0); opacity: 1; } to { transform: rotate(var(--a)) translateX(var(--d)); opacity: 0; } }
+.gear-bonus { position: absolute; top: 30px; left: 10%; font-size: 11px; font-weight: 800; color: #ffe9a8; text-shadow: 0 1px 0 #000; white-space: nowrap; }
+.gear-bonus.pop { animation: comboPop .25s ease-out; }

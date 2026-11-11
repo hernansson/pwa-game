@@ -14,6 +14,8 @@ import {
   levelPower,
   pieceValue,
   boostMultiplier,
+  shieldReduction,
+  swordBonus,
   boostSeconds,
   starsFor,
   upgradeCost,
@@ -193,13 +195,14 @@ export class Game {
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
     const crit = this.rand() < 0.08;
+    // La mejor espada y el mejor escudo del nivel quedan en el héroe y dan un bonus fijo.
+    if (ev.fam === 'espada') run.look.sword = Math.max(run.look.sword ?? 1, ev.lvl);
+    if (ev.fam === 'escudo') run.look.shield = Math.max(run.look.shield ?? 1, ev.lvl);
     const boost = run.boost > 0 ? run.boostMult : 1;
-    const hit = BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1) * boost;
+    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 : 1) * boost;
     const hp = maxHp(this.s);
     const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
     const fam: Family = ev.fam;
-    if (fam === 'espada') run.look.sword = ev.lvl;
-    if (fam === 'escudo') run.look.shield = ev.lvl;
     if (fam === 'espada') r.dmg = hit;
     else {
       r.dmg = hit * 0.25;
@@ -225,6 +228,7 @@ export class Game {
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
+    if (blockable) dmg *= 1 - shieldReduction(run.look.shield);
     const blocked = blockable ? Math.min(run.shield, dmg) : 0;
     run.shield -= blocked;
     run.heroHp -= dmg - blocked;

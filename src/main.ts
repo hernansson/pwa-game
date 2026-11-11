@@ -8,6 +8,8 @@ import {
   UpgradeId,
   WAVES_PER_LEVEL,
   enemyAttackSeconds,
+  shieldReduction,
+  swordBonus,
   enemyHp,
   upgradeCost,
 } from './balance';
@@ -105,6 +107,7 @@ document.querySelector('#app')!.innerHTML = `
         <div class="hero-wrap">
           <div class="hp hero-hp"><div class="hp-fill" id="hero-hp"></div><div class="shield-fill" id="hero-shield"></div></div>
           <div class="shield-label" id="shield-label"></div>
+          <div class="gear-bonus" id="gear-bonus"></div>
           <div class="hero" id="hero"></div>
           <div class="hero-fx" id="hero-fx"></div>
           <div class="boost-ring" id="boost-ring"></div>
@@ -290,6 +293,16 @@ function renderScreen() {
   $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
   $('#hero').classList.toggle('down', run.result === 'lose');
   const boosted = run.boost > 0 && !run.result;
+  const sw = run.look.sword ?? 1;
+  const sh = run.look.shield ?? 1;
+  const gb = [sw > 1 ? `⚔️ +${Math.round((swordBonus(sw) - 1) * 100)}%` : '', sh > 1 ? `🛡️ -${Math.round(shieldReduction(sh) * 100)}%` : '']
+    .filter(Boolean)
+    .join('  ');
+  const gbe = $('#gear-bonus');
+  if (gbe.textContent !== gb) {
+    gbe.textContent = gb;
+    restartAnim(gbe, 'pop');
+  }
   // Potenciador: un aura pequeña sobre el héroe que crece con el nivel del rayo.
   const ring = $('#boost-ring');
   const bLvl = boosted ? Math.round((run.boostMult - 1) / 0.3) + 1 : 0;
