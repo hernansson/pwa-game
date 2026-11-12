@@ -38,6 +38,21 @@ export interface Run {
   duel?: { left: number; dmg: number };
   /** Renacer del Fénix (skin en nivel 40): segundos de furia que quedan; usado = ya renació en este nivel. */
   reborn?: { left: number; used: boolean };
+  /** Ataque cargado del monstruo: segundos que faltan y espadas juntadas para cortarlo. */
+  charge?: { left: number; total: number; sw: number } | null;
+  /** Barra del golpe especial del héroe (0 a 1). */
+  special?: number;
+  /** Últimas familias juntadas, para las cadenas. */
+  chain?: string[];
+  /** Golpes del monstruo actual (cada tantos carga uno fuerte). */
+  attacks?: number;
+  /** El jefe se enfureció (le bajaste la mitad de la vida). */
+  enraged?: boolean;
+  /** Truco del monstruo actual: ya se rearmó / esquiva el próximo golpe. */
+  revived?: boolean;
+  dodge?: boolean;
+  /** Veneno: segundos que quedan, daño por segundo y cuánto falta para el próximo pinchazo. */
+  poison?: { left: number; dps: number; t: number } | null;
 }
 
 export interface GameState {

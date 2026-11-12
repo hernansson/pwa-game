@@ -8,7 +8,6 @@ import {
   UPGRADES,
   UpgradeId,
   WAVES_PER_LEVEL,
-  enemyAttackSeconds,
   shieldReduction,
   swordBonus,
   enemyHp,
@@ -28,9 +27,10 @@ import {
   firstClearGems,
 } from './balance';
 import { WORLDS, worldName, worldTheme } from './monsters';
+import { FOE_TRICK, TRICK_INFO, foeOf } from './foes';
 import { sceneSvg } from './scenes';
 import { EVO_COLORS, Skin, worldBossArt, previewEvo, setEvoSource, enemySvg, famIcon, heroSvg, levelEnemyName, levelEnemySvg, levelMob, pieceFrame, pieceSvg, skinById } from './art';
-import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
+import { BASE_COLS, BASE_ROWS, CHEST_OPEN, Cell, FAMILY_INFO, Family, Piece, canMerge, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult, REBIRTH_DAMAGE, REBIRTH_SECONDS } from './game';
 import { RARITY_COLORS } from './items';
 import {
@@ -214,6 +214,8 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="combo" id="combo"></div>
       <div class="boost-label" id="boost-label"></div>
+      <div class="charge-hud" id="charge-hud" hidden><b>⚠️ ¡ATAQUE FUERTE!</b><small>Junta 🛡️ un escudo para bloquearlo o ⚔️⚔️ dos espadas para cortarlo</small><div class="cg-bar"><i id="cg-bar"></i></div></div>
+      <button class="spec-btn" id="spec-btn" hidden aria-label="Golpe especial"><span class="sb-ic">⚔️</span><small>ESPECIAL</small></button>
       <div class="fury-hud" id="fury-hud" hidden><b>🔥 FURIA DEL FÉNIX</b><span id="fury-t">8.0</span><div class="fury-bar"><i id="fury-bar"></i></div></div>
       <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
     </div>
@@ -311,6 +313,10 @@ function renderLobby() {
         <b>${esc(levelEnemyName(lvl))}</b>
         <div class="lvl-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}">★</span>`).join('')}</div>
         <div class="li-rew"><em>${firstWin ? 'Primera victoria' : 'Recompensa'}</em>${rew}</div>
+        ${(() => {
+          const t = TRICK_INFO[FOE_TRICK[foeOf(lvl, WAVES_PER_LEVEL, 0, true)]];
+          return `<div class="li-trick"><span>${t.icon}</span><b>${t.name}:</b> ${t.text}</div>`;
+        })()}
       </div>
     </div>`;
   const cleared = lvl < s.unlocked;
@@ -870,7 +876,22 @@ function renderScreen() {
   $('#hero-shield').style.width = Math.min(1, run.shield / hpMax) * 100 + '%';
   $('#shield-label').textContent = run.shield >= 1 ? `🛡️ ${fmt(run.shield)}` : '';
   const atk = $('#atk-fill');
-  atk.style.width = (run.stun > 0 ? 100 : Math.max(0, 1 - run.enemyTimer / enemyAttackSeconds(boss)) * 100) + '%';
+  atk.style.width = (run.stun > 0 || run.charge ? 100 : Math.max(0, 1 - run.enemyTimer / game.attackEvery(run)) * 100) + '%';
+  // Ataque cargado: cartel con barra que se vacía; los escudos del tablero brillan.
+  const ch = run.result ? null : run.charge;
+  const chud = $('#charge-hud');
+  if (chud.hidden === !!ch) chud.hidden = !ch;
+  if (ch) $('#cg-bar').style.width = Math.max(0, ch.left / ch.total) * 100 + '%';
+  $('#enemy').classList.toggle('charging', !!ch);
+  $('#board').classList.toggle('charging', !!ch);
+  $('#enemy').classList.toggle('enraged', !!run.enraged && !run.result);
+  $('#hero').classList.toggle('poisoned', !!run.poison && !run.result);
+  // Golpe especial: se llena juntando; cuando está lleno brilla y se puede tocar.
+  const sb = $('#spec-btn');
+  const sp = run.special ?? 0;
+  if (sb.hidden === !run.result) sb.hidden = !!run.result;
+  sb.style.setProperty('--p', String(sp));
+  sb.classList.toggle('ready', sp >= 1);
   atk.parentElement!.classList.toggle('stunned', run.stun > 0);
   atk.parentElement!.classList.toggle('soon', run.stun <= 0 && run.enemyTimer < 1);
   $('#enemy').classList.toggle('stunned', run.stun > 0);
@@ -969,6 +990,20 @@ function renderScreen() {
     r.innerHTML = html;
     r.dataset.k = html;
   }
+}
+
+/** Golpe especial: destello, un tajo gigante que cruza la pantalla y el número enorme. */
+function specialFx(dmg: number) {
+  const el = document.createElement('div');
+  el.className = 'special-fx';
+  el.innerHTML = '<i class="sx-flash"></i><i class="sx-slash a"></i><i class="sx-slash b"></i><b>¡GOLPE ESPECIAL!</b>';
+  $('#stage').appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+  restartAnim($('#hero'), 'attack');
+  restartAnim($('#enemy'), 'hurt');
+  restartAnim($('#stage'), 'shake-big');
+  setTimeout(() => floatText(fmt(dmg) + '!', 'crit big special', 68, 30), 250);
+  navigator.vibrate?.([30, 30, 80]);
 }
 
 function floatText(text: string, cls: string, xPct = 72, yPct = 40) {
@@ -1148,6 +1183,13 @@ function onMergeFx(r: MergeResult) {
   if (r.boost > 0) {
     floatText(`⚡ x${r.boostMult.toFixed(2).replace(/0$/, '')}`, 'boost', 50, 30);
   }
+  if (ev.kind === 'bomb') floatText(`💣 ¡BOMBA! x${ev.size}`, 'chain bomb', 50, 18);
+  if (ev.kind === 'star') floatText('⭐ Comodín', 'chain star', 50, 22);
+  if (r.chestGold) floatText(`🎁 +${fmt(r.chestGold)} 🪙`, 'gold big', 50, 30);
+  else if (ev.kind === 'chest') floatText('🎁 ¡Un cofre más y se abre!', 'chain', 50, 26);
+  if (r.chain) floatText(r.chain === 'same' ? '🔗 ¡CADENA x3!' : '🌈 ¡TRIPLE MIXTA!', 'chain ' + r.chain, 50, 14);
+  if (r.dodged) floatText('🌀 ¡Esquivó!', 'trick', 72, 30);
+  if (r.armored) floatText('🪨 Coraza: sube las piezas', 'trick', 70, 30);
   // Cuanto más alto el nivel, un poco mejor se ve el efecto (sin iluminar toda la pantalla).
   if (ev.fam === 'espada' && r.dmg > 0) slashFx(ev.lvl + tierOf(swordHeat));
   if (ev.fam === 'espada') powerUp('sw', ev.lvl);
@@ -1202,6 +1244,30 @@ function wireGame() {
       // La pieza sale volando por arriba.
     } else if (e.type === 'rebirth') {
       rebirthFx();
+    } else if (e.type === 'charge') {
+      restartAnim($('#enemy'), 'charge-in');
+      navigator.vibrate?.([20, 40, 20]);
+    } else if (e.type === 'charge-end') {
+      if (e.how === 'blocked') floatText('🛡️ ¡BLOQUEADO!', 'big-word block', 50, 30);
+      else if (e.how === 'interrupted') {
+        floatText('⚔️ ¡CORTADO!', 'big-word cut', 62, 26);
+        restartAnim($('#enemy'), 'hurt');
+      } else {
+        floatText('💥 ¡GOLPE FUERTE!', 'big-word smash', 36, 22);
+        restartAnim($('#stage'), 'shake-big');
+        navigator.vibrate?.([60, 30, 60]);
+      }
+    } else if (e.type === 'special') {
+      specialFx(e.dmg);
+    } else if (e.type === 'trick') {
+      const t = TRICK_INFO[e.trick];
+      floatText(`${t.icon} ${t.name}`, 'trick', 74, 14);
+    } else if (e.type === 'enrage') {
+      floatText('😡 ¡SE ENFURECIÓ!', 'big-word rage', 64, 18);
+      restartAnim($('#stage'), 'shake-big');
+    } else if (e.type === 'burnout') {
+      burstAt(e.col, e.row, '#ff6a1a', true);
+      floatText(`🔥 -${fmt(e.dmg)}`, 'ouch', 24, 34);
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
@@ -1212,6 +1278,10 @@ function wireGame() {
   });
 }
 wireGame();
+
+$('#spec-btn').addEventListener('click', () => {
+  if (!game.special()) restartAnim($('#spec-btn'), 'nope');
+});
 
 $('#flee').addEventListener('click', () => {
   if (game.s.run?.duel) {
@@ -1389,6 +1459,24 @@ function burstAt(col: number, row: number, color: string, big: boolean) {
   setTimeout(() => el.remove(), 500);
 }
 
+/** Dibujo de las piezas especiales: bomba, comodín (con su nivel) y cofre. */
+function specialPieceSvg(p: Piece): string {
+  if (p.sp === 'bomb')
+    return `<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="14" fill="#3a1414" stroke="#ff5a3a" stroke-width="3"/>
+      <circle cx="30" cy="38" r="17" fill="#1b1424"/><circle cx="24" cy="32" r="5" fill="#fff" opacity=".35"/>
+      <rect x="36" y="16" width="9" height="8" rx="2" transform="rotate(35 40 20)" fill="#555"/><path d="M43 15 Q48 8 53 10" stroke="#c9a46a" stroke-width="2.5" fill="none"/>
+      <circle class="spark" cx="53" cy="10" r="4" fill="#ffd34d"/><circle class="spark" cx="53" cy="10" r="2" fill="#fff"/></svg>`;
+  if (p.sp === 'star')
+    return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="spStar" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5ad8"/><stop offset=".35" stop-color="#ffd34d"/><stop offset=".7" stop-color="#4fe0a0"/><stop offset="1" stop-color="#4fb0ff"/></linearGradient></defs>
+      <rect x="3" y="3" width="58" height="58" rx="14" fill="#2a1a4a" stroke="url(#spStar)" stroke-width="3"/>
+      <path d="M32 8 L38.5 24 L56 25 L42.5 36 L47 53 L32 43.5 L17 53 L21.5 36 L8 25 L25.5 24Z" fill="url(#spStar)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+      <text x="32" y="38" text-anchor="middle" font-size="16" font-weight="900" fill="#fff" stroke="#2a1a4a" stroke-width="3" paint-order="stroke">${p.lvl}</text></svg>`;
+  const pips = Array.from({ length: CHEST_OPEN - 1 }, (_, i) => `<circle cx="${26 + i * 12}" cy="54" r="3.4" fill="${i < p.lvl ? '#ffd34d' : '#4a3020'}" stroke="#2a1608" stroke-width="1"/>`).join('');
+  return `<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="14" fill="#3a2a10" stroke="#ffb02e" stroke-width="3"/>
+    <path d="M12 26 Q12 12 32 12 Q52 12 52 26Z" fill="#b8662a" stroke="#2a1608" stroke-width="2"/><rect x="12" y="26" width="40" height="20" rx="2" fill="#9a4f1e" stroke="#2a1608" stroke-width="2"/>
+    <path d="M12 26 H52 M24 12 V46 M40 12 V46" stroke="#ffcf4d" stroke-width="3"/><rect x="28" y="22" width="8" height="10" rx="2" fill="#ffd34d" stroke="#2a1608" stroke-width="1.5"/>${pips}</svg>`;
+}
+
 function renderBoard() {
   const run = game.s.run;
   if (!run) return;
@@ -1412,9 +1500,10 @@ function renderBoard() {
       if (!el) {
         el = document.createElement('div');
         el.className = 'pc';
-        el.dataset.k = p.fam + p.lvl;
+        el.dataset.k = (p.sp ?? p.fam) + p.lvl;
         el.dataset.col = String(c);
-        el.innerHTML = pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color, boardShape(p.fam));
+        el.innerHTML = p.sp ? specialPieceSvg(p) : pieceSvg(p.fam, p.lvl, FAMILY_INFO[p.fam].color, boardShape(p.fam));
+        if (p.sp) el.classList.add('sp-' + p.sp);
         el.style.left = pos.left;
         if (fromTop.has(p.id)) {
           // Las piezas nuevas entran desde arriba del tablero y caen.
@@ -1432,6 +1521,9 @@ function renderBoard() {
       }
       el.dataset.col = String(c);
       el.dataset.row = String(r);
+      el.classList.toggle('webbed', !!p.web && !p.ice);
+      el.classList.toggle('iced', !!p.web && !!p.ice);
+      el.classList.toggle('burning', !!p.burn);
       if (el.style.left !== pos.left) el.style.left = pos.left;
       if (el.style.bottom !== pos.bottom) el.style.bottom = pos.bottom;
     }
@@ -1460,7 +1552,7 @@ function markMatches(from: Cell | null) {
   const p = from && run ? run.grid[from.col][from.row] : null;
   pieceEls.forEach((el) => {
     const q = run?.grid[Number(el.dataset.col)]?.[Number(el.dataset.row)];
-    el.classList.toggle('match', !!p && !!q && q !== p && q.fam === p.fam && q.lvl === p.lvl);
+    el.classList.toggle('match', !!p && canMerge(p, q));
   });
 }
 

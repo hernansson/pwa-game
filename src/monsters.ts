@@ -2,8 +2,8 @@
 // Cada mundo tiene 3 especies para las oleadas y un jefe de mundo único. Los colores cambian por mundo
 // y por nivel, y el jefe de cada nivel es una versión "élite" (más grande, con cuernos, aura y corona).
 
-export type Species = 'slime' | 'mushroom' | 'wolf' | 'bat' | 'spider' | 'skeleton' | 'golem' | 'scorpion' | 'imp' | 'yeti';
-export type BossSpecies = 'treant' | 'queen' | 'titan' | 'sphinx' | 'icedragon' | 'firedragon';
+import { BossSpecies, Species, WORLD_FOES, foeIndex } from './foes';
+export type { BossSpecies, Species };
 
 export interface Look {
   c: string; // color base
@@ -24,32 +24,32 @@ export interface WorldTheme {
 
 export const WORLDS: WorldTheme[] = [
   {
-    name: 'Bosque Viscoso', scene: 'forest', mobs: ['slime', 'mushroom', 'wolf'], boss: 'treant', bossName: 'Ent Ancestral',
+    name: 'Bosque Viscoso', scene: 'forest', mobs: WORLD_FOES[0].mobs, boss: WORLD_FOES[0].boss, bossName: 'Ent Ancestral',
     looks: [{ c: '#6fd36a', c2: '#2f8f4a', eye: '#fff36b' }, { c: '#e2574c', c2: '#f6e7c8', eye: '#ffe066' }, { c: '#8d6a4f', c2: '#d8c3a5', eye: '#ffd34d' }],
     sky: ['#1f4a3a', '#0c1f1a'], accent: '#7ee07a',
   },
   {
-    name: 'Cuevas del Eco', scene: 'cave', mobs: ['bat', 'spider', 'skeleton'], boss: 'queen', bossName: 'Reina Araña',
+    name: 'Cuevas del Eco', scene: 'cave', mobs: WORLD_FOES[1].mobs, boss: WORLD_FOES[1].boss, bossName: 'Reina Araña',
     looks: [{ c: '#7b5bd6', c2: '#c9a7ff', eye: '#ff5a8a' }, { c: '#3f3a5c', c2: '#b26bff', eye: '#ff3b3b' }, { c: '#e8e2d4', c2: '#8a7fa8', eye: '#7fe0ff' }],
     sky: ['#2a1a4a', '#0b0716'], accent: '#b98bff',
   },
   {
-    name: 'Picos de Piedra', scene: 'peaks', mobs: ['golem', 'wolf', 'bat'], boss: 'titan', bossName: 'Titán de la Cumbre',
+    name: 'Picos de Piedra', scene: 'peaks', mobs: WORLD_FOES[2].mobs, boss: WORLD_FOES[2].boss, bossName: 'Titán de la Cumbre',
     looks: [{ c: '#9aa3ad', c2: '#5f6873', eye: '#5ad1ff' }, { c: '#e9eef5', c2: '#8fa3bf', eye: '#5ad1ff' }, { c: '#5c6f8a', c2: '#a8c0e0', eye: '#ffe066' }],
     sky: ['#3a6aa8', '#14243e'], accent: '#9fd0ff',
   },
   {
-    name: 'Dunas Ardientes', scene: 'desert', mobs: ['scorpion', 'skeleton', 'slime'], boss: 'sphinx', bossName: 'Esfinge Dorada',
+    name: 'Dunas Ardientes', scene: 'desert', mobs: WORLD_FOES[3].mobs, boss: WORLD_FOES[3].boss, bossName: 'Esfinge Dorada',
     looks: [{ c: '#d9963a', c2: '#7a3f12', eye: '#ff3b3b' }, { c: '#e8d6a8', c2: '#9a7a4a', eye: '#3affc8' }, { c: '#e8c26a', c2: '#a8742a', eye: '#ff5a2a' }],
     sky: ['#e88a3a', '#5a2410'], accent: '#ffcf6b',
   },
   {
-    name: 'Glaciar Eterno', scene: 'glacier', mobs: ['yeti', 'wolf', 'slime'], boss: 'icedragon', bossName: 'Dragón de Escarcha',
+    name: 'Glaciar Eterno', scene: 'glacier', mobs: WORLD_FOES[4].mobs, boss: WORLD_FOES[4].boss, bossName: 'Dragón de Escarcha',
     looks: [{ c: '#eef6ff', c2: '#7fb8e8', eye: '#3a8bff' }, { c: '#cfe8ff', c2: '#5a8fc8', eye: '#7fffd4' }, { c: '#8fd8ff', c2: '#2a7fc8', eye: '#ffffff' }],
     sky: ['#2a5a8a', '#0a1a30'], accent: '#bff0ff',
   },
   {
-    name: 'Fragua Infernal', scene: 'volcano', mobs: ['imp', 'golem', 'scorpion'], boss: 'firedragon', bossName: 'Dragón del Volcán',
+    name: 'Fragua Infernal', scene: 'volcano', mobs: WORLD_FOES[5].mobs, boss: WORLD_FOES[5].boss, bossName: 'Dragón del Volcán',
     looks: [{ c: '#d83a2a', c2: '#ffb02e', eye: '#ffe066' }, { c: '#4a2a24', c2: '#ff6a1a', eye: '#ffb02e' }, { c: '#b8261a', c2: '#ffd34d', eye: '#fff1a8' }],
     sky: ['#6a1a10', '#1a0505'], accent: '#ff8a3d',
   },
@@ -363,7 +363,7 @@ export function levelMonster(level: number, wave: number, enemy: number, boss: b
   const world = Math.ceil(level / 10);
   const t = worldTheme(world);
   if (boss && level % 10 === 0) return { svg: worldBossSvg(world, titanArt), name: t.bossName };
-  const i = boss ? (level + world) % 3 : (wave * 2 + enemy + level) % 3;
+  const i = foeIndex(level, wave, enemy, boss);
   const sp = t.mobs[i];
   const look = lookFor(t, i, level);
   const title = TITLES[(level * 5 + world) % TITLES.length];

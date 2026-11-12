@@ -37,7 +37,7 @@ export function replayRun(snapshot: GameState, level: number, seed: number, log:
     else if (kind === 2) {
       game.abandon();
       done = true;
-    }
+    } else if (kind === 3) done = game.special();
     if (!done) return { ok: false, error: 'invalid_move' };
     prev = step;
   }

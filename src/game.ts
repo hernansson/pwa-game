@@ -21,7 +21,8 @@ import {
   starsFor,
   upgradeCost,
 } from './balance';
-import { BASE_COLS, BASE_ROWS, Cell, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, MergeEvent, discard, hasPair, makePiece, mergePair, randomPiece, refill, startingGrid } from './board';
+import { BASE_COLS, BASE_ROWS, Cell, Family, MAX_EXTRA_COLS, MAX_EXTRA_ROWS, MergeEvent, Piece, discard, hasPair, makePiece, mergePair, randomPiece, refill, startingGrid } from './board';
+import { FOE_TRICK, Trick, foeOf } from './foes';
 import {
   GameState,
   Run,
@@ -74,7 +75,17 @@ export interface MergeResult {
   stun: number;
   boost: number;
   boostMult: number;
+  /** Cadena: 3 juntadas iguales seguidas (same) o 3 distintas (mix). */
+  chain?: 'same' | 'mix';
+  /** El monstruo esquivó el golpe. */
+  dodged?: boolean;
+  /** La coraza frenó un golpe chico. */
+  armored?: boolean;
+  /** Oro de un cofre que se abrió. */
+  chestGold?: number;
 }
+
+export type ChargeEnd = 'blocked' | 'interrupted' | 'hit';
 
 export type GameEvent =
   | { type: 'merge'; r: MergeResult }
@@ -84,6 +95,12 @@ export type GameEvent =
   | { type: 'spawn'; ids: number[] }
   | { type: 'discard'; col: number; row: number }
   | { type: 'rebirth'; seconds: number }
+  | { type: 'charge'; seconds: number }
+  | { type: 'charge-end'; how: ChargeEnd; dmg: number }
+  | { type: 'special'; dmg: number }
+  | { type: 'trick'; trick: Trick; cells?: Cell[] }
+  | { type: 'enrage' }
+  | { type: 'burnout'; col: number; row: number; dmg: number }
   | { type: 'end'; report: ClearReport };
 
 /** Renacer del Fénix: segundos de furia inmune y cuánto multiplica el daño mientras dura. */
@@ -94,7 +111,16 @@ const FURY_FAM: Partial<Record<Family, Family>> = { escudo: 'espada', pocion: 'r
 
 type Listener = (e: GameEvent) => void;
 
-/** Jugada anotada: [paso, 0 juntar, de col, de fila, a col, a fila] · [paso, 1 tirar, col, fila] · [paso, 2 abandonar]. */
+/** Ataque cargado: cada cuántos golpes del monstruo (jefe / jefe furioso), cuánto dura el aviso y cuánto pega. */
+export const CHARGE = { every: 4, bossEvery: 3, rageEvery: 2, seconds: 2.6, bossSeconds: 2.2, mult: 2.6, swords: 2, stun: 1.4 };
+/** Golpe especial: cuánto llena cada fusión y cuánto pega (parte de la vida del enemigo como mínimo). */
+export const SPECIAL = { perMerge: 0.05, perLevel: 0.012, hpPart: 0.3, bossHpPart: 0.14, value: 24, stun: 1.5 };
+/** Piezas especiales: chance de que una pieza nueva sea bomba, comodín o cofre. */
+export const SPECIAL_ODDS = { bomb: 0.02, star: 0.025, chest: 0.018 };
+/** Cadenas: daño extra sobre el golpe que la completa. */
+export const CHAIN_BONUS = { same: 0.6, mix: 1.2 };
+
+/** Jugada anotada: [paso, 0 juntar, de col, de fila, a col, a fila] · [paso, 1 tirar, col, fila] · [paso, 2 abandonar] · [paso, 3 golpe especial]. */
 export type RunAction = number[];
 
 export class Game {
@@ -143,10 +169,139 @@ export class Game {
     return !this.s.run && level <= this.s.unlocked && this.s.energy >= ENERGY_COST;
   }
 
-  private newPiece() {
+  private newPiece(): Piece {
     const p = randomPiece(pieceOdds(this.s), this.rand);
     if (this.s.run?.reborn?.left) p.fam = FURY_FAM[p.fam] ?? p.fam;
+    // A veces cae una pieza especial.
+    const r = this.rand();
+    if (r < SPECIAL_ODDS.bomb) p.sp = 'bomb';
+    else if (r < SPECIAL_ODDS.bomb + SPECIAL_ODDS.star) p.sp = 'star';
+    else if (r < SPECIAL_ODDS.bomb + SPECIAL_ODDS.star + SPECIAL_ODDS.chest) p.sp = 'chest';
+    if (p.sp === 'bomb' || p.sp === 'chest') p.lvl = 1;
     return p;
+  }
+
+  /** Truco del monstruo que estás peleando. */
+  trickOf(run: Run): Trick {
+    return FOE_TRICK[foeOf(run.level, run.wave, run.enemyInWave, this.isBossWave(run))];
+  }
+
+  /** Segundos entre golpes del monstruo actual. */
+  attackEvery(run: Run): number {
+    let t = enemyAttackSeconds(this.isBossWave(run));
+    if (this.trickOf(run) === 'fast') t *= 0.75;
+    if (run.enraged) t *= 0.7;
+    return t;
+  }
+
+  /** Golpe normal del monstruo. */
+  private enemyBlow(run: Run): number {
+    return run.duel ? maxHp(this.s) * DUEL_HIT : enemyHit(run.level, this.isBossWave(run));
+  }
+
+  /** Piezas normales al azar (para telarañas, hielo y fuego). */
+  private pickPieces(run: Run, n: number): Cell[] {
+    const cells: Cell[] = [];
+    run.grid.forEach((col, c) => col.forEach((p, r) => p && !p.sp && !p.web && !p.burn && cells.push({ col: c, row: r })));
+    const out: Cell[] = [];
+    while (out.length < n && cells.length) out.push(cells.splice(Math.floor(this.rand() * cells.length), 1)[0]);
+    return out;
+  }
+
+  /** El truco que se activa con cada ataque del monstruo. */
+  private onEnemyAttack(run: Run) {
+    const trick = this.trickOf(run);
+    const boss = this.isBossWave(run);
+    const max = enemyHp(run.level, boss);
+    if (trick === 'regen') {
+      if (run.enemyHp < max && !run.duel) {
+        run.enemyHp = Math.min(max, run.enemyHp + max * (boss ? 0.05 : 0.07));
+        this.emit({ type: 'trick', trick });
+      }
+    } else if (trick === 'spores' || trick === 'poison') {
+      run.poison = { left: 3, dps: this.enemyBlow(run) * (trick === 'poison' ? 0.3 : 0.18), t: 1 };
+      this.emit({ type: 'trick', trick });
+    } else if (trick === 'dodge') {
+      run.dodge = true;
+      this.emit({ type: 'trick', trick });
+    } else if (trick === 'web' || trick === 'freeze' || trick === 'burn') {
+      const cells = this.pickPieces(run, boss ? 2 : 1);
+      for (const c of cells) {
+        const p = run.grid[c.col][c.row]!;
+        if (trick === 'burn') p.burn = 4;
+        else {
+          p.web = trick === 'web' ? 5 : 4;
+          if (trick === 'freeze') p.ice = true;
+        }
+      }
+      if (cells.length) this.emit({ type: 'trick', trick, cells });
+      if (!hasPair(run.grid)) this.afterChange(run);
+    }
+  }
+
+  /** Daño de una fusión antes de efectos (lo usa también el golpe especial). */
+  private heroHit(run: Run, v: number, crit: boolean): number {
+    const m = this.mods;
+    const boost = run.boost > 0 ? run.boostMult : 1;
+    return swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 + m.critMult : 1) * boost * (1 + m.dmg) * (run.reborn?.left ? REBIRTH_DAMAGE : 1);
+  }
+
+  private addSpecial(run: Run, n: number) {
+    run.special = Math.min(1, (run.special ?? 0) + n);
+  }
+
+  /** Golpe especial del héroe: cuando la barra está llena. */
+  special(): boolean {
+    const run = this.s.run;
+    if (!run || run.result || (run.special ?? 0) < 1) return false;
+    this.log.push([this.step, 3]);
+    run.special = 0;
+    const boss = this.isBossWave(run);
+    const max = enemyHp(run.level, boss);
+    const dmg = Math.max(this.heroHit(run, SPECIAL.value, false), max * (boss ? SPECIAL.bossHpPart : SPECIAL.hpPart));
+    run.stun = Math.max(run.stun, SPECIAL.stun);
+    run.dodge = false;
+    if (run.charge) this.endCharge(run, 'interrupted', 0);
+    this.emit({ type: 'special', dmg });
+    this.damageEnemy(run, dmg);
+    return true;
+  }
+
+  private endCharge(run: Run, how: ChargeEnd, dmg: number) {
+    run.charge = null;
+    run.enemyTimer = this.attackEvery(run);
+    if (how === 'interrupted') {
+      run.stun = Math.max(run.stun, CHARGE.stun);
+      this.addSpecial(run, 0.15);
+    } else if (how === 'blocked') this.addSpecial(run, 0.1);
+    this.emit({ type: 'charge-end', how, dmg });
+  }
+
+  /** Daño al enemigo: en el reto el jefe no muere; si no, puede rearmarse o morir. */
+  private damageEnemy(run: Run, dmg: number) {
+    if (dmg <= 0 || run.result) return;
+    const boss = this.isBossWave(run);
+    const max = enemyHp(run.level, boss);
+    if (run.duel) {
+      run.duel.dmg += dmg;
+      run.enemyHp -= dmg;
+      while (run.enemyHp <= 0) run.enemyHp += max; // el jefe del reto no muere
+    } else {
+      run.enemyHp -= dmg;
+      if (run.enemyHp <= 0 && this.trickOf(run) === 'revive' && !run.revived) {
+        run.revived = true;
+        run.enemyHp = max * 0.4;
+        this.emit({ type: 'trick', trick: 'revive' });
+      } else if (run.enemyHp <= 0) {
+        this.kill(run);
+        return;
+      }
+    }
+    if (boss && !run.enraged && (run.duel ? run.duel.dmg >= max * 0.5 : run.enemyHp <= max * 0.5)) {
+      run.enraged = true;
+      run.enemyTimer = Math.min(run.enemyTimer, this.attackEvery(run));
+      this.emit({ type: 'enrage' });
+    }
   }
 
   /** El Caballero Fénix en nivel 40 renace una vez por nivel. */
@@ -267,11 +422,15 @@ export class Game {
   private afterChange(run: Run) {
     const added = refill(run.grid, () => this.newPiece());
     if (!hasPair(run.grid)) {
-      // Nunca dejar el tablero sin jugadas: copia una pieza en otra casilla.
-      const p = run.grid[0][0]!;
-      const q = makePiece(p.fam, p.lvl);
-      run.grid[run.grid.length - 1][run.grid[0].length - 1] = q;
-      added.push(q);
+      // Nunca dejar el tablero sin jugadas: copia una pieza normal en otra casilla.
+      const cells = run.grid.flatMap((col, c) => col.map((p, r) => ({ p, c, r }))).filter((x) => x.p && !x.p.sp && !x.p.web);
+      const src = cells[0];
+      const dst = cells[cells.length - 1];
+      if (src && dst && src !== dst) {
+        const q = makePiece(src.p!.fam, src.p!.lvl);
+        run.grid[dst.c][dst.r] = q;
+        added.push(q);
+      }
     }
     run.drops += added.length;
     this.emit({ type: 'spawn', ids: added.map((p) => p.id) });
@@ -298,16 +457,27 @@ export class Game {
     run.comboTimer = comboTime(this.s) + this.mods.combo;
     run.maxCombo = Math.max(run.maxCombo, run.combo);
     this.bump('combo', run.combo, true);
-    const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
+    this.addSpecial(run, SPECIAL.perMerge + SPECIAL.perLevel * (ev.lvl - 1));
+    const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit: false, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
+    if (ev.kind === 'chest') {
+      // Cofre: no pega, pero al abrirse da oro.
+      if (ev.opened) {
+        r.chestGold = Math.round(enemyGold(run.level, false) * 4);
+        run.gold += r.chestGold;
+        this.s.gold += r.chestGold;
+      }
+      this.emit({ type: 'merge', r });
+      return;
+    }
+    const v = (ev.value ?? pieceValue(ev.lvl, ev.size)) * (ev.burst ? 3 : 1);
     const m = this.mods;
     const crit = this.rand() < critChance(this.s);
+    r.crit = crit;
     // La mejor espada y el mejor escudo del nivel quedan en el héroe y dan un bonus fijo.
     if (ev.fam === 'espada') run.look.sword = Math.max(run.look.sword ?? 1, ev.lvl);
     if (ev.fam === 'escudo') run.look.shield = Math.max(run.look.shield ?? 1, ev.lvl);
-    const boost = run.boost > 0 ? run.boostMult : 1;
-    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 + m.critMult : 1) * boost * (1 + m.dmg) * (run.reborn?.left ? REBIRTH_DAMAGE : 1);
+    const hit = this.heroHit(run, v, crit);
     const hp = maxHp(this.s);
-    const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
     const fam: Family = ev.fam;
     if (fam === 'espada') r.dmg = hit;
     else {
@@ -326,16 +496,34 @@ export class Game {
         run.boost = Math.max(run.boost, r.boost);
       }
     }
-    this.emit({ type: 'merge', r });
-    if (r.dmg > 0 && run.duel) {
-      run.duel.dmg += r.dmg;
-      run.enemyHp -= r.dmg;
-      const max = enemyHp(run.level, true);
-      while (run.enemyHp <= 0) run.enemyHp += max; // el jefe del reto no muere
-    } else if (r.dmg > 0) {
-      run.enemyHp -= r.dmg;
-      if (run.enemyHp <= 0) this.kill(run);
+    // Cadenas: 3 juntadas de la misma familia seguidas, o 3 distintas.
+    const ch = (run.chain = [...(run.chain ?? []), fam].slice(-3));
+    if (ch.length === 3) {
+      if (ch[0] === ch[1] && ch[1] === ch[2]) r.chain = 'same';
+      else if (new Set(ch).size === 3) r.chain = 'mix';
+      if (r.chain) {
+        r.dmg += hit * CHAIN_BONUS[r.chain];
+        this.addSpecial(run, r.chain === 'mix' ? 0.1 : 0.05);
+        run.chain = [];
+      }
     }
+    // Truco del monstruo: esquiva o coraza.
+    const trick = this.trickOf(run);
+    if (run.dodge && r.dmg > 0) {
+      run.dodge = false;
+      r.dodged = true;
+      r.dmg = 0;
+    } else if (trick === 'armor' && ev.lvl <= 2 && !ev.kind) {
+      r.armored = true;
+      r.dmg *= 0.35;
+    }
+    // Ataque cargado: un escudo lo bloquea; dos espadas lo cortan.
+    if (run.charge) {
+      if (fam === 'escudo') this.endCharge(run, 'blocked', 0);
+      else if (fam === 'espada' && ++run.charge.sw >= CHARGE.swords) this.endCharge(run, 'interrupted', 0);
+    }
+    this.emit({ type: 'merge', r });
+    this.damageEnemy(run, r.dmg);
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
@@ -399,17 +587,78 @@ export class Game {
         return;
       }
     }
+    this.tickPieces(run, dt);
+    if (run.result) return;
+    if (run.poison) {
+      run.poison.left -= dt;
+      run.poison.t -= dt;
+      if (run.poison.t <= 0) {
+        run.poison.t += 1;
+        this.hurt(run, run.poison.dps, false);
+        if (run.result) return;
+      }
+      if (run.poison && run.poison.left <= 0) run.poison = null;
+    }
     if (run.stun > 0) {
       run.stun = Math.max(0, run.stun - dt);
+      return;
+    }
+    if (run.charge) {
+      run.charge.left -= dt;
+      if (run.charge.left <= 0) {
+        // No lo frenaste: golpe fuerte.
+        const dmg = this.enemyBlow(run) * CHARGE.mult;
+        this.endCharge(run, 'hit', dmg);
+        this.hurt(run, dmg, true);
+      }
       return;
     }
     run.enemyTimer -= dt;
     if (run.enemyTimer <= 0) {
       const boss = this.isBossWave(run);
-      run.enemyTimer = enemyAttackSeconds(boss);
+      run.attacks = (run.attacks ?? 0) + 1;
+      const every = run.enraged ? CHARGE.rageEvery : boss ? CHARGE.bossEvery : CHARGE.every;
+      if (run.attacks % every === 0) {
+        // Carga un ataque fuerte: se ve venir y se puede frenar.
+        const secs = boss ? CHARGE.bossSeconds : CHARGE.seconds;
+        run.charge = { left: secs, total: secs, sw: 0 };
+        this.emit({ type: 'charge', seconds: secs });
+        return;
+      }
+      run.enemyTimer = this.attackEvery(run);
       // En el reto el jefe pega una parte de tu vida: así un amigo nuevo también puede aguantar y competir.
-      this.hurt(run, run.duel ? maxHp(this.s) * DUEL_HIT : enemyHit(run.level, boss), true);
+      this.hurt(run, this.enemyBlow(run), true);
+      if (!run.result) this.onEnemyAttack(run);
     }
+  }
+
+  /** Telarañas y hielo se derriten; las piezas en llamas se queman si no las usas. */
+  private tickPieces(run: Run, dt: number) {
+    let changed = false;
+    for (let c = 0; c < run.grid.length; c++)
+      for (let r = 0; r < run.grid[c].length; r++) {
+        const p = run.grid[c][r];
+        if (!p) continue;
+        if (p.web) {
+          p.web -= dt;
+          if (p.web <= 0) {
+            delete p.web;
+            delete p.ice;
+          }
+        }
+        if (p.burn) {
+          p.burn -= dt;
+          if (p.burn <= 0) {
+            run.grid[c][r] = null;
+            changed = true;
+            const dmg = this.enemyBlow(run) * 0.5;
+            this.emit({ type: 'burnout', col: c, row: r, dmg });
+            this.hurt(run, dmg, false);
+            if (run.result) return;
+          }
+        }
+      }
+    if (changed) this.afterChange(run);
   }
 
   private kill(run: Run) {
@@ -436,7 +685,11 @@ export class Game {
       this.emit({ type: 'wave', wave: run.wave, boss: this.isBossWave(run) });
     }
     run.enemyHp = enemyHp(run.level, this.isBossWave(run));
-    run.enemyTimer = enemyAttackSeconds(this.isBossWave(run));
+    run.charge = null;
+    run.revived = false;
+    run.dodge = false;
+    run.attacks = 0;
+    run.enemyTimer = this.attackEvery(run);
   }
 
   private finish(win: boolean) {

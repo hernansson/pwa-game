@@ -1646,3 +1646,76 @@ button.res { cursor: pointer; }
 .wb-rank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid #ffb02e66; border-radius: 16px; background: rgba(0,0,0,.3); color: #fff; padding: 6px 4px; box-shadow: 0 4px 0 rgba(0,0,0,.4); }
 .wb-rank span { font-size: 22px; }
 .wb-rank small { font-size: 10px; font-weight: 800; }
+
+/* ---------- Pelea dinámica ---------- */
+/* Ataque cargado */
+.charge-hud { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); z-index: 7; width: min(86%, 330px); text-align: center; pointer-events: none;
+  background: linear-gradient(180deg, rgba(120,10,10,.92), rgba(60,4,8,.92)); border: 2px solid #ff4a3a; border-radius: 14px; padding: 5px 10px 7px; box-shadow: 0 0 22px rgba(255,40,30,.6); animation: cgIn .25s ease-out, cgPulse .5s ease-in-out infinite alternate; }
+.charge-hud b { display: block; font-size: 15px; font-weight: 1000; letter-spacing: 1px; color: #fff; text-shadow: 0 2px 0 #000; }
+.charge-hud small { display: block; font-size: 10.5px; font-weight: 800; color: #ffd9d0; margin: 1px 0 4px; }
+.cg-bar { height: 7px; border-radius: 4px; background: rgba(0,0,0,.5); overflow: hidden; }
+.cg-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffd34d, #ff3a2a); }
+@keyframes cgIn { from { transform: translateX(-50%) scale(.6); opacity: 0; } }
+@keyframes cgPulse { to { box-shadow: 0 0 34px rgba(255,60,30,.95); } }
+.enemy.charging { filter: drop-shadow(0 0 10px #ff2a1a) drop-shadow(0 0 20px rgba(255,40,20,.7)); animation: cgShake .12s linear infinite; }
+@keyframes cgShake { 0% { transform: translateX(-1.5px); } 50% { transform: translateX(1.5px) scale(1.04); } 100% { transform: translateX(-1.5px); } }
+.enemy.giant.charging { animation: none; }
+.enemy.charge-in { animation: cgGrow .35s ease-out; }
+@keyframes cgGrow { 50% { transform: scale(1.15); } }
+#board.charging .pc[data-k^="escudo"] { box-shadow: 0 0 0 3px #5cb0ff, 0 0 16px #5cb0ff; border-radius: 12px; animation: cgPiece .45s ease-in-out infinite alternate; }
+@keyframes cgPiece { to { box-shadow: 0 0 0 3px #bfe4ff, 0 0 24px #5cb0ff; } }
+
+/* Furia del jefe y veneno */
+.enemy.enraged:not(.charging) { filter: drop-shadow(0 0 8px #ff3a2a) saturate(1.5) hue-rotate(-12deg); }
+.enemy.enraged svg { animation-duration: .9s !important; }
+.hero.poisoned { filter: drop-shadow(0 0 6px #6aff4a) hue-rotate(40deg) saturate(1.3); }
+
+/* Botón del golpe especial */
+.spec-btn { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 8; width: 58px; height: 58px; border-radius: 50%; padding: 0; border: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff;
+  background: radial-gradient(circle, #2a1f4a 56%, transparent 58%), conic-gradient(#ffb02e calc(var(--p, 0) * 360deg), rgba(255,255,255,.14) 0);
+  box-shadow: 0 3px 0 rgba(0,0,0,.5); opacity: .9; transition: transform .15s; }
+.spec-btn .sb-ic { font-size: 20px; line-height: 1; filter: grayscale(.6); }
+.spec-btn small { font-size: 7.5px; font-weight: 1000; letter-spacing: .5px; opacity: .7; }
+.spec-btn.ready { opacity: 1; background: radial-gradient(circle, #ff7a2a 0%, #d8301a 56%, transparent 58%), conic-gradient(#ffe066, #ffb02e, #ffe066); animation: sbReady .7s ease-in-out infinite alternate; }
+.spec-btn.ready .sb-ic { filter: none; font-size: 24px; }
+.spec-btn.ready small { opacity: 1; }
+@keyframes sbReady { from { transform: translateX(-50%) scale(1); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 10px #ffb02e; } to { transform: translateX(-50%) scale(1.12); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 26px #ffd34d; } }
+.spec-btn.nope { animation: sbNope .3s; }
+@keyframes sbNope { 25% { transform: translateX(calc(-50% - 4px)); } 75% { transform: translateX(calc(-50% + 4px)); } }
+.special-fx { position: absolute; inset: 0; z-index: 9; pointer-events: none; overflow: hidden; }
+.sx-flash { position: absolute; inset: 0; background: radial-gradient(circle at 70% 50%, #fff, rgba(255,210,90,.6) 30%, transparent 70%); animation: sxFlash .5s ease-out forwards; }
+@keyframes sxFlash { from { opacity: 1; } to { opacity: 0; } }
+.sx-slash { position: absolute; left: -20%; right: -20%; top: 50%; height: 10px; border-radius: 50%; background: linear-gradient(90deg, transparent, #fff 30%, #ffe066 50%, #fff 70%, transparent); box-shadow: 0 0 22px #ffb02e; transform-origin: center; }
+.sx-slash.a { transform: rotate(-22deg) scaleX(0); animation: sxSlash .45s .05s ease-out forwards; }
+.sx-slash.b { transform: rotate(18deg) scaleX(0); animation: sxSlash .45s .2s ease-out forwards; }
+@keyframes sxSlash { 40% { transform: rotate(var(--r, -22deg)) scaleX(1); opacity: 1; } to { transform: rotate(var(--r, -22deg)) scaleX(1.1); opacity: 0; } }
+.sx-slash.b { --r: 18deg; }
+.special-fx b { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 24px; font-weight: 1000; color: #fff; white-space: nowrap; text-shadow: 0 3px 0 #8a2a00, 0 0 18px #ffb02e; animation: rbText 1.1s ease-out forwards; }
+
+/* Textos grandes de la pelea */
+.float.big-word { font-size: 22px; font-weight: 1000; white-space: nowrap; text-shadow: 0 3px 0 #000, 0 0 12px currentColor; animation-duration: 1.1s; }
+.float.block { color: #8fd0ff; }
+.float.cut { color: #ffe066; }
+.float.smash { color: #ff5a4a; }
+.float.rage { color: #ff3a2a; }
+.float.trick { font-size: 13px; font-weight: 900; color: #fff; background: rgba(0,0,0,.6); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.float.chain { font-size: 16px; font-weight: 1000; white-space: nowrap; color: #ffe066; text-shadow: 0 2px 0 #000, 0 0 10px #ffb02e; }
+.float.chain.mix { color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px #ff5ad8, 0 0 16px #4fb0ff; }
+.float.chain.bomb { color: #ff8a5a; font-size: 20px; }
+.float.special { font-size: 34px; }
+
+/* Piezas especiales y trabadas */
+.pc.sp-bomb svg, .pc.sp-star svg, .pc.sp-chest svg { filter: drop-shadow(0 0 6px rgba(255,220,120,.6)); }
+.pc.sp-star { animation: spStar 1.6s ease-in-out infinite; }
+@keyframes spStar { 50% { filter: brightness(1.25); } }
+.pc.webbed::after, .pc.iced::after, .pc.burning::after { content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none; display: grid; place-items: center; font-size: 26px; }
+.pc.webbed::after { content: '🕸️'; background: rgba(230,230,240,.35); }
+.pc.iced::after { content: '❄️'; background: rgba(150,210,255,.55); box-shadow: inset 0 0 0 2px #cfefff; }
+.pc.burning::after { content: '🔥'; font-size: 22px; place-items: end end; padding: 0 2px 2px 0; background: rgba(255,90,20,.25); box-shadow: inset 0 0 0 2px #ff6a1a, 0 0 12px #ff6a1a; animation: burnFlick .25s ease-in-out infinite alternate; }
+@keyframes burnFlick { to { box-shadow: inset 0 0 0 2px #ffb02e, 0 0 18px #ff3a1a; } }
+.pc.webbed, .pc.iced { filter: saturate(.6); }
+
+/* Truco del jefe en la ficha del nivel */
+.li-trick { font-size: 10.5px; color: #ffd9c0; margin-top: 3px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.li-trick b { color: #fff; }
