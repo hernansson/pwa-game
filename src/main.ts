@@ -445,6 +445,19 @@ function renderScreen() {
     combo.textContent = comboText;
     if (comboText) restartAnim(combo, 'pop');
   }
+  const tier = run.result ? 0 : Math.min(4, Math.floor(run.combo / 10));
+  if (tier !== frenzyTier) {
+    const board = $('#board');
+    for (let t = 1; t <= 4; t++) {
+      board.classList.toggle('fz' + t, t === tier);
+      combo.classList.toggle('fz' + t, t === tier);
+    }
+    if (tier > frenzyTier) {
+      restartAnim(board, 'zap');
+      if (navigator.vibrate) navigator.vibrate(tier >= 3 ? [30, 40, 30] : 25);
+    }
+    frenzyTier = tier;
+  }
   $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
   $('#hero').classList.toggle('down', run.result === 'lose');
   const boosted = run.boost > 0 && !run.result;
@@ -508,6 +521,7 @@ function toast(text: string) {
   setTimeout(() => el.remove(), 2600);
 }
 
+let frenzyTier = 0;
 function restartAnim(el: HTMLElement, cls: string) {
   el.classList.remove(cls);
   void el.offsetWidth;
@@ -838,6 +852,7 @@ const TAB_TITLES: Record<Tab, [string, string]> = {
 };
 
 function openSheet(tab: Tab) {
+  if (tab === 'heroe' && openTab !== 'heroe') heroView = 'resumen';
   openTab = tab;
   $('#sheet').hidden = false;
   $('#sheet').dataset.tab = tab;
@@ -905,20 +920,40 @@ function section(title: string, sub: string, inner: string): string {
   return `<section class="sec"><div class="sec-head"><b>${title}</b><small>${sub}</small></div>${inner}</section>`;
 }
 
+let heroView: 'resumen' | 'entrenar' = 'resumen';
+
 function renderHeroSheet() {
   const s = game.s;
-  const dmg = Math.round((damageMultiplier(s) * (1 + game.mods.dmg) - 1) * 100);
-  const crit = Math.round(critChance(s) * 100);
-  const skin = armById(s.arms.skin)!;
-  const skinLvl = s.arsenal[skin.id].lvl;
-  const talents = UPGRADES.map(
-    (u) => `<button class="upgrade" data-up="${u.id}">
+  const canTrain = UPGRADES.some((u) => game.canBuy(u.id));
+  const seg = `<div class="seg hero-seg">
+    <button data-hero-view="resumen" class="${heroView === 'resumen' ? 'on' : ''}"><span>🧝</span>Resumen</button>
+    <button data-hero-view="entrenar" class="${heroView === 'entrenar' ? 'on' : ''}"><span>🏋️</span>Entrenar${canTrain ? '<i class="dot"></i>' : ''}</button>
+  </div>`;
+  if (heroView === 'entrenar') {
+    const talents = UPGRADES.map(
+      (u) => `<button class="upgrade" data-up="${u.id}">
       <span class="u-ico">${u.icon}</span>
       <span class="u-main"><b>${u.name} <small data-lvl></small></b><span class="u-desc" data-desc></span></span>
       <span class="u-cost" data-cost></span>
     </button>`,
-  ).join('');
-  $('#sheet-body').innerHTML = `
+    ).join('');
+    $('#sheet-body').innerHTML = `${seg}
+      <div class="train-head"><span>Mejoras permanentes que se pagan con oro.</span><b>🪙 ${fmt(s.gold)}</b></div>
+      ${talents}`;
+    updateTalents();
+    return;
+  }
+  const dmg = Math.round((damageMultiplier(s) * (1 + game.mods.dmg) - 1) * 100);
+  const crit = Math.round(critChance(s) * 100);
+  const skin = armById(s.arms.skin)!;
+  const skinLvl = s.arsenal[skin.id].lvl;
+  const skills = activeSkillList();
+  const slot = (f: ArmFam) => {
+    const d = armById(s.arms[f])!;
+    const lv = s.arsenal[d.id].lvl;
+    return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d)}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
+  };
+  $('#sheet-body').innerHTML = `${seg}
     <div class="hero-card" style="--rar:${RARITY_COLORS[skin.rarity]}">
       <div class="hero-big">${myHero()}</div>
       <div class="hero-stats">
@@ -932,17 +967,17 @@ function renderHeroSheet() {
       <span><small>Daño</small><b>⚔️ +${dmg}%</b></span>
       <span><small>Crítico</small><b>🎯 ${crit}%</b></span>
     </div>
-    ${section('Equipado', 'toca para verlo en el Arsenal', `<div class="gear-row">${(['espada', 'escudo', 'rayo', 'skin'] as ArmFam[])
-      .map((f) => {
-        const d = armById(s.arms[f])!;
-        const lv = s.arsenal[d.id].lvl;
-        return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d)}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
-      })
-      .join('')}</div>`)}
-    ${section('Estadísticas', 'todo lo que tienes activo', `<div class="stat-grid">${heroStats().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`)}
-    ${section('Habilidades activas', 'de lo que tienes equipado', activeSkills())}
-    ${section('Entrenamiento', 'mejoras permanentes con oro', talents)}`;
-  updateTalents();
+    ${section('Equipo', 'toca para cambiarlo', `<div class="gear-row">${(['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]).map(slot).join('')}</div>
+      <div class="companion soon"><span>🐾</span><b>Compañero</b><small>Muy pronto</small></div>`)}
+    <details class="fold">
+      <summary><span>✨ Habilidades activas</span><b>${skills.length}</b></summary>
+      ${skills.length ? `<ul class="active-skills">${skills.join('')}</ul>` : `<p class="note">Todavía ninguna. Sube tus armas y tu skin al nivel 5 en el Arsenal para desbloquear la primera habilidad de cada una.</p>`}
+    </details>
+    <details class="fold">
+      <summary><span>📊 Todas las estadísticas</span><b>${heroStats().length}</b></summary>
+      <div class="stat-grid">${heroStats().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
+    </details>
+    ${canTrain ? `<button class="train-cta" data-hero-view="entrenar">🏋️ Tienes mejoras para entrenar <b>Entrenar →</b></button>` : ''}`;
 }
 
 /** Resumen de números del héroe: base + talentos + Arsenal. */
@@ -965,18 +1000,19 @@ function heroStats(): [string, string][] {
 }
 
 /** Habilidades desbloqueadas de todo lo equipado. */
-function activeSkills(): string {
+function activeSkillList(): string[] {
   const items: string[] = [];
   for (const f of ['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]) {
     const d = armById(game.s.arms[f])!;
     const lv = game.s.arsenal[d.id].lvl;
     for (const sk of d.skills) if (lv >= sk.at) items.push(`<li><span class="t-icon">${armIcon(d)}</span><span>${sk.text}</span><small>${d.name}</small></li>`);
   }
-  if (!items.length) return `<p class="note">Todavía ninguna. Sube tus armas y tu skin al nivel 5 en el Arsenal para desbloquear la primera habilidad de cada una.</p>`;
-  return `<ul class="active-skills">${items.join('')}</ul>`;
+  return items;
 }
 
 function updateTalents() {
+  const gold = $('#sheet-body').querySelector('.train-head b');
+  if (gold) gold.textContent = `🪙 ${fmt(game.s.gold)}`;
   $('#sheet-body')
     .querySelectorAll<HTMLElement>('.upgrade')
     .forEach((el) => {
@@ -1536,6 +1572,13 @@ $('#sheet-body').addEventListener('click', (ev) => {
       sync('buy', { id: up.dataset.up });
     }
     updateTalents();
+    return;
+  }
+  const hv = t.closest('[data-hero-view]') as HTMLElement | null;
+  if (hv) {
+    heroView = hv.dataset.heroView as typeof heroView;
+    renderHeroSheet();
+    $('#sheet-body').scrollTop = 0;
     return;
   }
   if (armAction(t, false)) return;
