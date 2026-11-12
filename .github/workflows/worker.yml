@@ -16,8 +16,6 @@ concurrency: worker-deploy
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Los secretos están guardados en el entorno github-pages del repositorio.
-    environment: github-pages
     env:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       WORKER: forja-api
