@@ -1331,3 +1331,12 @@ button.res { cursor: pointer; }
 @keyframes skTwinkle { 0%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
 @keyframes skLight { 50% { opacity: .65; } }
 @keyframes skPed { 50% { box-shadow: 0 0 34px color-mix(in srgb, var(--rar) 80%, transparent); } }
+/* ---- Pelea más compacta: sin leyenda, el combo va abajo del escenario y el tablero se ajusta al espacio que queda ---- */
+#stage .combo-hud { top: auto; bottom: 4px; width: min(60%, 260px); z-index: 8; }
+#app.in-run .stage { height: 26dvh; min-height: 172px; max-height: 240px; }
+#app.in-run .lower { padding-top: 8px; }
+.forge { container-type: size; }
+.pboard { width: min(100cqw, 420px, calc((100cqh - 2px) * var(--cols) / var(--rows))); }
+.forge .hint { margin: 6px 0 0; font-size: 12px; }
+.forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 46px) * var(--cols) / var(--rows))); }
+@media (max-height: 640px) { .forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 2px) * var(--cols) / var(--rows))); } }

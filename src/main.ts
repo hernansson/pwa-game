@@ -21,7 +21,7 @@ import {
   goldPackAmount,
 } from './balance';
 import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
-import { BASE_COLS, BASE_ROWS, Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
+import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
 import {
@@ -78,7 +78,6 @@ function applyServer(state: GameState) {
   game.setState(s);
   save(game.s);
   lobbyKey = heroKeyCache = enemyKeyCache = '';
-  renderLegend();
   refreshSheet();
 }
 
@@ -199,13 +198,12 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="combo" id="combo"></div>
       <div class="boost-label" id="boost-label"></div>
+      <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
     </div>
   </section>
 
   <section class="lower" id="lower" hidden>
     <div class="forge" id="forge" hidden>
-      <div class="legend" id="legend"></div>
-      <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
       </div>
@@ -657,7 +655,6 @@ function renderScreen() {
   const hud = $('#combo-hud');
   const on = run.combo >= 2 && !run.result;
   if (hud.hidden === on) hud.hidden = !on;
-  $('#legend').classList.toggle('dim', on);
   if (on) {
     const n = $('#ch-n');
     const txt = 'x' + run.combo;
@@ -1103,18 +1100,8 @@ const pieceEls = new Map<number, HTMLElement>();
 const fromTop = new Set<number>();
 let playedMerges = 0;
 
-function renderLegend() {
-  $('#legend').innerHTML = FAMILIES.map(
-    (f) => `<span title="${FAMILY_INFO[f].effect}">${pieceSvg(f, 1, FAMILY_INFO[f].color, boardShape(f))}<small>${legendWord(f)}</small></span>`,
-  ).join('');
-}
-renderLegend();
-function legendWord(f: Family) {
-  return { espada: 'daño', escudo: 'escudo', pocion: 'cura', rayo: 'poder' }[f];
-}
 
 function resetBoardView() {
-  renderLegend();
   resetPower();
   pieceEls.forEach((el) => el.remove());
   pieceEls.clear();
@@ -2054,8 +2041,7 @@ function armAction(t: HTMLElement, inModal: boolean): boolean {
   if (ok) {
     sync(upEl ? 'arm_up' : 'arm_equip', { id });
     lobbyKey = heroKeyCache = '';
-    renderLegend();
-    save(game.s);
+      save(game.s);
     if (inModal) showArm(id);
     refreshSheet();
   }
