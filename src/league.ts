@@ -44,8 +44,8 @@ function rivals(week: number, division: number): Rival[] {
   const scale = Math.pow(1.7, division);
   const names = [...NAMES].sort(() => r() - 0.5).slice(0, LEAGUE_SIZE - 1);
   return names.map((name) => {
-    // Distribución log-uniforme entre 4.000 y 140.000 puntos semanales (en Bronce).
-    const target = Math.round(4000 * Math.pow(35, r()) * scale);
+    // Distribución log-uniforme entre 2.000 y 70.000 puntos semanales (en Bronce).
+    const target = Math.round(2000 * Math.pow(35, r()) * scale);
     const skinRoll = r();
     const skin = skinRoll > 0.93 ? 'cyber' : skinRoll > 0.75 ? 'samurai' : 'caballero';
     return {
@@ -69,7 +69,7 @@ export function standings(s: GameState, now = Date.now()): Rival[] {
   }));
   list.push({
     name: s.playerName || 'Tú',
-    skin: s.skin,
+    skin: 'equipo',
     weapon: 0,
     target: 0,
     curve: 1,

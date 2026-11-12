@@ -1,46 +1,124 @@
 // Todas las fórmulas de equilibrio en un solo lugar, para poder ajustarlas fácil.
 
-export const BOARD_SIZE = 16; // tablero 4x4
-export const BOSS_EVERY = 10;
-export const BOSS_TIME = 25; // segundos para vencer al jefe
-export const OFFLINE_CAP_HOURS = 8;
-export const OFFLINE_RATE = 0.5; // lo ganado sin jugar rinde la mitad
-export const PRESTIGE_MIN_WAVE = 30;
+export const WAVES_PER_LEVEL = 3;
+export const ENEMIES_PER_WAVE = 3;
+export const LEVELS_PER_WORLD = 10;
+export const ENERGY_MAX = 30;
+export const ENERGY_COST = 5;
+/** Gemas para llenar la energía. */
+export const REFILL_GEMS = 30;
+export const ENERGY_REGEN_SECONDS = 5 * 60; // 1 de energía cada 5 minutos
+export const BASE_DAMAGE = 7;
 
-export function weaponDamage(level: number): number {
-  return 4 * Math.pow(2.05, level - 1);
+/** Las piezas de los mundos avanzados pegan más fuerte. */
+export function levelPower(level: number): number {
+  return Math.pow(1.2, level - 1);
 }
 
-export function enemyHp(wave: number): number {
-  const base = 8 * Math.pow(1.16, wave - 1);
-  return isBoss(wave) ? base * 7 : base;
+/** Los primeros niveles son más suaves, para aprender a jugar. */
+function earlyEase(level: number): number {
+  return Math.min(1, 0.55 + 0.15 * (level - 1));
 }
 
-export function enemyGold(wave: number): number {
-  const base = 1 + 0.9 * Math.pow(1.145, wave - 1);
-  return isBoss(wave) ? base * 12 : base;
+/**
+ * Crecimiento por nivel. Hasta el nivel LATE.from los enemigos crecen rápido (el enganche inicial);
+ * después crecen más despacio para que el avance siga siendo constante en mundos lejanos.
+ */
+export const LATE = { from: 30, hp: 1.24, hit: 1.13, gold: 1.24 };
+function grow(level: number, early: number, late: number): number {
+  const a = Math.min(level, LATE.from) - 1;
+  const b = Math.max(0, level - LATE.from);
+  return Math.pow(early, a) * Math.pow(late, b);
 }
 
-export function isBoss(wave: number): boolean {
-  return wave % BOSS_EVERY === 0;
+export function enemyHp(level: number, boss: boolean): number {
+  const base = 140 * grow(level, 1.33, LATE.hp) * earlyEase(level);
+  return boss ? base * 4 : base;
 }
 
-/** Enemigos que hay que vencer para pasar de oleada (los jefes son uno solo). */
-export function killsPerWave(wave: number): number {
-  return isBoss(wave) ? 1 : 5;
+/** Daño de cada golpe del enemigo. */
+export function enemyHit(level: number, boss: boolean): number {
+  const base = 14 * grow(level, 1.21, LATE.hit) * earlyEase(level);
+  return boss ? base * 1.6 : base;
 }
 
-export function leaguePointsForKill(wave: number): number {
-  return isBoss(wave) ? 25 : 1 + Math.floor(wave / 25);
+/** Segundos entre golpes del enemigo. */
+export function enemyAttackSeconds(boss: boolean): number {
+  return boss ? 2.4 : 2.8;
 }
 
-export function soulsForPrestige(maxWave: number): number {
-  if (maxWave < PRESTIGE_MIN_WAVE) return 0;
-  return Math.floor(Math.pow(maxWave / 10, 1.6));
+export function enemyGold(level: number, boss: boolean): number {
+  const base = 3 * grow(level, 1.33, LATE.gold);
+  return boss ? base * 10 : base;
 }
 
-export function soulMultiplier(souls: number): number {
-  return 1 + souls * 0.1;
+/** Fuerza de una fusión según el nivel que resulta y cuántas piezas juntó. */
+export function pieceValue(lvl: number, size: number): number {
+  return Math.pow(2, lvl - 2) * (1 + 0.5 * (size - 2));
+}
+
+/**
+ * El potenciador de un rayo siempre dura lo mismo: alcanza para 3 o 4 fusiones
+ * (un jugador tarda entre 0,5 y 0,8 s por fusión). El nivel solo sube cuánto multiplica.
+ */
+export const BOOST_SECONDS = 2.5;
+export function boostSeconds(_lvl: number): number {
+  return BOOST_SECONDS;
+}
+
+/** Cuánto multiplica el daño el potenciador: x1,3 en nivel 2, x3,4 en nivel 9, x4 en nivel 10. */
+export function boostMultiplier(lvl: number): number {
+  return 1 + 0.3 * (lvl - 1);
+}
+
+/** Bonus de daño de la mejor espada armada en el nivel: +10% por nivel. */
+export function swordBonus(lvl = 1): number {
+  return 1 + 0.1 * (lvl - 1);
+}
+
+/** El mejor escudo armado en el nivel reduce cada golpe del enemigo: 5% por nivel (45% en nivel 10). */
+export function shieldReduction(lvl = 1): number {
+  return 0.05 * (lvl - 1);
+}
+
+/** Segundos que tienes entre fusiones para no perder el combo. */
+export const COMBO_WINDOW = 2.5;
+
+/** Probabilidad base de crítico; el talento Crítico suma 0,5% por nivel. */
+export const BASE_CRIT = 0.05;
+
+/**
+ * Topes de los stats en porcentaje. Daño, vida, escudo y potencia no tienen tope porque los
+ * enemigos crecen sin parar; lo que se expresa como probabilidad, tiempo o reducción sí,
+ * para que nadie llegue a 100% de crítico o a no recibir daño.
+ */
+export const CAPS = {
+  crit: 0.5, // probabilidad de crítico total
+  critMult: 1, // golpe crítico máximo x3
+  reduce: 0.6, // daño recibido: como mucho -60% sumando escudo fusionado y Arsenal
+  combo: 1.5, // tiempo extra de combo: hasta 4 s
+  boostSec: 2, // duración extra del potenciador: hasta 4,5 s
+  startShield: 0.4, // escudo al empezar: hasta 40% de la vida
+};
+
+/** Probabilidad de que una pieza nueva llegue ya en nivel 2 sin el pase (siempre 0). */
+export const LEVEL_TWO_CHANCE = 0;
+
+/** Pase mensual: dura 30 días y hace que parte de las piezas nuevas lleguen en nivel 2 o 3. */
+export const PASS = { days: 30, lvl2: 0.3, lvl3: 0.1 };
+
+export function firstClearGems(level: number): number {
+  return level % LEVELS_PER_WORLD === 0 ? 30 : 5;
+}
+
+export function leaguePointsForClear(level: number, stars: number): number {
+  return Math.round((50 + level * 15) * (0.5 + stars * 0.25));
+}
+
+export function starsFor(hpLeftRatio: number): number {
+  if (hpLeftRatio >= 0.6) return 3;
+  if (hpLeftRatio >= 0.3) return 2;
+  return 1;
 }
 
 export interface UpgradeDef {
@@ -53,53 +131,35 @@ export interface UpgradeDef {
   icon: string;
 }
 
-export type UpgradeId = 'fuerza' | 'velocidad' | 'forja' | 'calidad' | 'codicia';
+export type UpgradeId = 'fuerza' | 'vida' | 'critico';
 
 export const UPGRADES: UpgradeDef[] = [
   {
     id: 'fuerza',
     name: 'Fuerza',
     desc: (l) => `+15% de daño por nivel (ahora +${l * 15}%)`,
-    baseCost: 10,
-    growth: 1.45,
+    baseCost: 15,
+    growth: 1.5,
     max: 999,
     icon: '💪',
   },
   {
-    id: 'velocidad',
-    name: 'Velocidad',
-    desc: (l) => `+8% de velocidad de ataque (ahora +${l * 8}%)`,
-    baseCost: 30,
-    growth: 1.75,
-    max: 25,
-    icon: '⚡',
-  },
-  {
-    id: 'forja',
-    name: 'Forja',
-    desc: (l) => `Cae un arma cada ${forgeInterval(l).toFixed(1)} s`,
-    baseCost: 40,
-    growth: 1.8,
-    max: 20,
-    icon: '🔨',
-  },
-  {
-    id: 'calidad',
-    name: 'Calidad',
-    desc: (l) => `Las armas nuevas salen de nivel ${l + 1}`,
-    baseCost: 400,
-    growth: 7,
-    max: 15,
-    icon: '💎',
-  },
-  {
-    id: 'codicia',
-    name: 'Codicia',
-    desc: (l) => `+20% de oro (ahora +${l * 20}%)`,
-    baseCost: 25,
+    id: 'vida',
+    name: 'Vida',
+    desc: (l) => `Vida máxima ${Math.round(heroMaxHp(l))}`,
+    baseCost: 15,
     growth: 1.5,
     max: 999,
-    icon: '🪙',
+    icon: '❤️',
+  },
+  {
+    id: 'critico',
+    name: 'Crítico',
+    desc: (l) => `+0,5% de probabilidad de crítico por nivel, hasta +10% (ahora +${(l * 0.5).toString().replace('.', ',')}%)`,
+    baseCost: 50,
+    growth: 1.8,
+    max: 20,
+    icon: '🎯',
   },
 ];
 
@@ -107,10 +167,109 @@ export function upgradeCost(def: UpgradeDef, lvl: number): number {
   return Math.ceil(def.baseCost * Math.pow(def.growth, lvl));
 }
 
-export function forgeInterval(forgeLvl: number): number {
-  return 6 * Math.pow(0.9, forgeLvl);
+export function heroMaxHp(vidaLvl: number): number {
+  return 100 * Math.pow(1.18, vidaLvl);
 }
 
-export function attacksPerSecond(speedLvl: number): number {
-  return 1.2 * (1 + speedLvl * 0.08);
+export function comboMultiplier(combo: number): number {
+  return 1 + Math.min(combo, 20) * 0.1;
+}
+
+// ---------- Tienda: gemas, oro y precios ----------
+// Referencia: 100 gemas ≈ US$ 1 (paquete de 4,99). Los paquetes grandes dan un poco más por dólar.
+// Con eso: un cofre de armas (40 💠) ≈ US$ 0,40, una recarga de energía (30 💠) ≈ US$ 0,30,
+// y el pase mensual (US$ 4,99) vale lo mismo que 500 gemas.
+
+export const GEM_PACKS = [
+  { gems: 80, usd: 0.99 },
+  { gems: 500, usd: 4.99, tag: 'Popular' },
+  { gems: 1200, usd: 9.99, tag: '+20%' },
+  { gems: 2600, usd: 19.99, tag: '+30%' },
+  { gems: 7000, usd: 49.99, tag: 'Mejor precio' },
+];
+
+/** Precio en gemas de abrir `count` cofres (10 cuestan como 9). */
+export function chestPrice(gems: number, count: number): number {
+  return count === 10 ? gems * 9 : gems * count;
+}
+
+/** Oro que da superar una vez el nivel (todas las oleadas y el jefe). */
+export function levelGold(level: number): number {
+  return enemyGold(level, false) * ENEMIES_PER_WAVE * WAVES_PER_LEVEL + enemyGold(level, true);
+}
+
+/**
+ * Paquetes de oro. Se miden en "niveles de oro" del nivel donde estás: una recarga de energía (30 💠)
+ * da para 6 niveles, así que el oro sale un poco mejor que jugar esos niveles (pero sin fragmentos ni avance).
+ */
+export const GOLD_PACKS = [
+  { gems: 40, levels: 10 },
+  { gems: 180, levels: 50, tag: '+12%' },
+  { gems: 700, levels: 220, tag: '+26%' },
+];
+
+export function goldPackAmount(pack: number, level: number): number {
+  const p = GOLD_PACKS[pack];
+  if (!p) return 0;
+  const raw = p.levels * levelGold(Math.max(1, level));
+  const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+  return Math.round(raw / mag) * mag; // números redondos
+}
+
+// ---------- Gemas jugando: premio diario y misiones diarias ----------
+// Un jugador constante junta ~80 💠 por día (más las de primeras victorias): unas 2.400 por mes,
+// que alcanzan para ~45 cofres de skins. Así la legendaria se consigue jugando en 1 o 2 meses,
+// y pagar solo la acelera.
+
+/** Día de juego: cambia a las 00:00 de Argentina (UTC-3). */
+export function dayNumber(now = Date.now()): number {
+  return Math.floor((now - 3 * 3600_000) / 86400_000);
+}
+
+/** Premio por entrar cada día; el séptimo día seguido es el grande y después vuelve a empezar. */
+export const LOGIN_GEMS = [10, 10, 15, 15, 20, 20, 60];
+
+export type MissionStat = 'clears' | 'merges' | 'combo' | 'kills' | 'chests';
+export interface Mission {
+  id: string;
+  stat: MissionStat;
+  goal: number;
+  gems: number;
+  text: string;
+  icon: string;
+}
+export const DAILY_MISSIONS: Mission[] = [
+  { id: 'clears', stat: 'clears', goal: 3, gems: 10, text: 'Supera 3 niveles', icon: '🏁' },
+  { id: 'kills', stat: 'kills', goal: 25, gems: 10, text: 'Vence 25 enemigos', icon: '💀' },
+  { id: 'merges', stat: 'merges', goal: 150, gems: 10, text: 'Junta 150 piezas', icon: '🧩' },
+  { id: 'combo', stat: 'combo', goal: 10, gems: 10, text: 'Llega a un combo x10', icon: '🔥' },
+  { id: 'chests', stat: 'chests', goal: 1, gems: 5, text: 'Abre un cofre (el gratis vale)', icon: '🎁' },
+];
+/** Extra por completar todas las misiones del día. */
+export const DAILY_BONUS = 20;
+
+// ---------- Jefe Mundial ----------
+// Un jefe por día, el mismo para todos. 3 intentos de 60 s; cuenta el daño sumado de los intentos.
+// Todos pelean en el mismo nivel, así gana quien tiene mejor héroe y mejor mano, no quien llegó más lejos.
+export const WORLD_BOSS = { level: 30, tries: 3 };
+/** Gemas por el puesto del día anterior (se cobran al día siguiente). */
+export function worldBossGems(rank: number): number {
+  if (rank <= 0) return 0;
+  if (rank === 1) return 200;
+  if (rank === 2) return 150;
+  if (rank === 3) return 120;
+  if (rank <= 10) return 80;
+  return 30;
+}
+export const WORLD_BOSSES = [
+  { name: 'Titán de Magma', color: '#e8542a', horns: true, spikes: true, eyes: '#ffe066' },
+  { name: 'Kraken Abisal', color: '#3a7bd8', horns: false, spikes: true, eyes: '#7fffd4' },
+  { name: 'Hidra de Escarcha', color: '#7fd8ff', horns: true, spikes: false, eyes: '#ffffff' },
+  { name: 'Gólem Ancestral', color: '#8a9a5b', horns: false, spikes: false, eyes: '#ff9a3d' },
+  { name: 'Dragón Sombrío', color: '#5a3a8a', horns: true, spikes: true, eyes: '#ff3b6a' },
+  { name: 'Coloso de Tormenta', color: '#c9c35a', horns: true, spikes: false, eyes: '#9fe8ff' },
+  { name: 'Behemot Carmesí', color: '#c2263a', horns: true, spikes: true, eyes: '#ffd34d' },
+];
+export function worldBossOf(day: number) {
+  return WORLD_BOSSES[((day % WORLD_BOSSES.length) + WORLD_BOSSES.length) % WORLD_BOSSES.length];
 }
