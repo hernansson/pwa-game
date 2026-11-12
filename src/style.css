@@ -1300,3 +1300,15 @@ button.res { cursor: pointer; }
 @keyframes lgFloat { 50% { transform: translateY(-6px); } }
 @keyframes lgSpin { to { transform: rotate(360deg); } }
 .sc-art.legend.escudo svg.lg-art { width: 86%; height: 86%; margin: 0; }
+/* ---- Caballero Fénix en guardia: respira y se mueve mientras espera pelear ---- */
+.fenix-hero .fx-body { transform-box: view-box; transform-origin: 52px 100px; animation: fxBreath 1.7s ease-in-out infinite; }
+@keyframes fxBreath { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(1.8px) scale(1.012, .982); } }
+.fenix-hero .fx-head { transform-box: view-box; transform-origin: 52px 50px; animation: fxHead 1.7s ease-in-out infinite; animation-delay: -.2s; }
+@keyframes fxHead { 0%, 100% { transform: rotate(0deg); } 50% { transform: translateY(.8px) rotate(-2.5deg); } }
+.fenix-hero .fx-armidle { transform-box: view-box; transform-origin: 64px 55px; animation: fxArm 1.7s ease-in-out infinite; animation-delay: -.35s; }
+@keyframes fxArm { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-7deg) translateY(1px); } }
+.fenix-hero .fx-shidle { animation: fxShield 1.7s ease-in-out infinite; animation-delay: -.5s; }
+@keyframes fxShield { 50% { transform: translate(1.2px, -1.8px); } }
+.fenix-hero .fx-capewrap { transform-box: view-box; transform-origin: 56px 46px; animation: fxCape 2.3s ease-in-out infinite; }
+@keyframes fxCape { 50% { transform: skewX(4deg) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .fenix-hero .fx-body, .fenix-hero .fx-head, .fenix-hero .fx-armidle, .fenix-hero .fx-shidle, .fenix-hero .fx-capewrap { animation: none; } }

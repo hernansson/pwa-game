@@ -188,63 +188,71 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
   const o = '#3a0d05';
   const gold = skin.armor;
   const red = skin.armorDark;
+  // Proporción chibi (cabeza grande, piernas cortas), girado a tres cuartos mirando a la derecha y en guardia:
+  // el cuerpo respira, la cabeza acompaña, la espada se balancea y el escudo sube y baja mientras espera pelear.
   return `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero" aria-hidden="true">
     ${back}
-    <ellipse cx="50" cy="104" rx="28" ry="5" fill="#000" opacity=".3"/>
-    ${fenixWings()}
-    <path class="fx-cape" d="M40 44 Q22 58 17 98 Q24 93 29 98 Q35 91 41 97 Q47 91 53 96 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
-    <path class="fx-fl f2" d="M20 96 Q22 88 26 92 Q28 84 33 90 Q36 83 40 89 Q44 84 48 90 L52 95 Q46 90 41 96 Q35 90 29 97 Q24 92 20 96Z" fill="#ffd34d" opacity=".85"/>
-    <path d="M40 48 Q27 62 25 92 Q30 90 33 93 Q36 70 46 50Z" fill="#000" opacity=".25"/>
-    <path d="M42 80 L48 80 L48 95 L41 95Z M53 80 L59 80 L61 95 L54 95Z" fill="${red}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M40 86 L44.5 81 L49 86 L44.5 90Z M52 86 L56.5 81 L61 86 L56.5 90Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
-    <path d="M37 95 L49 95 L50 103 L34 103 Q34 98 37 95Z M53 95 L64 95 Q68 98 69 103 L53 103Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M34 103 L50 103 M53 103 L69 103" stroke="${red}" stroke-width="2"/>
-    <path d="M36 73 L49 73 L48 87 L38 85Z M51 73 L64 73 L62 85 L52 87Z" fill="${gold}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
-    <path d="M37 78 L48.6 79 M51.4 79 L63 78" stroke="${red}" stroke-width="1.6"/>
-    <path d="M45 74 L55 74 L55 88 L52.5 93 L50 88.5 L47.5 93 L45 88Z" fill="${red}" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
-    <path d="M50 77 Q53 81 50 85 Q47 81 50 77Z" fill="#ffd34d"/>
-    <path d="M37 46 Q50 41 63 46 L61 73 Q50 77 39 73Z" fill="${red}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="M41 49 Q50 45 59 49 L57.5 70 Q50 73 42.5 70Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
-    <g class="fx-sun"><circle cx="50" cy="58" r="5.2" fill="#ff5a1f" stroke="${o}" stroke-width="1.2"/>
-      ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path d="M50 50.5 L51.3 53 L48.7 53Z" fill="#fff1a8" transform="rotate(${a} 50 58)"/>`).join('')}
-      <circle cx="50" cy="58" r="2.4" fill="#fff1a8"/></g>
-    <path d="M42 49 Q45 46.5 49 46" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
-    <path d="M38 71 L62 71 L62 75 L38 75Z" fill="#5a1a0a" stroke="${o}" stroke-width="1.4"/>
-    <path d="M30 46 Q24 38 26 30 Q30 37 34 39 Q32 32 36 27 Q37 35 41 38Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M28 51 Q29 40 40 39 Q46 41 46 48 Q37 46 31 55Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M30.5 54 Q37 46 46 48" stroke="${red}" stroke-width="2.2" fill="none"/>
-    <path d="M32 46 Q35 42 41 41.5" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
-    <g class="fx-helm">
-      <g class="fx-crest">
-        <path class="fx-fl f1" d="M50 -10 Q59 0 55 10 L45 10 Q41 0 50 -10Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.1"/>
-        <path class="fx-fl f2" d="M43 -3 Q48 3 47 10 L40 11 Q38 3 43 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
-        <path class="fx-fl f3" d="M57 -3 Q62 3 60 11 L53 10 Q52 3 57 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
-        <path class="fx-fl f2" d="M50 -3 Q53 3 51.5 9 L48.5 9 Q47 3 50 -3Z" fill="#fff1a8"/>
-      </g>
-      <path class="fx-hw l" d="M35 25 Q24 20 19 6 Q26 12 30 13 Q25 6 26 -2 Q32 8 36 13 Q34 6 37 1 Q39 12 40 18Z" fill="${gold}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
-      <path class="fx-hw r" d="M65 25 Q76 20 81 6 Q74 12 70 13 Q75 6 74 -2 Q68 8 64 13 Q66 6 63 1 Q61 12 60 18Z" fill="${gold}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
-      <path d="M33 13 Q30 8 26 9 M67 13 Q70 8 74 9" stroke="${red}" stroke-width="1.3" fill="none"/>
-      <path d="M33 27 Q34 12 50 7 Q66 12 67 27 L68 38 L59 46 L50 49 L41 46 L32 38Z" fill="${gold}" stroke="${o}" stroke-width="2.3" stroke-linejoin="round"/>
-      <path d="M60 14 Q66 20 66.5 30 L66.5 38 L59 45 L56 46Z" fill="${red}" opacity=".35"/>
-      <path d="M48.6 7.6 L51.4 7.6 L51.4 28 L48.6 28Z" fill="${red}" stroke="${o}" stroke-width="1"/>
-      <path d="M37 24 Q38 14 47 11" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
-      <path d="M36 28 L64 28 L63 33 L37 33Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
-      <path d="M47.8 33 L52.2 33 L51.6 43 L48.4 43Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.3"/>
-      <path class="fx-eyes" d="M39.5 30.5 L46.5 30.5 M53.5 30.5 L60.5 30.5 M50 34.5 L50 41.5" stroke="#ffb02e" stroke-width="2.2" stroke-linecap="round"/>
-      <g fill="${red}"><circle cx="40" cy="39" r="1.1"/><circle cx="44" cy="42" r="1.1"/><circle cx="56" cy="42" r="1.1"/><circle cx="60" cy="39" r="1.1"/></g>
-      <path d="M50 14 L53 18 L50 23 L47 18Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
+    <ellipse cx="51" cy="104" rx="31" ry="5" fill="#000" opacity=".3"/>
+    <g class="fx-legs">
+      <path d="M43 85 L49.5 85 L46.5 97 L39.5 97Z" fill="#7a2414" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M36 96.5 L47 96.5 L47.5 103 L32.5 103 Q32.5 98.5 36 96.5Z" fill="#c98a1e" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M52.5 85 L59 85 L63 97 L56 97Z" fill="${red}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M55.5 90.5 L59.5 88 L63 91.5 L59.5 94.5Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M54.5 96.5 L64 96.5 Q70 98.5 72 103 L54.5 103Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M32.5 103 L47.5 103 M54.5 103 L72 103" stroke="${red}" stroke-width="2"/>
     </g>
-    ${fight.shield ? heroShield(fight.shield, fight.shieldShape ?? 0) : ''}
-    <path d="M62 43 Q64 34 72 32 Q70 38 72 41 Q75 36 80 35 Q76 41 74 46Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M56 47 Q58 38 67 39 Q74 41 73 51 Q66 46 58 50Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M58 50 Q66 46 73 51" stroke="${red}" stroke-width="2.2" fill="none"/>
-    <path d="M60 43 Q63 40.5 68 41" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
-    <g class="hero-arm">
-      <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
-      ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
-      <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
-      <path d="M65.5 58.5 L75.5 58.5" stroke="${red}" stroke-width="1.4"/>
-    </g>
+    <g class="fx-body"><g transform="translate(0 8)">
+      <g class="fx-wingwrap">${fenixWings()}</g>
+      <g class="fx-capewrap"><path d="M40 44 Q24 58 20 90 Q26 86 31 90 Q36 84 42 89 Q47 84 53 88 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+        <path class="fx-fl f2" d="M22 88 Q24 81 28 85 Q30 77 35 83 Q38 76 42 82 Q46 77 50 83 L53 87 Q47 83 42 88 Q36 83 31 89 Q26 85 22 88Z" fill="#ffd34d" opacity=".85"/>
+        <path d="M40 48 Q28 62 26 86 Q30 84 33 87 Q36 68 46 50Z" fill="#000" opacity=".25"/></g>
+      <path d="M38 73 L50 73 L49 81 L39 80Z M52 73 L65 73 L63.5 80 L53 81Z" fill="${gold}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M47 74 L57 74 L57 83 L54.5 87 L52 83.5 L49.5 87 L47 83Z" fill="${red}" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M52 76.5 Q54.5 79.5 52 82.5 Q49.5 79.5 52 76.5Z" fill="#ffd34d"/>
+      <path d="M37 46 Q51 41 64 46 L62 73 Q51 77 39 73Z" fill="${red}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M43 49 Q52 45 60 49 L58.5 70 Q52 73 44.5 70Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M38.5 48 Q41 47 43 49 L44.5 70 Q42 71.5 39.5 72Z" fill="#000" opacity=".22"/>
+      <g class="fx-sun"><circle cx="52.5" cy="58" r="5" fill="#ff5a1f" stroke="${o}" stroke-width="1.2"/>
+        ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path d="M52.5 50.8 L53.7 53.2 L51.3 53.2Z" fill="#fff1a8" transform="rotate(${a} 52.5 58)"/>`).join('')}
+        <circle cx="52.5" cy="58" r="2.3" fill="#fff1a8"/></g>
+      <path d="M45 49 Q48 46.5 52 46" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
+      <path d="M38.5 71 L62.5 71 L62.5 75 L38.5 75Z" fill="#5a1a0a" stroke="${o}" stroke-width="1.4"/>
+      <rect x="49.5" y="70" width="6" height="6" rx="1.4" fill="${gold}" stroke="${o}" stroke-width="1.2"/>
+      <path d="M30 46 Q24 38 26 30 Q30 37 34 39 Q32 32 36 27 Q37 35 41 38Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M28 51 Q29 40 40 39 Q46 41 46 48 Q37 46 31 55Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M30.5 54 Q37 46 46 48" stroke="${red}" stroke-width="2.2" fill="none"/>
+      <g class="fx-head"><g transform="translate(52 45) scale(1.17) translate(-52 -45)">
+        <g class="fx-crest">
+          <path class="fx-fl f1" d="M52 -10 Q61 0 57 10 L47 10 Q43 0 52 -10Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.1"/>
+          <path class="fx-fl f2" d="M45 -3 Q50 3 49 10 L42 11 Q40 3 45 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
+          <path class="fx-fl f3" d="M59 -3 Q64 3 62 11 L55 10 Q54 3 59 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
+          <path class="fx-fl f2" d="M52 -3 Q55 3 53.5 9 L50.5 9 Q49 3 52 -3Z" fill="#fff1a8"/>
+        </g>
+        <path d="M65 24 Q72 20 76 10 Q71 14 68 15 Q71 9 70 4 Q66 11 63 15Z" fill="#c98a1e" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+        <path class="fx-hw" d="M36 25 Q25 20 19 6 Q26 12 30 13 Q25 6 26 -2 Q32 8 36 13 Q34 6 37 1 Q39 12 41 18Z" fill="${gold}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M33 13 Q30 8 26 9" stroke="${red}" stroke-width="1.3" fill="none"/>
+        <path d="M33 28 Q34 12 52 7 Q67 11 68 27 L69 38 L62 46 L54 49 L43 46 L33 38Z" fill="${gold}" stroke="${o}" stroke-width="2.3" stroke-linejoin="round"/>
+        <path d="M35 24 Q36 32 40 44 L43 46 L33 38 L33 28Z" fill="#000" opacity=".18"/>
+        <path d="M54.6 7.4 L57.2 8.2 L57 28 L54.4 28Z" fill="${red}" stroke="${o}" stroke-width="1"/>
+        <path d="M38 23 Q39 14 48 10.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
+        <path d="M41 28 L68 27.5 L67.5 33 L42 33Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M53.6 33 L58 33 L57.5 43.5 L54.2 43.5Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.3"/>
+        <path class="fx-eyes" d="M44.5 30.5 L50 30.5 M59.5 30.3 L66 30.2 M55.8 34.5 L55.8 42" stroke="#ffb02e" stroke-width="2.2" stroke-linecap="round"/>
+        <g fill="${red}"><circle cx="46" cy="40" r="1.1"/><circle cx="50" cy="43" r="1.1"/><circle cx="61" cy="43" r="1.1"/><circle cx="65" cy="39.5" r="1.1"/></g>
+        <path d="M56 13.5 L59 17.5 L56 22.5 L53 17.5Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
+      </g></g>
+      ${fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : ''}
+      <path d="M62 43 Q64 34 72 32 Q70 38 72 41 Q75 36 80 35 Q76 41 74 46Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M56 47 Q58 38 67 39 Q74 41 73 51 Q66 46 58 50Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M58 50 Q66 46 73 51" stroke="${red}" stroke-width="2.2" fill="none"/>
+      <path d="M60 43 Q63 40.5 68 41" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
+      <g class="hero-arm"><g class="fx-armidle">
+        <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
+        ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
+        <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
+        <path d="M65.5 58.5 L75.5 58.5" stroke="${red}" stroke-width="1.4"/>
+      </g></g>
+    </g></g>
   </svg>`;
 }
 
