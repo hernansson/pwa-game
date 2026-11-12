@@ -260,13 +260,19 @@ export function armMods(def: ArmDef, lvl: number, into: Mods = { ...NO_MODS }): 
   return into;
 }
 
+/**
+ * Jugando niveles no salen legendarias en el reparto normal. Solo si ya la tienes desbloqueada,
+ * cada victoria tiene una chance chica de dar 1 fragmento (2 en los jefes de mundo).
+ */
+export const LEGEND_PLAY_CHANCE = 0.06;
+
 /** Peso de cada rareza al repartir fragmentos. */
 export const SHARD_WEIGHT: Record<Rarity, number> = { común: 50, rara: 35, épica: 15, legendaria: 5 };
 
 /** Reparte `total` fragmentos en 2 o 3 partes; cada parte va a una variante sorteada por rareza. */
-export function rollShards(total: number, fams: ArmFam[] = ['espada', 'escudo', 'rayo'], rand = Math.random): Record<string, number> {
+export function rollShards(total: number, fams: ArmFam[] = ['espada', 'escudo', 'rayo'], rand = Math.random, noLegend = false): Record<string, number> {
   const out: Record<string, number> = {};
-  const pool = ARMS.filter((a) => fams.includes(a.fam));
+  const pool = ARMS.filter((a) => fams.includes(a.fam) && !(noLegend && a.rarity === 'legendaria'));
   const parts = total >= 12 ? 3 : 2;
   let left = total;
   for (let i = 0; i < parts; i++) {

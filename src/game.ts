@@ -35,7 +35,7 @@ import {
   track,
   upgradeDef,
 } from './state';
-import { CHESTS, FENIX_SET, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, CHESTS, FENIX_SET, LEGEND_PLAY_CHANCE, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import { DAILY_BONUS, DAILY_MISSIONS, ENERGY_MAX, LOGIN_GEMS, Mission, MissionStat, dayNumber, GOLD_PACKS, LEVELS_PER_WORLD, PASS, REFILL_GEMS, chestPrice, goldPackAmount } from './balance';
 
 export interface ClearReport {
@@ -416,9 +416,14 @@ export class Game {
       // Fragmentos del Arsenal: más en la primera victoria y en los jefes de mundo.
       const worldBoss = run.level % LEVELS_PER_WORLD === 0;
       const total = (firstClear ? 10 + run.level * 2 : 3 + stars + Math.floor(run.level / 3)) * (worldBoss ? 2 : 1);
-      shards = rollShards(total, ['espada', 'escudo', 'rayo'], this.rand);
+      shards = rollShards(total, ['espada', 'escudo', 'rayo'], this.rand, true);
       // Los jefes de mundo además dejan fragmentos de skin.
-      if (worldBoss) for (const [id, n] of Object.entries(rollShards(10, ['skin'], this.rand))) shards[id] = (shards[id] ?? 0) + n;
+      if (worldBoss) for (const [id, n] of Object.entries(rollShards(10, ['skin'], this.rand, true))) shards[id] = (shards[id] ?? 0) + n;
+      // Legendarias ya desbloqueadas: muy de vez en cuando, 1 fragmento (2 en jefe de mundo).
+      for (const a of ARMS) {
+        if (a.rarity !== 'legendaria' || !this.s.arsenal[a.id]?.lvl) continue;
+        if (this.rand() < LEGEND_PLAY_CHANCE) shards[a.id] = (shards[a.id] ?? 0) + (worldBoss ? 2 : 1);
+      }
       for (const id in shards) this.s.arsenal[id].shards += shards[id];
       this.s.stars[run.level] = Math.max(this.s.stars[run.level] ?? 0, stars);
       this.s.unlocked = Math.max(this.s.unlocked, run.level + 1);
