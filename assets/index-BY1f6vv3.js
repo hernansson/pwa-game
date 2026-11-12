@@ -904,7 +904,7 @@
       <div class="pets-soon"><div class="ps-art">🐾</div><b>Mascotas</b><p>Muy pronto vas a poder tener un compañero que pelea a tu lado y suma su propia habilidad.</p><button data-interest="pets">¡Me interesa!</button></div>`;return}const t=Ne,s=ne.filter(l=>l.fam===t),a=N(es[t]??n.s.arms[t])??s[0],o=n.s.arsenal[a.id],r=o.lvl===0;Da!==a.id&&(Da=a.id,De=null);const i=Ye.find(l=>l.id===bl[t]);d("#sheet-body").innerHTML=`
     ${e}
     <div class="showcase" style="--rar:${ee[a.rarity]}">
-      ${(()=>{const l=a.rarity==="legendaria"&&De!=null&&De!==ht(o.lvl)?De:null,c=r&&l==null,u=l!=null&&(r||l>ht(o.lvl));return`<div class="sc-art ${c?"locked":(a.fam==="skin"?"skinv r-"+a.rarity:a.rarity==="legendaria"?"legend "+a.fam:"")+(u?" not-yet":"")}">${Ka(l,()=>kt(a,!c))}${c?'<span class="lock">🔒</span>':u?`<span class="lock evo-lock">🔒<small>Nv ${pt[l-1]}</small></span>`:""}</div>`})()}
+      ${(()=>{const l=a.rarity==="legendaria"&&De!=null&&De!==ht(o.lvl)?De:null,c=l!=null&&(r||l>ht(o.lvl)),u=r&&l==null||c;return`<div class="sc-art ${u?"locked":a.fam==="skin"?"skinv r-"+a.rarity:a.rarity==="legendaria"?"legend "+a.fam:""}">${Ka(l,()=>kt(a,!u))}${c?`<span class="lock evo-lock">🔒<small>Nv ${pt[l-1]}</small></span>`:u?'<span class="lock">🔒</span>':""}</div>`})()}
       <div class="sc-info">
         <small class="rar">${a.rarity.toUpperCase()}</small>
         <h3>${a.name}</h3>
