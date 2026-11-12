@@ -1619,3 +1619,6 @@ button.res { cursor: pointer; }
 .mo .mo-glow { animation: scGlow 1.2s ease-in-out infinite alternate; }
 .mo .mo-aura { transform-origin: 55px 60px; animation: moAura 2s ease-in-out infinite; }
 @keyframes moAura { 50% { transform: scale(1.08); opacity: .7; } }
+.sc-art.not-yet > svg, .sc-art.not-yet > :not(.lock) { filter: brightness(.8); }
+.sc-art .evo-lock { font-size: 34px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.sc-art .evo-lock small { font-size: 11px; font-weight: 900; color: #fff; background: rgba(0,0,0,.7); border-radius: 999px; padding: 2px 6px; margin-top: 2px; white-space: nowrap; }
