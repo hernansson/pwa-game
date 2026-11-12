@@ -912,6 +912,7 @@ function shardList(sh: Record<string, number>, title = 'Fragmentos para el Arsen
 }
 
 function showResult(r: ClearReport) {
+  if (r.win) return winShow(r);
   if (r.win) {
     const stars = [1, 2, 3].map((i) => `<span class="${i <= r.stars ? 'on' : ''}" style="animation-delay:${i * 0.15}s">★</span>`).join('');
     showModal(
@@ -934,6 +935,103 @@ function showResult(r: ClearReport) {
       true,
     );
   }
+}
+
+/**
+ * Festejo de victoria a pantalla completa, con la misma sensación que abrir un cofre:
+ * cartel, estrellas que caen una por una y cada premio que aparece y se cuenta solo. Tocar acelera.
+ */
+function winShow(r: ClearReport) {
+  hideModal();
+  const el = document.createElement('div');
+  el.className = 'chest-ov win-ov';
+  el.style.setProperty('--rar', r.stars >= 3 ? '#ffd25a' : r.firstClear ? '#46e08a' : '#8ea0ff');
+  const shards = Object.keys(r.shards)
+    .map((k) => ({ def: armById(k)!, n: r.shards[k] }))
+    .sort((a, b) => RAR_RANK[b.def.rarity] - RAR_RANK[a.def.rarity]);
+  const rows: string[] = [];
+  if (r.firstClear && r.gems) rows.push(`<div class="wr-row gems first"><span class="wr-ico">💠</span><span class="wr-l">Primera victoria</span><b data-count="${r.gems}">0</b></div>`);
+  rows.push(`<div class="wr-row gold"><span class="wr-ico">🪙</span><span class="wr-l">Oro</span><b data-count="${r.gold}">0</b></div>`);
+  if (r.points) rows.push(`<div class="wr-row pts"><span class="wr-ico">🏆</span><span class="wr-l">Puntos de liga</span><b data-count="${r.points}">0</b></div>`);
+  if (shards.length)
+    rows.push(`<div class="wr-shards"><small>Fragmentos para tu equipo</small><div class="co-sum">${shards
+      .map((c) => {
+        const st = game.s.arsenal[c.def.id];
+        const goal = shardGoal(c.def.id);
+        const ready = st.shards >= goal && st.lvl < MAX_ARM_LEVEL;
+        return `<div class="co-mini ${ready ? 'ready' : ''}" style="--rar:${RARITY_COLORS[c.def.rarity]}">
+          <div class="co-mini-art">${armIcon(c.def)}</div><b>+${c.n}</b><small>${c.def.name}</small>
+          <div class="co-bar sm"><i style="--from:${Math.min(100, ((st.shards - c.n) / goal) * 100)}%;--to:${Math.min(100, (st.shards / goal) * 100)}%"></i></div>
+          ${ready ? `<em>${st.lvl ? '¡Sube!' : '¡Nueva!'}</em>` : ''}</div>`;
+      })
+      .join('')}</div></div>`);
+  const ns = 26;
+  const sparks = (col: string) => Array.from({ length: ns }, (_, i) => `<i style="--a:${(i * 360) / ns}deg;--d:${120 + (i % 4) * 40}px;--t:${(i % 5) * 0.03}s;background:${col};box-shadow:0 0 12px ${col}"></i>`).join('');
+  el.innerHTML = `<div class="cel-rays"></div><div class="co-flash"></div>
+    <div class="co-stage win-stage">
+      <div class="win-title"><small>Nivel ${r.level}${r.firstClear ? ' · primera vez' : ''}</small><b>¡VICTORIA!</b><div class="cel-sparks">${sparks('#ffd25a')}</div></div>
+      <div class="win-stars">${[1, 2, 3].map((i) => `<span class="ws ${i <= r.stars ? 'on' : ''}" data-star="${i}">★</span>`).join('')}</div>
+      <div class="win-combo">🔥 Mejor combo <b>x${r.maxCombo}</b></div>
+      <div class="win-rows">${rows.join('')}</div>
+      <div class="co-btns win-btns"><button class="primary" data-win-ok>Continuar</button></div>
+      <div class="win-tap">Toca para ver todo</div>
+    </div>`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('opened'));
+  const vib = (p: number | number[]) => navigator.vibrate?.(p);
+  vib([40, 40, 80]);
+  const steps: (() => void)[] = [];
+  el.querySelectorAll<HTMLElement>('.ws').forEach((st) =>
+    steps.push(() => {
+      st.classList.add('in');
+      if (st.classList.contains('on')) vib(35);
+    }),
+  );
+  el.querySelectorAll<HTMLElement>('.wr-row, .wr-shards').forEach((row) =>
+    steps.push(() => {
+      row.classList.add('in');
+      const b = row.querySelector<HTMLElement>('[data-count]');
+      if (b) countUp(b, Number(b.dataset.count));
+      if (row.classList.contains('first')) {
+        el.classList.remove('epic');
+        void el.offsetWidth;
+        el.classList.add('epic');
+        vib([50, 40, 120]);
+      } else vib(15);
+    }),
+  );
+  steps.push(() => el.classList.add('done'));
+  let i = 0;
+  let timer = 0;
+  const next = () => {
+    if (i >= steps.length) return;
+    steps[i++]();
+    timer = window.setTimeout(next, i <= 3 ? 280 : 380);
+  };
+  timer = window.setTimeout(next, 650);
+  el.addEventListener('click', (ev) => {
+    if ((ev.target as HTMLElement).closest('[data-win-ok]')) {
+      clearTimeout(timer);
+      el.remove();
+      backHome();
+      return;
+    }
+    // Tocar muestra todo de una.
+    clearTimeout(timer);
+    while (i < steps.length) steps[i++]();
+  });
+}
+
+/** Cuenta un número desde 0 hasta `to` en menos de un segundo. */
+function countUp(el: HTMLElement, to: number) {
+  const t0 = performance.now();
+  const dur = 700;
+  const tick = (t: number) => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = '+' + fmt(Math.round(to * (1 - Math.pow(1 - k, 3))));
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 // ---------- Tablero de piezas (solo durante el nivel) ----------
@@ -1507,7 +1605,7 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
         .join('');
       // La primera carta queda arriba: se muestran en orden inverso al apilado.
       [...cardsEl.children].forEach((n, i) => ((n as HTMLElement).style.zIndex = String(cards.length - i)));
-      countEl.textContent = `${cards.length} cartas · toca para darlas vuelta`;
+      countEl.textContent = `${cards.length} cartas · desliza o toca para darlas vuelta`;
     }, 650);
   };
 
@@ -1570,8 +1668,55 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
       </div>`;
   };
 
+  // Deslizar la carta de arriba: mientras la levantas, asoma un borde del color de su rareza.
+  let drag: { x: number; y: number; card: HTMLElement; moved: boolean } | null = null;
+  let dragged = false;
+  cardsEl.addEventListener('pointerdown', (ev) => {
+    if (phase !== 'cards' || shown >= cards.length) return;
+    const card = cardsEl.children[shown] as HTMLElement;
+    if (!card || !(ev.target as HTMLElement).closest('.co-card')) return;
+    drag = { x: ev.clientX, y: ev.clientY, card, moved: false };
+    card.style.setProperty('--rarc', RARITY_COLORS[cards[shown].def.rarity]);
+    card.classList.add('dragging');
+    cardsEl.setPointerCapture(ev.pointerId);
+  });
+  cardsEl.addEventListener('pointermove', (ev) => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.x;
+    const dy = ev.clientY - drag.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 6) drag.moved = true;
+    const peek = Math.min(1, dist / 110);
+    drag.card.style.setProperty('--peek', String(peek));
+    drag.card.style.transform = `translate(${dx * 0.7}px, ${dy * 0.5}px) rotate(${dx / 14}deg)`;
+    if (peek > 0.35 && !drag.card.dataset.buzz) {
+      drag.card.dataset.buzz = '1';
+      vib(RAR_RANK[cards[shown].def.rarity] >= 2 ? [20, 30, 20] : 10);
+    }
+  });
+  const endDrag = (ev: PointerEvent) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    const dist = Math.hypot(ev.clientX - d.x, ev.clientY - d.y);
+    d.card.classList.remove('dragging');
+    d.card.style.transform = '';
+    d.card.style.removeProperty('--peek');
+    delete d.card.dataset.buzz;
+    if (d.moved) {
+      dragged = true;
+      if (dist > 70) flip();
+    }
+  };
+  cardsEl.addEventListener('pointerup', endDrag);
+  cardsEl.addEventListener('pointercancel', endDrag);
+
   el.addEventListener('click', (ev) => {
     const t = ev.target as HTMLElement;
+    if (dragged) {
+      dragged = false;
+      return;
+    }
     if (t.closest('.co-skip')) {
       summary();
       return;
