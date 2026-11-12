@@ -2120,6 +2120,7 @@ function celebrate(def: ArmDef, kind: 'unlock' | 'up') {
     if (navigator.vibrate) navigator.vibrate(15);
     return;
   }
+  if (kind === 'up' && def.rarity === 'legendaria' && EVO_LEVELS.includes(lvl)) return evolveShow(def, lvl, skill!.text);
   el.className = 'cel big';
   el.style.setProperty('--rar', RARITY_COLORS[def.rarity]);
   const sparks = Array.from({ length: 18 }, (_, i) => `<i style="--a:${i * 20}deg;--d:${110 + (i % 3) * 30}px;--t:${0.15 + (i % 4) * 0.05}s"></i>`).join('');
@@ -2137,6 +2138,54 @@ function celebrate(def: ArmDef, kind: 'unlock' | 'up') {
   document.body.appendChild(el);
   if (navigator.vibrate) navigator.vibrate([30, 60, 40]);
   track(game.s, `celebrate:${kind}:${def.id}:${lvl}`);
+}
+
+/**
+ * Evolución de una legendaria: se ve la forma vieja temblando y brillando cada vez más,
+ * un destello blanco, y aparece la forma nueva con su nombre y la habilidad que ganó.
+ */
+function evolveShow(def: ArmDef, lvl: number, skillText: string) {
+  const e = evoStage(lvl);
+  const art = (stage: number) =>
+    previewEvo(stage, () =>
+      def.fam === 'skin' ? armIcon(def) : `<svg viewBox="-5 -6 74 74" aria-hidden="true">${famIcon(def.fam, def.shape, 1, FAMILY_INFO[def.fam].color)}</svg>`,
+    );
+  const col = EVO_COLORS[e];
+  const el = document.createElement('div');
+  el.className = 'evo-ov';
+  el.style.setProperty('--ec', col);
+  el.style.setProperty('--ep', EVO_COLORS[e - 1]);
+  const sparks = Array.from({ length: 28 }, (_, i) => `<i style="--a:${i * (360 / 28)}deg;--d:${120 + (i % 4) * 40}px;--t:${(i % 5) * 0.03}s"></i>`).join('');
+  const motes = Array.from({ length: 16 }, (_, i) => `<i style="--a:${i * 22.5}deg;--t:${(i % 8) * 0.18}s"></i>`).join('');
+  el.innerHTML = `<div class="evo-rays"></div><div class="evo-motes">${motes}</div><div class="evo-flash"></div><div class="evo-burst">${sparks}</div>
+    <div class="evo-stage">
+      <small class="evo-kick">¡${def.name} está evolucionando!</small>
+      <div class="evo-art old">${art(e - 1)}</div>
+      <div class="evo-art new">${art(e)}</div>
+      <div class="evo-info">
+        <small class="evo-kick2">NUEVA FORMA · NIVEL ${lvl}</small>
+        <h2>${EVO_NAMES[e]}</h2>
+        <div class="cel-skill">${skillText}</div>
+        <button data-cel-close>¡Increíble!</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const vib = (p: number | number[]) => navigator.vibrate?.(p);
+  vib([20, 80, 20, 80, 30, 60, 40]);
+  const reveal = () => {
+    if (el.classList.contains('done')) return;
+    el.classList.add('done');
+    vib([60, 40, 120]);
+  };
+  const timer = setTimeout(reveal, 2300);
+  el.addEventListener('click', (ev) => {
+    if (!el.classList.contains('done')) {
+      clearTimeout(timer);
+      return reveal();
+    }
+    if ((ev.target as HTMLElement).closest('[data-cel-close]') || ev.target === el) el.remove();
+  });
+  track(game.s, `evolve:${def.id}:${lvl}`);
 }
 
 function armAction(t: HTMLElement, inModal: boolean): boolean {
