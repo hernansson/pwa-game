@@ -23,8 +23,10 @@ import {
   DAILY_MISSIONS,
   LOGIN_GEMS,
   dayNumber,
+  WORLD_BOSS,
+  worldBossOf,
 } from './balance';
-import { EVO_COLORS, Skin, previewEvo, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
+import { EVO_COLORS, Skin, worldBossArt, previewEvo, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult, REBIRTH_DAMAGE, REBIRTH_SECONDS } from './game';
 import { RARITY_COLORS } from './items';
@@ -607,6 +609,173 @@ function duelFromLink() {
 }
 let pendingDuel: string | null = null;
 
+// ---------- Jefe Mundial ----------
+type WbEntry = { name: string; damage: number; combo: number; tries: number; me: boolean };
+type WbInfo = {
+  day: number;
+  level: number;
+  seconds: number;
+  tries: number;
+  used: number;
+  total: number;
+  rank: number;
+  players: number;
+  entries: WbEntry[];
+  yesterday: { rank: number; damage: number; gems: number; claimed: boolean };
+};
+let wbRun: { runId: string; day: number; n: number } | null = null;
+let wbBusy = false;
+/** Día del jefe que se está mostrando en la pelea (sigue después del final, hasta volver al inicio). */
+let wbView: number | null = null;
+let wbLast: WbInfo | null = null;
+
+function wbBossSvg(day: number): string {
+  const b = worldBossOf(day);
+  return worldBossArt(b);
+}
+
+/** Cuánto falta para que cambie el día (00:00 de Argentina). */
+function wbEndsIn(): number {
+  return (dayNumber() + 1) * 86400_000 + 3 * 3600_000 - Date.now();
+}
+
+function wbRanking(d: WbInfo): string {
+  if (!d.entries.length) return `<p class="note">Todavía nadie lo atacó hoy. ¡Sé el primero!</p>`;
+  return `<ol class="duel-rank">${d.entries
+    .map((e, i) => `<li class="${e.me ? 'me' : ''}"><span class="pos">${i === 0 ? '👑' : i + 1}</span><b>${esc(e.name)}</b><small>${e.tries}/${d.tries} · combo x${e.combo}</small><em>💥 ${fmt(e.damage)}</em></li>`)
+    .join('')}</ol>`;
+}
+
+function worldBossBox(): string {
+  const day = dayNumber();
+  const b = worldBossOf(day);
+  const body = !online()
+    ? `<button class="primary" data-login-settings>Entra con Google para pelear</button>`
+    : `<div id="wb-live" class="wb-live"><p class="note">Cargando…</p></div>`;
+  return `<div class="event world-boss live">
+    <div class="wb-head"><div class="wb-art">${wbBossSvg(day)}</div>
+      <div class="ev-body"><small>JEFE MUNDIAL · HOY</small><b>${b.name}</b>
+      <p>El mismo jefe para todos. Tienes ${WORLD_BOSS.tries} intentos de ${DUEL_SECONDS} segundos y cuenta el daño sumado. Mañana cobras gemas según tu puesto.</p>
+      <p class="wb-ends">Termina en <b data-wb-ends>${timeText(wbEndsIn())}</b></p></div></div>
+    ${body}
+  </div>`;
+}
+
+function wbLiveHtml(d: WbInfo): string {
+  const left = Math.max(0, d.tries - d.used);
+  const dots = Array.from({ length: d.tries }, (_, i) => `<i class="${i < d.used ? 'used' : ''}"></i>`).join('');
+  const y = d.yesterday;
+  const claim = y.gems && !y.claimed
+    ? `<button class="wb-claim" data-wb-claim>🏆 Ayer quedaste #${y.rank} · cobrar ${y.gems} 💠</button>`
+    : '';
+  return `${claim}
+    <div class="wb-me"><div><small>Tu daño de hoy</small><b>💥 ${fmt(d.total)}</b></div><div><small>Puesto</small><b>${d.rank ? '#' + d.rank : '—'}</b><small>de ${d.players}</small></div><div><small>Intentos</small><span class="wb-dots">${dots}</span></div></div>
+    <div class="wb-btns">${left ? `<button class="primary big" data-wb-play>⚔️ Atacar · quedan ${left}</button>` : `<button class="big" disabled>Sin intentos · vuelve mañana</button>`}<button data-wb-rank>🏅 Ranking</button></div>`;
+}
+
+function loadWorldBoss() {
+  act<WbInfo>('wb_get').then(
+    (a) => {
+      wbLast = a.result;
+      const el = document.querySelector('#wb-live');
+      if (el) el.innerHTML = wbLiveHtml(a.result);
+    },
+    (e) => {
+      const el = document.querySelector('#wb-live');
+      if (el) el.innerHTML = `<p class="note">${errorText(e)}</p>`;
+    },
+  );
+}
+
+function showWbRanking(d: WbInfo) {
+  const b = worldBossOf(d.day);
+  showModal(`<div class="duel-modal wb-modal">
+    <button class="x" data-close>✕</button>
+    <div class="duel-boss wb-boss-big">${wbBossSvg(d.day)}</div>
+    <h2>${b.name}</h2>
+    <p class="duel-meta">Jefe Mundial · termina en ${timeText(wbEndsIn())}</p>
+    <div class="wb-prizes"><span>🥇 200 💠</span><span>🥈 150 💠</span><span>🥉 120 💠</span><span>Top 10 · 80 💠</span><span>Resto · 30 💠</span></div>
+    <div class="sec-head"><b>Ranking de hoy</b><small>${d.players} ${d.players === 1 ? 'jugador' : 'jugadores'}</small></div>
+    ${wbRanking(d)}
+  </div>`);
+}
+
+function playWorldBoss() {
+  if (wbBusy || game.s.run) return;
+  wbBusy = true;
+  act<{ runId: string; seed: number; level: number; day: number; n: number }>('wb_start').then(
+    (a) => {
+      wbBusy = false;
+      applyServer(a.state);
+      wbRun = { runId: a.result.runId, day: a.result.day, n: a.result.n };
+      wbView = a.result.day;
+      duelCode = null;
+      game.rand = seeded(a.result.seed);
+      if (game.startDuel(a.result.level)) {
+        heroKeyCache = enemyKeyCache = '';
+        resetBoardView();
+        closeSheet();
+        hideModal();
+        showWbIntro(a.result.day);
+      }
+    },
+    (e) => {
+      wbBusy = false;
+      toast(errorText(e));
+    },
+  );
+}
+
+/** Entrada del jefe gigante: la pantalla tiembla y aparece su nombre. */
+function showWbIntro(day: number) {
+  const stage = $('#stage');
+  const el = document.createElement('div');
+  el.className = 'wb-intro';
+  el.innerHTML = `<small>JEFE MUNDIAL</small><b>${worldBossOf(day).name}</b><span>${DUEL_SECONDS} segundos · todo el daño que puedas</span>`;
+  stage.appendChild(el);
+  restartAnim(stage, 'shake-big');
+  navigator.vibrate?.([60, 60, 120]);
+  setTimeout(() => el.remove(), 2400);
+}
+
+function finishWorldBoss(local: ClearReport) {
+  const run = wbRun;
+  wbRun = null;
+  if (!run) return;
+  const t0 = Date.now();
+  const show = (html: string) => setTimeout(() => showModal(html, true), Math.max(0, 1100 - (Date.now() - t0)));
+  act<{ damage: number; info: WbInfo }>('wb_finish', { runId: run.runId, log: game.log }).then(
+    (a) => {
+      const d = a.result.info;
+      wbLast = d;
+      const left = Math.max(0, d.tries - d.used);
+      show(`<div class="result duel-result wb-result ${d.rank === 1 ? 'win' : ''}">
+        <div class="wb-boss-small">${wbBossSvg(d.day)}</div>
+        <h2>${fmt(a.result.damage)} de daño</h2>
+        <p class="duel-meta">Intento ${run.n} de ${d.tries} · mejor combo x${local.maxCombo}</p>
+        <p class="duel-done">Llevas 💥 <b>${fmt(d.total)}</b> hoy · puesto <b>#${d.rank}</b> de ${d.players}</p>
+        ${wbRanking(d)}
+        <div class="btns"><button data-leave>Inicio</button>${left ? `<button class="primary" data-wb-again>⚔️ Otro intento (${left})</button>` : ''}</div>
+      </div>`);
+    },
+    (e) => {
+      show(`<div class="result lose"><div class="big-ico">⚠️</div><h2>No se pudo anotar</h2><p>${errorText(e)}</p><div class="btns"><button data-leave>Inicio</button></div></div>`);
+    },
+  );
+}
+
+function claimWorldBoss() {
+  act<{ gems: number; rank: number }>('wb_claim').then(
+    (a) => {
+      applyServer(a.state);
+      gemBurst(a.result.gems);
+      toast(`+${a.result.gems} 💠 por quedar #${a.result.rank}`);
+      loadWorldBoss();
+    },
+    (e) => toast(errorText(e)),
+  );
+}
+
 // ---------- Combate ----------
 
 let heroKeyCache = '';
@@ -630,19 +799,27 @@ function renderScreen() {
   $('#forge').hidden = !run;
   $('#app').classList.toggle('in-run', !!run);
   if (!run) {
+    wbView = null;
     renderLobby();
     return;
   }
   renderBoard();
   const boss = game.isBossWave(run);
   renderHero();
-  const ek = `${run.level}:${boss}`;
+  const ek = `${run.level}:${boss}:${wbView ?? ''}`;
   if (ek !== enemyKeyCache) {
     enemyKeyCache = ek;
     const el = $('#enemy');
+    el.classList.toggle('giant', wbView != null);
+    if (wbView != null) {
+      el.innerHTML = wbBossSvg(wbView);
+      el.classList.add('boss');
+      $('#enemy-name').textContent = worldBossOf(wbView).name;
+    } else {
     el.innerHTML = levelEnemySvg(run.level, boss);
     el.classList.toggle('boss', boss);
     $('#enemy-name').textContent = boss ? levelEnemyName(run.level, run.level % LEVELS_PER_WORLD === 0) : enemyName(levelEnemy(run.level).wave, false);
+    }
   }
   const max = enemyHp(run.level, boss);
   $('#hp-fill').style.width = (game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / max) * 100) + '%';
@@ -725,7 +902,7 @@ function renderScreen() {
   const app = $('#app');
   app.classList.toggle('in-duel', !!run.duel);
   if (run.duel) {
-    $('#run-title').textContent = `Reto ${duelCode ?? ''}`;
+    $('#run-title').textContent = wbView != null ? 'Jefe Mundial' : `Reto ${duelCode ?? ''}`;
     const left = Math.ceil(run.duel.left);
     const html = `<span class="duel-time ${left <= 10 ? 'hurry' : ''}">⏱ ${left}s</span><span class="duel-dmg">💥 ${fmt(run.duel.dmg)}</span>`;
     const r = $('#route');
@@ -980,7 +1157,7 @@ function wireGame() {
     } else if (e.type === 'kill') {
       floatText('+' + fmt(e.gold) + ' 🪙', 'gold', 70, 18);
     } else if (e.type === 'wave') {
-      if (e.boss) toast('¡Llegó el jefe!');
+      if (e.boss && wbView == null) toast('¡Llegó el jefe!');
     } else if (e.type === 'discard') {
       // La pieza sale volando por arriba.
     } else if (e.type === 'rebirth') {
@@ -988,7 +1165,7 @@ function wireGame() {
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
-      if (e.report.damage !== undefined) return finishDuel(e.report);
+      if (e.report.damage !== undefined) return wbRun ? finishWorldBoss(e.report) : finishDuel(e.report);
       finishOnline(e.report);
       setTimeout(() => showResult(e.report), 1100);
     }
@@ -2325,19 +2502,17 @@ function renderSheet(full: boolean) {
     body.innerHTML = `
       ${dailyBox()}
       ${duelBox()}
-      <div class="event world-boss">
-        <div class="ev-art">${enemySvg(21, true)}</div>
-        <div class="ev-body"><small>PRÓXIMAMENTE</small><b>Jefe Mundial</b>
-          <p>Un jefe gigante para todos los jugadores. Tienes 3 intentos por día y hay un ranking de quién le hace más daño, con premios exclusivos.</p>
-          <button data-interest="worldboss">¡Me interesa!</button></div>
-      </div>
+      ${worldBossBox()}
       <div class="event raid">
         <div class="ev-art">${enemySvg(11, true)}</div>
         <div class="ev-body"><small>PRÓXIMAMENTE</small><b>Raids con amigos</b>
           <p>Forma un grupo de hasta 4 amigos y venzan juntos jefes que solos son imposibles. Cada uno pone su héroe con su equipo.</p>
           <button data-interest="raids">¡Me interesa!</button></div>
       </div>`;
-    if (online()) loadMyDuels();
+    if (online()) {
+      loadMyDuels();
+      loadWorldBoss();
+    }
   }
 }
 
@@ -2368,6 +2543,9 @@ $('#sheet-body').addEventListener('click', (ev) => {
     updateTalents();
     return;
   }
+  if (t.closest('[data-wb-play]')) return playWorldBoss();
+  if (t.closest('[data-wb-claim]')) return claimWorldBoss();
+  if (t.closest('[data-wb-rank]')) return wbLast ? showWbRanking(wbLast) : undefined;
   if (t.closest('[data-duel-create]')) return createDuel();
   if (t.closest('[data-duel-join]')) {
     const v = (document.querySelector('#duel-code') as HTMLInputElement | null)?.value ?? '';
@@ -2680,6 +2858,9 @@ $('#modal').addEventListener('click', (ev) => {
     shareDuel((t.closest('[data-duel-share]') as HTMLElement).dataset.duelShare!);
   } else if (t.closest('[data-duel-refresh]')) {
     openDuel((t.closest('[data-duel-refresh]') as HTMLElement).dataset.duelRefresh!);
+  } else if (t.closest('[data-wb-again]')) {
+    backHome();
+    playWorldBoss();
   } else if (t.closest('[data-leave]')) backHome();
   else if (t.closest('[data-next]')) {
     const lvl = Number((t.closest('[data-next]') as HTMLElement).dataset.next);

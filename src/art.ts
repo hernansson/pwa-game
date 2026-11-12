@@ -837,3 +837,30 @@ export function pieceSvg(fam: string, lvl: number, color: string, shape = 0): st
     <text x="13" y="17.5" text-anchor="middle" font-size="12" font-weight="900" fill="#1a1020" font-family="system-ui,sans-serif">${lvl}</text>
   </svg>`;
 }
+
+/** Jefe Mundial: un titán enorme con cuernos, ojos que brillan, grietas de energía y núcleo en el pecho. */
+export function worldBossArt(o: { color: string; eyes: string; horns: boolean; spikes: boolean }): string {
+  const dark = '#1a0f14';
+  const id = 'wbG' + o.color.slice(1);
+  return `<svg viewBox="0 0 120 110" class="enemy-svg wb-titan" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.color}"/><stop offset="1" stop-color="${dark}" stop-opacity=".9"/></linearGradient>
+      <radialGradient id="${id}a"><stop offset="0" stop-color="${o.eyes}" stop-opacity=".55"/><stop offset="1" stop-color="${o.eyes}" stop-opacity="0"/></radialGradient></defs>
+    <ellipse class="fx-pulse" cx="60" cy="56" rx="58" ry="52" fill="url(#${id}a)"/>
+    <ellipse cx="60" cy="105" rx="40" ry="5" fill="#000" opacity=".35"/>
+    <path d="M38 76 L34 104 L50 104 L52 80Z M82 76 L86 104 L70 104 L68 80Z" fill="url(#${id})" stroke="${dark}" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M22 44 Q8 54 10 78 Q12 86 20 86 Q28 86 28 76 L30 56Z M98 44 Q112 54 110 78 Q108 86 100 86 Q92 86 92 76 L90 56Z" fill="url(#${id})" stroke="${dark}" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M8 76 Q8 92 20 92 Q32 92 31 78 Q20 72 8 76Z M112 76 Q112 92 100 92 Q88 92 89 78 Q100 72 112 76Z" fill="${o.color}" stroke="${dark}" stroke-width="2.4"/>
+    <path d="M24 40 Q60 26 96 40 L90 84 Q60 92 30 84Z" fill="url(#${id})" stroke="${dark}" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M14 46 Q20 34 34 36 L36 50 Q24 50 14 46Z M106 46 Q100 34 86 36 L84 50 Q96 50 106 46Z" fill="${o.color}" stroke="${dark}" stroke-width="2.2" stroke-linejoin="round"/>
+    ${o.spikes ? `<path d="M18 40 L14 28 L24 37Z M102 40 L106 28 L96 37Z M26 36 L26 24 L32 34Z M94 36 L94 24 L88 34Z" fill="${o.eyes}" stroke="${dark}" stroke-width="1.4"/>` : ''}
+    <path class="wb-veins" d="M40 50 L46 58 L42 66 L48 74 M80 50 L74 60 L79 68 L72 78 M54 80 L60 74 L66 80 M18 60 L22 68 M102 60 L98 68" stroke="${o.eyes}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <g class="fx-pulse"><circle cx="60" cy="60" r="8" fill="${o.eyes}" opacity=".45"/><path d="M60 52 L66 60 L60 68 L54 60Z" fill="${o.eyes}" stroke="${dark}" stroke-width="1.6"/><path d="M60 55 L62.5 60 L60 63Z" fill="#fff" opacity=".8"/></g>
+    ${o.horns ? `<path d="M44 22 Q30 12 28 -2 Q40 8 50 16Z M76 22 Q90 12 92 -2 Q80 8 70 16Z" fill="#f2e6cf" stroke="${dark}" stroke-width="2" stroke-linejoin="round"/>` : ''}
+    <path d="M42 36 Q40 14 60 12 Q80 14 78 36 Q70 42 60 42 Q50 42 42 36Z" fill="${o.color}" stroke="${dark}" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M44 24 L56 28 L56 31 L44 28Z M76 24 L64 28 L64 31 L76 28Z" fill="${dark}"/>
+    <path class="wb-eyes" d="M46 27 L55 29.6 M74 27 L65 29.6" stroke="${o.eyes}" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M50 35 Q60 40 70 35 L68 38 Q60 42 52 38Z" fill="${dark}"/>
+    <path d="M53 36 L54.5 39.5 L56 36.5 M67 36 L65.5 39.5 L64 36.5" fill="#fff" stroke="#fff" stroke-width=".6"/>
+    <path d="M48 16 Q54 13 60 13" stroke="#fff" stroke-width="2" fill="none" opacity=".35" stroke-linecap="round"/>
+  </svg>`;
+}

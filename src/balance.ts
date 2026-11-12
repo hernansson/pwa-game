@@ -247,3 +247,29 @@ export const DAILY_MISSIONS: Mission[] = [
 ];
 /** Extra por completar todas las misiones del día. */
 export const DAILY_BONUS = 20;
+
+// ---------- Jefe Mundial ----------
+// Un jefe por día, el mismo para todos. 3 intentos de 60 s; cuenta el daño sumado de los intentos.
+// Todos pelean en el mismo nivel, así gana quien tiene mejor héroe y mejor mano, no quien llegó más lejos.
+export const WORLD_BOSS = { level: 30, tries: 3 };
+/** Gemas por el puesto del día anterior (se cobran al día siguiente). */
+export function worldBossGems(rank: number): number {
+  if (rank <= 0) return 0;
+  if (rank === 1) return 200;
+  if (rank === 2) return 150;
+  if (rank === 3) return 120;
+  if (rank <= 10) return 80;
+  return 30;
+}
+export const WORLD_BOSSES = [
+  { name: 'Titán de Magma', color: '#e8542a', horns: true, spikes: true, eyes: '#ffe066' },
+  { name: 'Kraken Abisal', color: '#3a7bd8', horns: false, spikes: true, eyes: '#7fffd4' },
+  { name: 'Hidra de Escarcha', color: '#7fd8ff', horns: true, spikes: false, eyes: '#ffffff' },
+  { name: 'Gólem Ancestral', color: '#8a9a5b', horns: false, spikes: false, eyes: '#ff9a3d' },
+  { name: 'Dragón Sombrío', color: '#5a3a8a', horns: true, spikes: true, eyes: '#ff3b6a' },
+  { name: 'Coloso de Tormenta', color: '#c9c35a', horns: true, spikes: false, eyes: '#9fe8ff' },
+  { name: 'Behemot Carmesí', color: '#c2263a', horns: true, spikes: true, eyes: '#ffd34d' },
+];
+export function worldBossOf(day: number) {
+  return WORLD_BOSSES[((day % WORLD_BOSSES.length) + WORLD_BOSSES.length) % WORLD_BOSSES.length];
+}

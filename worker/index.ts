@@ -12,7 +12,7 @@ import { DUEL_SECONDS, Game } from '../src/game';
 import { GameState, newState, migrate, regenEnergy } from '../src/state';
 import { rolloverLeague } from '../src/league';
 import { replayRun } from '../src/replay';
-import { UPGRADES, UpgradeId } from '../src/balance';
+import { UPGRADES, UpgradeId, WORLD_BOSS, dayNumber, worldBossGems } from '../src/balance';
 import { ARMS } from '../src/arsenal';
 
 interface D1Stmt {
@@ -239,6 +239,14 @@ async function act(env: Env, user: User, b: Record<string, unknown>) {
       return duelFinish(env, user, str('runId'), b.log);
     case 'duel_mine':
       return duelMine(env, user);
+    case 'wb_get':
+      return wbGet(env, user);
+    case 'wb_start':
+      return wbStart(env, user);
+    case 'wb_finish':
+      return wbFinish(env, user, str('runId'), b.log);
+    case 'wb_claim':
+      return wbClaim(env, user);
     case 'pass':
       throw new HttpError(402, 'needs_payment'); // se activa cuando haya cobros reales
     // Solo para la cuenta de administrador.
@@ -466,6 +474,102 @@ async function duelMine(env: Env, user: User) {
     .bind(user.sub, since)
     .first<{ j: string }>();
   return { ...base, result: { duels: JSON.parse(row?.j || '[]') } };
+}
+
+// ---------- Jefe Mundial ----------
+// Un jefe por día para todos (el día cambia a las 00:00 de Argentina). Cada uno tiene 3 intentos de 60 s,
+// el servidor rejuega cada pelea, y el ranking es por daño sumado. Al día siguiente se cobran gemas por el puesto.
+
+async function wbRank(env: Env, day: number, sub: string) {
+  const mine = await env.DB.prepare('SELECT COALESCE(SUM(damage), 0) AS t, COUNT(*) AS n FROM wb_entries WHERE day = ? AND sub = ? AND done = 1').bind(day, sub).first<{ t: number; n: number }>();
+  if (!mine?.n) return { total: 0, rank: 0 };
+  const above = await env.DB.prepare('SELECT COUNT(*) AS n FROM (SELECT sub, SUM(damage) AS t FROM wb_entries WHERE day = ? AND done = 1 GROUP BY sub) WHERE t > ?').bind(day, mine.t).first<{ n: number }>();
+  return { total: mine.t, rank: (above?.n ?? 0) + 1 };
+}
+
+async function wbInfo(env: Env, user: User) {
+  const day = dayNumber();
+  const top = await env.DB.prepare(
+    `SELECT json_group_array(json_object('name', name, 'damage', t, 'combo', c, 'tries', n, 'me', sub = ?2)) AS j FROM (
+      SELECT sub, MAX(name) AS name, SUM(damage) AS t, MAX(combo) AS c, COUNT(*) AS n FROM wb_entries WHERE day = ?1 AND done = 1 GROUP BY sub ORDER BY t DESC LIMIT 50)`,
+  )
+    .bind(day, user.sub)
+    .first<{ j: string }>();
+  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM wb_entries WHERE day = ? AND sub = ?').bind(day, user.sub).first<{ n: number }>();
+  const players = await env.DB.prepare('SELECT COUNT(DISTINCT sub) AS n FROM wb_entries WHERE day = ? AND done = 1').bind(day).first<{ n: number }>();
+  const me = await wbRank(env, day, user.sub);
+  // Premio de ayer: cuánto le toca y si ya lo cobró.
+  const y = await wbRank(env, day - 1, user.sub);
+  const claimed = await env.DB.prepare('SELECT gems FROM wb_claims WHERE day = ? AND sub = ?').bind(day - 1, user.sub).first<{ gems: number }>();
+  const entries = (JSON.parse(top?.j || '[]') as { name: string; damage: number; combo: number; tries: number; me: number }[]).map((e) => ({ ...e, me: !!e.me }));
+  return {
+    day,
+    level: WORLD_BOSS.level,
+    seconds: DUEL_SECONDS,
+    tries: WORLD_BOSS.tries,
+    used: used?.n ?? 0,
+    total: me.total,
+    rank: me.rank,
+    players: players?.n ?? 0,
+    entries,
+    yesterday: { rank: y.rank, damage: y.total, gems: worldBossGems(y.rank), claimed: !!claimed },
+  };
+}
+
+async function wbGet(env: Env, user: User) {
+  const base = await readUser(env, user);
+  return { ...base, result: await wbInfo(env, user) };
+}
+
+async function wbStart(env: Env, user: User) {
+  const day = dayNumber();
+  const base = await readUser(env, user);
+  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM wb_entries WHERE day = ? AND sub = ?').bind(day, user.sub).first<{ n: number }>();
+  const n = (used?.n ?? 0) + 1;
+  if (n > WORLD_BOSS.tries && !user.admin) throw new HttpError(409, 'no_tries');
+  const runId = randHex(16);
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+  const name = (base.state.playerName || user.name.split(' ')[0] || 'Héroe').replace(/[<>]/g, '').slice(0, 14);
+  // Se anota el intento antes de jugar: si se corta o cierra la app, ese intento se pierde.
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO wb_entries (day, sub, n, name, seed, run_id, snapshot, started) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(day, user.sub, n, name, seed, runId, JSON.stringify(base.state), Date.now())
+    .run();
+  if (r.meta.changes !== 1) throw new HttpError(409, 'busy');
+  return { ...base, result: { runId, seed, level: WORLD_BOSS.level, seconds: DUEL_SECONDS, day, n } };
+}
+
+async function wbFinish(env: Env, user: User, runId: string, log: unknown) {
+  if (!/^[a-f0-9]{32}$/.test(runId)) throw new HttpError(400, 'bad_run');
+  const e = await env.DB.prepare('SELECT snapshot, started, done, seed FROM wb_entries WHERE run_id = ? AND sub = ?')
+    .bind(runId, user.sub)
+    .first<{ snapshot: string; started: number; done: number; seed: number }>();
+  if (!e || e.done) throw new HttpError(404, 'run_not_found');
+  if (!Array.isArray(log) || log.length > 5000) throw new HttpError(400, 'bad_log');
+  if (Date.now() - e.started > RUN_TTL) throw new HttpError(410, 'run_expired');
+  const out = replayRun(migrate(JSON.parse(e.snapshot)), WORLD_BOSS.level, e.seed, log as number[][], true);
+  if (!out.ok) throw new HttpError(422, 'replay_' + out.error);
+  const elapsed = (Date.now() - e.started) / 1000;
+  if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
+  const damage = Math.max(0, Math.round(out.report.damage ?? 0));
+  const claim = await env.DB.prepare("UPDATE wb_entries SET damage = ?, combo = ?, done = 1, snapshot = '' WHERE run_id = ? AND done = 0")
+    .bind(damage, out.report.maxCombo, runId)
+    .run();
+  if (claim.meta.changes !== 1) throw new HttpError(404, 'run_not_found');
+  const base = await readUser(env, user);
+  return { ...base, result: { damage, info: await wbInfo(env, user) } };
+}
+
+async function wbClaim(env: Env, user: User) {
+  const day = dayNumber() - 1;
+  const y = await wbRank(env, day, user.sub);
+  const gems = worldBossGems(y.rank);
+  if (!gems) throw new HttpError(400, 'not_ready');
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO wb_claims (day, sub, gems) VALUES (?, ?, ?)').bind(day, user.sub, gems).run();
+  if (r.meta.changes !== 1) throw new HttpError(400, 'already_claimed');
+  return mutate(env, user, (s) => {
+    s.gems += gems;
+    return { gems, rank: y.rank };
+  });
 }
 
 // ---------- Google ----------

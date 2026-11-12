@@ -50,3 +50,25 @@ CREATE TABLE IF NOT EXISTS duel_entries (
 );
 CREATE INDEX IF NOT EXISTS duel_entries_sub ON duel_entries(sub, started);
 CREATE INDEX IF NOT EXISTS duel_entries_run ON duel_entries(run_id);
+-- Jefe Mundial: un jefe por día para todos, 3 intentos por persona. Cuenta el daño sumado.
+CREATE TABLE IF NOT EXISTS wb_entries (
+  day INTEGER NOT NULL,
+  sub TEXT NOT NULL,
+  n INTEGER NOT NULL,            -- intento 1, 2 o 3
+  name TEXT NOT NULL,
+  seed INTEGER NOT NULL,
+  run_id TEXT NOT NULL,
+  snapshot TEXT NOT NULL,
+  started INTEGER NOT NULL,
+  damage INTEGER NOT NULL DEFAULT 0,
+  combo INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, sub, n)
+);
+CREATE INDEX IF NOT EXISTS wb_entries_run ON wb_entries(run_id);
+CREATE TABLE IF NOT EXISTS wb_claims (
+  day INTEGER NOT NULL,
+  sub TEXT NOT NULL,
+  gems INTEGER NOT NULL,
+  PRIMARY KEY (day, sub)
+);

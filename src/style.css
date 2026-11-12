@@ -1495,3 +1495,34 @@ button.res { cursor: pointer; }
 .pc svg *:not(.spark) { animation: none !important; }
 
 .kn-halo { transform-box: fill-box; transform-origin: center; animation: fxPulse 2s ease-in-out infinite; }
+
+/* ---------- Jefe Mundial ---------- */
+.event.world-boss.live { display: block; padding: 12px; background: radial-gradient(circle at 18% 30%, #5a1f10, var(--panel) 72%); box-shadow: 0 0 0 1px #ff8a2a55, 0 8px 24px rgba(255,90,30,.18); }
+.wb-head { display: flex; gap: 10px; align-items: center; }
+.wb-art { flex: none; width: 96px; height: 96px; filter: drop-shadow(0 0 12px rgba(255,100,40,.55)); animation: wbBreath 2.4s ease-in-out infinite; }
+.wb-art svg, .wb-boss-big svg, .wb-boss-small svg { width: 100%; height: 100%; }
+@keyframes wbBreath { 50% { transform: scale(1.05) translateY(-2px); } }
+.wb-ends { margin: 4px 0 0; font-size: 12px; opacity: .85; }
+.wb-live { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.wb-me { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 6px; }
+.wb-me > div { background: rgba(0,0,0,.28); border-radius: 12px; padding: 7px 8px; display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.wb-me small { font-size: 10px; opacity: .75; }
+.wb-me b { font-size: 15px; }
+.wb-dots { display: flex; gap: 5px; margin-top: 4px; }
+.wb-dots i { width: 12px; height: 12px; border-radius: 50%; background: #ffb02e; box-shadow: 0 0 8px #ff8a1f; }
+.wb-dots i.used { background: #3a2a40; box-shadow: none; }
+.wb-btns { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.wb-claim { background: linear-gradient(90deg, #ffd34d, #ff9a1f); color: #2a1200; font-weight: 900; border: 0; border-radius: 12px; padding: 10px; animation: pop .4s; box-shadow: 0 0 16px rgba(255,180,40,.5); }
+.wb-prizes { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin: 6px 0 10px; }
+.wb-prizes span { font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 999px; background: rgba(255,180,40,.14); border: 1px solid #ffb02e55; }
+.wb-boss-big { width: 150px; height: 150px; margin: 0 auto; filter: drop-shadow(0 0 18px rgba(255,100,40,.6)); }
+.wb-boss-small { width: 110px; height: 110px; margin: 0 auto 4px; }
+/* En la pelea el jefe mundial es enorme. */
+.enemy.giant { transform: scale(1.45) translateY(4%); transform-origin: bottom center; filter: drop-shadow(0 0 14px rgba(255,80,30,.55)); }
+.wb-intro { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; white-space: nowrap; animation: rbText 2.3s ease-out forwards; }
+.wb-intro small { font-weight: 900; letter-spacing: 4px; font-size: 12px; color: #ffd34d; text-shadow: 0 0 8px #ff5a1f, 0 2px 0 #000; }
+.wb-intro b { font-size: 34px; font-weight: 1000; color: #fff; text-shadow: 0 3px 0 #5a1000, 0 0 16px #ff5a1f; }
+.wb-intro span { font-size: 13px; font-weight: 800; color: #fff; text-shadow: 0 2px 0 #000; }
+.wb-veins { animation: wbVein 1.6s ease-in-out infinite; }
+@keyframes wbVein { 50% { opacity: .45; } }
+.wb-eyes { animation: wbVein .9s ease-in-out infinite; }

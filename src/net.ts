@@ -156,6 +156,7 @@ export function errorText(e: unknown): string {
     too_many_duels: 'Creaste muchos retos hoy. Prueba mañana.',
     already_claimed: 'Ya cobraste el premio de hoy.',
     not_ready: 'Todavía no está lista.',
+    no_tries: 'Ya usaste tus 3 intentos de hoy. Vuelve mañana.',
   };
   if (m[code]) return m[code];
   if (code.startsWith('replay_')) return 'El servidor no pudo validar esa pelea.';
