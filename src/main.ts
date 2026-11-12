@@ -141,18 +141,14 @@ function myHero(): string {
 
 document.querySelector('#app')!.innerHTML = `
   <header class="topbar">
-    <button class="res gold" id="gold-btn" title="Oro"><span class="ico">🪙</span><b id="gold">0</b><i class="res-plus">+</i></button>
-    <button class="res gems" id="gems-btn" title="Gemas"><span class="ico">💠</span><b id="gems">0</b><i class="res-plus">+</i></button>
-    <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small><i class="res-plus">+</i></button>
-    <button id="install" class="install" hidden>Instalar</button>
+    <button class="res gold" id="gold-btn" title="Oro"><span class="ico">🪙</span><b id="gold">0</b><i class="res-plus"><svg viewBox="0 0 12 12"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></i></button>
+    <button class="res gems" id="gems-btn" title="Gemas"><span class="ico">💠</span><b id="gems">0</b><i class="res-plus"><svg viewBox="0 0 12 12"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></i></button>
+    <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small><i class="res-plus"><svg viewBox="0 0 12 12"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></i></button>
     <button class="gear" id="fullscreen" aria-label="Pantalla completa">⛶</button>
     <button class="gear" id="settings" aria-label="Ajustes">⚙️</button>
   </header>
 
   <section class="lobby" id="lobby">
-    <div class="lobby-top">
-      <button class="me-chip" data-open="heroe"><span class="me-hero" id="me-hero"></span><span><b id="me-name"></b><small>⚔️ <b id="me-power"></b></small></span></button>
-    </div>
     <div class="lobby-main">
       <div class="rail left">
         <button class="rail-btn" data-open="cofres"><span class="ri">🎁</span><small id="rail-chest">Cofres</small><i class="dot" data-dot="cofres" hidden></i></button>
@@ -244,9 +240,6 @@ function renderLobby() {
   const key = `${lvl}:${s.unlocked}:${s.stars[lvl] ?? 0}:${s.playerName}:${power(s)}:${JSON.stringify(s.arms)}:${Math.ceil(wait / 60000)}:${leagueRank()}`;
   if (key === lobbyKey) return;
   lobbyKey = key;
-  $('#me-hero').innerHTML = myHero();
-  $('#me-name').textContent = s.playerName || 'Tu héroe';
-  $('#me-power').textContent = fmt(power(s));
   $('#rail-chest').textContent = wait ? timeShort(wait) : '¡Gratis!';
   $('#rail-league').textContent = `#${leagueRank()}`;
 
@@ -1289,6 +1282,34 @@ function renderDots() {
   $('#vip-btn').hidden = !!s.run;
 }
 
+/** Fondo del héroe: patio del castillo de noche, antorchas y un círculo de runas bajo los pies. */
+function heroSceneSvg(): string {
+  return `<svg class="hs-bg" viewBox="0 0 400 420" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="hsSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140c33"/><stop offset=".6" stop-color="#2a1856"/><stop offset="1" stop-color="#3b2268"/></linearGradient>
+      <radialGradient id="hsMoon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6d8"/><stop offset=".6" stop-color="#ffe7a8" stop-opacity=".5"/><stop offset="1" stop-color="#ffe7a8" stop-opacity="0"/></radialGradient>
+      <radialGradient id="hsTorch" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffb347" stop-opacity=".85"/><stop offset="1" stop-color="#ff6b1a" stop-opacity="0"/></radialGradient>
+      <linearGradient id="hsFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2150"/><stop offset="1" stop-color="#140d2a"/></linearGradient>
+    </defs>
+    <rect width="400" height="420" fill="url(#hsSky)"/>
+    <g fill="#fff" opacity=".7"><circle cx="40" cy="40" r="1.4"/><circle cx="120" cy="22" r="1"/><circle cx="210" cy="50" r="1.2"/><circle cx="350" cy="30" r="1.5"/><circle cx="300" cy="80" r="1"/><circle cx="70" cy="100" r="1"/><circle cx="380" cy="120" r="1.1"/><circle cx="160" cy="90" r=".9"/></g>
+    <circle cx="315" cy="78" r="60" fill="url(#hsMoon)"/><circle cx="315" cy="78" r="22" fill="#fff3cf"/>
+    <path d="M0 250 L40 200 L80 230 L130 170 L175 225 L220 190 L265 235 L310 180 L360 228 L400 200 V300 H0Z" fill="#241547"/>
+    <g fill="#1a0f36">
+      <rect x="0" y="215" width="400" height="110"/>
+      <rect x="20" y="150" width="54" height="170"/><path d="M14 150 L47 112 L80 150Z"/>
+      <rect x="326" y="150" width="54" height="170"/><path d="M320 150 L353 112 L386 150Z"/>
+      ${Array.from({ length: 12 }, (_, i) => `<rect x="${78 + i * 21}" y="203" width="12" height="14"/>`).join('')}
+    </g>
+    <rect x="40" y="185" width="12" height="18" rx="6" fill="#ffcf6b" opacity=".85"/><rect x="346" y="185" width="12" height="18" rx="6" fill="#ffcf6b" opacity=".85"/>
+    <g class="hs-torch"><circle cx="100" cy="250" r="46" fill="url(#hsTorch)"/><rect x="97" y="250" width="6" height="26" fill="#3a2a1a"/><path d="M100 230 q8 10 0 20 q-8 -10 0 -20Z" fill="#ffd06b"/></g>
+    <g class="hs-torch t2"><circle cx="300" cy="250" r="46" fill="url(#hsTorch)"/><rect x="297" y="250" width="6" height="26" fill="#3a2a1a"/><path d="M300 230 q8 10 0 20 q-8 -10 0 -20Z" fill="#ffd06b"/></g>
+    <path d="M0 300 H400 V420 H0Z" fill="url(#hsFloor)"/>
+    <g stroke="#3a2d66" stroke-width="2" opacity=".7"><path d="M0 330 H400 M0 365 H400 M0 400 H400"/><path d="M60 300 L30 420 M140 300 L120 420 M200 300 V420 M260 300 L280 420 M340 300 L370 420"/></g>
+    <g class="hs-runes"><ellipse cx="200" cy="352" rx="120" ry="26" fill="none" stroke="var(--rar)" stroke-width="3" opacity=".8"/><ellipse cx="200" cy="352" rx="96" ry="19" fill="none" stroke="var(--rar)" stroke-width="1.5" stroke-dasharray="6 8" opacity=".9"/><ellipse cx="200" cy="352" rx="120" ry="26" fill="var(--rar)" opacity=".12"/></g>
+  </svg>`;
+}
+
 /** Héroe: el personaje al centro, sus 3 números (ataque, crítico y vida) para entrenar, y atajos al equipo. */
 function renderHeroSheet() {
   const s = game.s;
@@ -1310,18 +1331,20 @@ function renderHeroSheet() {
     </button>`;
   };
   $('#sheet-body').innerHTML = `
-    <div class="hs" style="--rar:${RARITY_COLORS[skin.rarity]}">
-      <div class="hs-slots left">${slot('espada')}${slot('escudo')}</div>
-      <div class="hs-hero">${myHero()}</div>
-      <div class="hs-slots right">${slot('rayo')}${slot('skin')}</div>
-    </div>
-    <div class="hs-name"><b>${esc(s.playerName || 'Tu héroe')}</b><span>⚔️ Poder <b>${fmt(power(s))}</b></span></div>
-    <div class="hs-stats">
-      ${stat('fuerza', '⚔️', 'Ataque', `+${dmg}%`)}
-      ${stat('critico', '🎯', 'Crítico', `${Math.round(critChance(s) * 100)}%`)}
-      ${stat('vida', '❤️', 'Vida', fmt(maxHp(s)))}
-    </div>
-    <p class="note">Toca un arma, el escudo, el potenciador o la skin para subirlos en Equipo.</p>`;
+    <div class="hero-page">
+      <div class="hs-scene" style="--rar:${RARITY_COLORS[skin.rarity]}">
+        ${heroSceneSvg()}
+        <div class="hs-name"><b>${esc(s.playerName || 'Tu héroe')}</b><span>⚔️ Poder <b>${fmt(power(s))}</b></span></div>
+        <div class="hs-slots left">${slot('espada')}${slot('escudo')}</div>
+        <div class="hs-hero">${myHero()}</div>
+        <div class="hs-slots right">${slot('rayo')}${slot('skin')}</div>
+      </div>
+      <div class="hs-stats">
+        ${stat('fuerza', '⚔️', 'Ataque', `+${dmg}%`)}
+        ${stat('critico', '🎯', 'Crítico', `${Math.round(critChance(s) * 100)}%`)}
+        ${stat('vida', '❤️', 'Vida', fmt(maxHp(s)))}
+      </div>
+    </div>`;
   updateTalents();
 }
 
@@ -2131,6 +2154,8 @@ function showSettings() {
     <button class="x" data-close aria-label="Cerrar">✕</button>
     <h2>Ajustes</h2>
     ${accountBox()}
+    ${installBox()}
+    ${$('#fullscreen').hidden ? '' : `<div class="btns set-fs"><button data-fs>⛶ Pantalla completa</button></div>`}
     <label class="start-label">Nombre en la liga<input id="name-input" maxlength="14" value="${esc(game.s.playerName)}"></label>
     ${online() ? '' : `<div class="set-box">
       <b>Copiar progreso</b>
@@ -2305,6 +2330,11 @@ function backHome() {
 $('#modal').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
   if (t.closest('[data-close]')) hideModal();
+  else if (t.closest('[data-install]')) doInstall();
+  else if (t.closest('[data-fs]')) {
+    hideModal();
+    $('#fullscreen').click();
+  }
   else if (armAction(t, true)) {
     /* hecho */
   } else if (t.closest('[data-goto-world]')) {
@@ -2391,15 +2421,22 @@ let deferredPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e as Event & { prompt: () => Promise<void> };
-  $('#install').hidden = false;
 });
-$('#install').addEventListener('click', async () => {
+
+/** En Ajustes: instalar el juego como app (Android y computadora) o cómo hacerlo en iPhone. */
+function installBox(): string {
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return '';
+  if (deferredPrompt) return `<div class="set-box"><b>📲 Instalar el juego</b><p>Tenlo como una app más, a pantalla completa y sin barra del navegador.</p><div class="btns"><button data-install class="primary">Instalar</button></div></div>`;
+  if (/iphone|ipad/i.test(navigator.userAgent)) return `<div class="set-box"><b>📲 Instalar el juego</b><p>En Safari toca Compartir y luego "Agregar a inicio". Se abre a pantalla completa como una app.</p></div>`;
+  return '';
+}
+async function doInstall() {
   if (!deferredPrompt) return;
   track(game.s, 'install_click');
   await deferredPrompt.prompt();
   deferredPrompt = null;
-  $('#install').hidden = true;
-});
+  hideModal();
+}
 
 if ('serviceWorker' in navigator && import.meta.env.PROD && import.meta.env.MODE !== 'single') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
