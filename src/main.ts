@@ -229,6 +229,7 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
+        <div class="board-glow"></div>
       </div>
       <p class="hint" id="hint">Arrastra una pieza sobre otra igual para juntarlas. Arrástrala hacia arriba, fuera del tablero, para tirarla.</p>
     </div>
@@ -837,10 +838,10 @@ let enemyKeyCache = '';
 let sceneKeyCache = '';
 function renderScreen() {
   const run = game.s.run;
-  $('#lobby').hidden = !!run;
-  $('#stage').hidden = !run;
-  $('#lower').hidden = !run;
-  $('#forge').hidden = !run;
+  setHidden($('#lobby'), !!run);
+  setHidden($('#stage'), !run);
+  setHidden($('#lower'), !run);
+  setHidden($('#forge'), !run);
   $('#app').classList.toggle('in-run', !!run);
   if (!run) {
     wbView = null;
@@ -872,20 +873,20 @@ function renderScreen() {
     }
   }
   const max = enemyHp(run.level, boss);
-  $('#hp-fill').style.width = (game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / max) * 100) + '%';
-  $('#hero-hp').style.width = Math.max(0, run.heroHp / maxHp(game.s)) * 100 + '%';
+  setScale($('#hp-fill'), ((game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / max) * 100)) / 100);
+  setScale($('#hero-hp'), (Math.max(0, run.heroHp / maxHp(game.s)) * 100) / 100);
   $('#hero-hp').classList.toggle('low', run.heroHp / maxHp(game.s) < 0.3);
   $('#enemy').classList.toggle('dead', game.respawning || run.result === 'win');
   const hpMax = maxHp(game.s);
-  $('#hero-shield').style.width = Math.min(1, run.shield / hpMax) * 100 + '%';
-  $('#shield-label').textContent = run.shield >= 1 ? `🛡️ ${fmt(run.shield)}` : '';
+  setScale($('#hero-shield'), (Math.min(1, run.shield / hpMax) * 100) / 100);
+  setText($('#shield-label'), run.shield >= 1 ? `🛡️ ${fmt(run.shield)}` : '');
   const atk = $('#atk-fill');
-  atk.style.width = (run.stun > 0 || run.charge ? 100 : Math.max(0, 1 - run.enemyTimer / game.attackEvery(run)) * 100) + '%';
+  setScale(atk, (run.stun > 0 || run.charge ? 100 : Math.max(0, 1 - run.enemyTimer / game.attackEvery(run)) * 100) / 100);
   // Ataque cargado: cartel con barra que se vacía; los escudos del tablero brillan.
   const ch = run.result ? null : run.charge;
   const chud = $('#charge-hud');
   if (chud.hidden === !!ch) chud.hidden = !ch;
-  if (ch) $('#cg-bar').style.width = Math.max(0, ch.left / ch.total) * 100 + '%';
+  if (ch) setScale($('#cg-bar'), (Math.max(0, ch.left / ch.total) * 100) / 100);
   $('#enemy').classList.toggle('charging', !!ch);
   $('#board').classList.toggle('charging', !!ch);
   $('#enemy').classList.toggle('enraged', !!run.enraged && !run.result);
@@ -893,13 +894,17 @@ function renderScreen() {
   // Golpe especial: se llena juntando; cuando está lleno brilla y se puede tocar.
   const sb = $('#spec-btn');
   const sp = run.result ? 0 : (run.special ?? 0);
-  sb.style.setProperty('--p', String(sp));
+  const spv = sp >= 1 ? '1' : (Math.floor(sp * 50) / 50).toFixed(2);
+  if (sb.dataset.p !== spv) {
+    sb.dataset.p = spv;
+    sb.style.setProperty('--p', spv);
+  }
   // Franja arriba del tablero: tu vida, la del monstruo y cuándo pega, para no tener que mirar arriba.
   const hpMaxB = maxHp(game.s);
-  $('#bh-hp').style.width = Math.max(0, run.heroHp / hpMaxB) * 100 + '%';
-  $('#bh-sh').style.width = Math.min(1, run.shield / hpMaxB) * 100 + '%';
-  $('#bh-ehp').style.width = (game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / enemyHp(run.level, boss)) * 100) + '%';
-  $('#bh-atk').style.width = atk.style.width;
+  setScale($('#bh-hp'), (Math.max(0, run.heroHp / hpMaxB) * 100) / 100);
+  setScale($('#bh-sh'), (Math.min(1, run.shield / hpMaxB) * 100) / 100);
+  setScale($('#bh-ehp'), ((game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / enemyHp(run.level, boss)) * 100)) / 100);
+  setScale($('#bh-atk'), Number(atk.dataset.s ?? 0));
   $('#board-hud').classList.toggle('soon', !ch && run.stun <= 0 && run.enemyTimer < 1);
   $('#board').classList.toggle('low-hp', !run.result && run.heroHp / hpMaxB < 0.3);
   sb.classList.toggle('ready', sp >= 1);
@@ -907,7 +912,7 @@ function renderScreen() {
   atk.parentElement!.classList.toggle('soon', run.stun <= 0 && run.enemyTimer < 1);
   $('#enemy').classList.toggle('stunned', run.stun > 0);
   const combo = $('#combo');
-  combo.textContent = '';
+  setText(combo, '');
   // Medidor de combo arriba del tablero: número grande y una barra que se vacía (si llega a cero, se corta).
   const hud = $('#combo-hud');
   const on = run.combo >= 2 && !run.result;
@@ -920,7 +925,7 @@ function renderScreen() {
       restartAnim(hud, 'pop');
     }
     const max = comboTime(game.s) + game.mods.combo;
-    $('#ch-bar').style.width = Math.max(0, Math.min(1, run.comboTimer / max)) * 100 + '%';
+    setScale($('#ch-bar'), (Math.max(0, Math.min(1, run.comboTimer / max)) * 100) / 100);
   }
   const tier = run.result ? 0 : Math.min(4, Math.floor(run.combo / 10));
   if (tier !== frenzyTier) {
@@ -965,16 +970,16 @@ function renderScreen() {
   if (fh.hidden === fury > 0) fh.hidden = !(fury > 0);
   $('#app').classList.toggle('fury', fury > 0);
   if (fury > 0) {
-    $('#fury-t').textContent = fury.toFixed(1) + 's';
-    $('#fury-bar').style.width = (fury / REBIRTH_SECONDS) * 100 + '%';
+    setText($('#fury-t'), fury.toFixed(1) + 's');
+    setScale($('#fury-bar'), ((fury / REBIRTH_SECONDS) * 100) / 100);
     fh.classList.toggle('hurry', fury < 3);
   }
   const bl = $('#boost-label');
-  bl.textContent = boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '';
+  setText(bl, boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '');
   const app = $('#app');
   app.classList.toggle('in-duel', !!run.duel);
   if (run.duel) {
-    $('#run-title').textContent = wbView != null ? 'Jefe Mundial' : `Reto ${duelCode ?? ''}`;
+    setText($('#run-title'), wbView != null ? 'Jefe Mundial' : `Reto ${duelCode ?? ''}`);
     const left = Math.ceil(run.duel.left);
     const html = `<span class="duel-time ${left <= 10 ? 'hurry' : ''}">⏱ ${left}s</span><span class="duel-dmg">💥 ${fmt(run.duel.dmg)}</span>`;
     const r = $('#route');
@@ -984,7 +989,7 @@ function renderScreen() {
     }
     return;
   }
-  $('#run-title').textContent = `Nivel ${run.level}`;
+  setText($('#run-title'), `Nivel ${run.level}`);
   const route: string[] = [];
   for (let w = 0; w < WAVES_PER_LEVEL; w++) {
     for (let e = 0; e < ENEMIES_PER_WAVE; e++) {
@@ -1000,6 +1005,22 @@ function renderScreen() {
   if (r.dataset.k !== html) {
     r.innerHTML = html;
     r.dataset.k = html;
+  }
+}
+
+/** Texto que solo se escribe si cambió. */
+function setHidden(el: HTMLElement, h: boolean) {
+  if (el.hidden !== h) el.hidden = h;
+}
+function setText(el: HTMLElement, t: string) {
+  if (el.textContent !== t) el.textContent = t;
+}
+/** Llena una barra con transform, solo si cambió (no recalcula el diseño, solo mueve la capa). */
+function setScale(el: HTMLElement, f: number) {
+  const v = (Math.round(Math.max(0, Math.min(1, f)) * 200) / 200).toFixed(3);
+  if (el.dataset.s !== v) {
+    el.dataset.s = v;
+    el.style.transform = `scaleX(${v})`;
   }
 }
 
@@ -1080,10 +1101,23 @@ function comboBroken() {
   setTimeout(() => el.remove(), 1100);
   restartAnim($('#board'), 'fz-off');
 }
+/**
+ * Vuelve a arrancar una animación de CSS. Se juntan todas las del cuadro y se reinician juntas en el
+ * siguiente: así hay una sola medición por cuadro en vez de una por animación (eso trababa las peleas).
+ */
+const animQueue = new Map<HTMLElement, Set<string>>();
+let animRaf = 0;
 function restartAnim(el: HTMLElement, cls: string) {
   el.classList.remove(cls);
-  void el.offsetWidth;
-  el.classList.add(cls);
+  let set = animQueue.get(el);
+  if (!set) animQueue.set(el, (set = new Set()));
+  set.add(cls);
+  if (!animRaf) animRaf = requestAnimationFrame(flushAnims);
+}
+function flushAnims() {
+  animRaf = 0;
+  animQueue.forEach((set, el) => set.forEach((c) => el.classList.add(c)));
+  animQueue.clear();
 }
 
 /** Corte sobre el enemigo: más grande, con el color del material y más chispas según el nivel. */
@@ -1503,6 +1537,12 @@ function specialPieceSvg(p: Piece): string {
     <path d="M12 26 H52 M24 12 V46 M40 12 V46" stroke="#ffcf4d" stroke-width="3"/><rect x="28" y="22" width="8" height="10" rx="2" fill="#ffd34d" stroke="#2a1608" stroke-width="1.5"/>${pips}</svg>`;
 }
 
+/** Una pieza cae `rows` casillas hasta su lugar. Se mueve con `translate` (lo hace la GPU, no traba). */
+function dropAnim(el: HTMLElement, rows: number, ms: number) {
+  if (rows <= 0) return;
+  el.animate([{ translate: `0 ${-rows * 100}%` }, { translate: '0 0' }], { duration: ms + rows * 12, easing: 'cubic-bezier(.55, 0, 1, .45)' });
+}
+
 function renderBoard() {
   const run = game.s.run;
   if (!run) return;
@@ -1532,12 +1572,12 @@ function renderBoard() {
         if (p.sp) el.classList.add('sp-' + p.sp);
         el.style.left = pos.left;
         if (fromTop.has(p.id)) {
-          // Las piezas nuevas entran desde arriba del tablero y caen.
+          // Las piezas nuevas entran desde arriba del tablero y caen (animación por GPU, sin recalcular el diseño).
           fromTop.delete(p.id);
-          el.style.bottom = 100 + (spawnedInCol[c]++ * 100) / ROWS + '%';
-          el.classList.add('falling');
+          el.style.bottom = pos.bottom;
+          el.dataset.row = String(r);
           piecesEl.appendChild(el);
-          void el.offsetWidth;
+          dropAnim(el, ROWS + spawnedInCol[c]++ - r, 280);
         } else {
           el.style.bottom = pos.bottom;
           if (run.merges > 0) el.classList.add('born');
@@ -1545,8 +1585,12 @@ function renderBoard() {
         }
         pieceEls.set(p.id, el);
       }
-      el.dataset.col = String(c);
-      el.dataset.row = String(r);
+      if (el.dataset.col !== String(c)) el.dataset.col = String(c);
+      const was = Number(el.dataset.row);
+      if (was !== r) {
+        el.dataset.row = String(r);
+        if (was > r) dropAnim(el, was - r, 220);
+      }
       el.classList.toggle('webbed', !!p.web && !p.ice);
       el.classList.toggle('iced', !!p.web && !!p.ice);
       el.classList.toggle('burning', !!p.burn);
@@ -3147,11 +3191,11 @@ setTimeout(checkVersion, 5000);
 
 function renderTop() {
   const s = game.s;
-  $('#gold').textContent = fmt(s.gold);
-  $('#gems').textContent = fmt(s.gems);
-  $('#energy-val').textContent = `${s.energy}/${ENERGY_MAX}`;
+  setText($('#gold'), fmt(s.gold));
+  setText($('#gems'), fmt(s.gems));
+  setText($('#energy-val'), `${s.energy}/${ENERGY_MAX}`);
   const secs = secondsToNextEnergy(s);
-  $('#energy-time').textContent = s.energy < ENERGY_MAX ? ` ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` : '';
+  setText($('#energy-time'), s.energy < ENERGY_MAX ? ` ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` : '');
   $('#energy').classList.toggle('low', s.energy < ENERGY_COST);
 }
 

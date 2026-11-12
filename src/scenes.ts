@@ -8,15 +8,27 @@ type Scene = WorldTheme['scene'];
 const sky = (id: string, stops: [number, string][]) =>
   `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`;
 
-/** Partículas que flotan (luciérnagas, nieve, brasas...). Pocas y con transform para no pesar. */
-function motes(n: number, color: string, cls: string, y0 = 20, y1 = 150, r = 1.2): string {
+/**
+ * Partículas que flotan (luciérnagas, nieve, brasas...). Van fuera del SVG, como elementos HTML que solo
+ * se mueven con transform: así el navegador no tiene que volver a pintar el escenario en cada cuadro.
+ */
+const MOTES: Partial<Record<Scene, { n: number; color: string; cls: string; y0: number; y1: number; r: number }>> = {
+  forest: { n: 10, color: '#e6ff8a', cls: 'sc-fly', y0: 60, y1: 150, r: 1.2 },
+  cave: { n: 8, color: '#c9a7ff', cls: 'sc-fly', y0: 50, y1: 140, r: 0.9 },
+  glacier: { n: 12, color: '#fff', cls: 'sc-snow', y0: 0, y1: 150, r: 1 },
+  volcano: { n: 12, color: '#ffb02e', cls: 'sc-ember', y0: 40, y1: 160, r: 0.9 },
+};
+function motesHtml(scene: Scene): string {
+  const m = MOTES[scene];
+  if (!m) return '';
   let out = '';
-  for (let i = 0; i < n; i++) {
-    const x = (i * 53 + 17) % 190 + 5;
-    const y = y0 + ((i * 37) % (y1 - y0));
-    out += `<circle class="${cls}" cx="${x}" cy="${y}" r="${r + (i % 3) * 0.4}" fill="${color}" style="animation-delay:${-(i * 0.7).toFixed(1)}s;animation-duration:${(4 + (i % 4)).toFixed(0)}s"/>`;
+  for (let i = 0; i < m.n; i++) {
+    const x = ((i * 53 + 17) % 190 + 5) / 2;
+    const y = (m.y0 + ((i * 37) % (m.y1 - m.y0))) / 2;
+    const d = 3 + (m.r + (i % 3) * 0.4) * 2.2;
+    out += `<i class="${m.cls}" style="left:${x}%;top:${y}%;width:${d.toFixed(1)}px;height:${d.toFixed(1)}px;background:${m.color};box-shadow:0 0 ${(d * 1.5).toFixed(0)}px ${m.color};animation-delay:${-(i * 0.7).toFixed(1)}s;animation-duration:${4 + (i % 4)}s"></i>`;
   }
-  return out;
+  return `<div class="sc-motes">${out}</div>`;
 }
 
 function pine(x: number, y: number, s: number, c: string): string {
@@ -40,8 +52,7 @@ const SCENES: Record<Scene, () => string> = {
     <path d="M0 148 Q50 140 100 146 Q150 140 200 148 L200 200 L0 200Z" fill="#3f9a4a"/>
     <path d="M0 160 Q60 152 120 158 Q170 154 200 160 L200 200 L0 200Z" fill="#348540"/>
     ${[12, 40, 70, 128, 158, 188].map((x) => `<path d="M${x} 166 l2 -6 l2 6 l2 -5 l1 5" stroke="#5cc25a" stroke-width="1.4" fill="none"/>`).join('')}
-    <circle cx="36" cy="174" r="2.4" fill="#ff5a6a"/><circle cx="168" cy="178" r="2.4" fill="#ffd34d"/><circle cx="60" cy="186" r="2" fill="#fff"/>
-    ${motes(10, '#e6ff8a', 'sc-fly', 60, 150)}`,
+    <circle cx="36" cy="174" r="2.4" fill="#ff5a6a"/><circle cx="168" cy="178" r="2.4" fill="#ffd34d"/><circle cx="60" cy="186" r="2" fill="#fff"/>`,
 
   cave: () => `<defs>${sky('sk-cave', [[0, '#0b0716'], [0.6, '#2a1a4a'], [1, '#3a2560']])}
       <radialGradient id="sk-cave-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#b98bff" stop-opacity=".5"/><stop offset="1" stop-color="#b98bff" stop-opacity="0"/></radialGradient></defs>
@@ -52,8 +63,7 @@ const SCENES: Record<Scene, () => string> = {
     ${[[26, 132, '#c9a7ff'], [46, 140, '#7fe0ff'], [158, 136, '#c9a7ff'], [178, 142, '#ff7ad8']].map(([x, y, c]) => `<g class="sc-glow"><path d="M${x} ${y} L${+x - 5} ${+y - 12} L${x} ${+y - 22} L${+x + 5} ${+y - 12}Z" fill="${c}" opacity=".9"/><path d="M${+x + 6} ${y} L${+x + 3} ${+y - 8} L${+x + 7} ${+y - 13} L${+x + 10} ${+y - 7}Z" fill="${c}" opacity=".7"/></g>`).join('')}
     <path d="M0 146 Q50 138 100 144 Q150 138 200 146 L200 200 L0 200Z" fill="#2c2148"/>
     <path d="M0 162 Q70 154 130 160 Q170 156 200 162 L200 200 L0 200Z" fill="#241a3d"/>
-    <ellipse cx="60" cy="176" rx="10" ry="3" fill="#3a2a5e"/><ellipse cx="150" cy="184" rx="14" ry="3.4" fill="#3a2a5e"/>
-    ${motes(8, '#c9a7ff', 'sc-fly', 50, 140, 0.9)}`,
+    <ellipse cx="60" cy="176" rx="10" ry="3" fill="#3a2a5e"/><ellipse cx="150" cy="184" rx="14" ry="3.4" fill="#3a2a5e"/>`,
 
   peaks: () => `<defs>${sky('sk-peaks', [[0, '#1f3f78'], [0.55, '#5a8fd0'], [0.78, '#bfe0ff']])}</defs>
     <rect width="200" height="200" fill="url(#sk-peaks)"/>
@@ -87,8 +97,7 @@ const SCENES: Record<Scene, () => string> = {
     <path d="M20 92 L28 140 L36 116Z M60 80 L66 132 L86 124Z M112 86 L118 136 L136 118Z M162 84 L170 138 L190 126Z" fill="#8fc0e8"/>
     <path d="M0 148 Q50 140 100 146 Q150 140 200 148 L200 200 L0 200Z" fill="#eef6ff"/>
     <path d="M0 164 Q60 156 120 162 Q170 158 200 164 L200 200 L0 200Z" fill="#dbeaf8"/>
-    <path d="M24 158 L28 146 L32 158Z M36 158 L38 150 L40 158Z M166 160 L171 144 L176 160Z" fill="#a8d4f5"/>
-    ${motes(12, '#fff', 'sc-snow', 0, 150, 1)}`,
+    <path d="M24 158 L28 146 L32 158Z M36 158 L38 150 L40 158Z M166 160 L171 144 L176 160Z" fill="#a8d4f5"/>`,
 
   volcano: () => `<defs>${sky('sk-volcano', [[0, '#1a0505'], [0.55, '#5a140c'], [0.8, '#c8401a']])}
       <linearGradient id="sk-lava" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe066"/><stop offset="1" stop-color="#ff5a1a"/></linearGradient></defs>
@@ -100,11 +109,10 @@ const SCENES: Record<Scene, () => string> = {
     <path d="M-10 146 L18 112 L36 136 L56 120 L70 146Z M130 146 L150 118 L170 134 L190 108 L210 130 L210 150 L130 150Z" fill="#3a1410"/>
     <path d="M0 148 Q50 140 100 146 Q150 140 200 148 L200 200 L0 200Z" fill="#3a1a14"/>
     <path d="M-5 176 Q40 164 90 174 Q140 184 205 170" stroke="url(#sk-lava)" stroke-width="5" fill="none" class="sc-glow"/>
-    <path d="M0 186 Q60 178 120 184 Q170 180 200 186 L200 200 L0 200Z" fill="#2a100c"/>
-    ${motes(12, '#ffb02e', 'sc-ember', 40, 160, 0.9)}`,
+    <path d="M0 186 Q60 178 120 184 Q170 180 200 186 L200 200 L0 200Z" fill="#2a100c"/>`,
 };
 
 /** Fondo del escenario. `fit` = cómo se recorta: 'map' (pantalla alta) o 'battle' (ancha). */
 export function sceneSvg(theme: WorldTheme, fit: 'map' | 'battle'): string {
-  return `<svg class="scene sc-${theme.scene}" viewBox="0 0 200 200" preserveAspectRatio="${fit === 'map' ? 'xMidYMid slice' : 'xMidYMax slice'}" aria-hidden="true">${SCENES[theme.scene]()}</svg>`;
+  return `<svg class="scene sc-${theme.scene}" viewBox="0 0 200 200" preserveAspectRatio="${fit === 'map' ? 'xMidYMid slice' : 'xMidYMax slice'}" aria-hidden="true">${SCENES[theme.scene]()}</svg>${motesHtml(theme.scene)}`;
 }

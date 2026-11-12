@@ -311,9 +311,8 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
   border: 2px solid var(--line); box-shadow: inset 0 0 30px rgba(0,0,0,.5); overflow: hidden; }
 .pieces { position: absolute; inset: 0; }
 .pc { position: absolute; width: calc(100% / var(--cols)); height: calc(100% / var(--rows)); padding: 3px; cursor: pointer;
-  transition: bottom .22s cubic-bezier(.5, 0, .9, .6), left .16s, transform .15s, opacity .2s; will-change: bottom; }
+  transition: transform .15s, opacity .2s; }
 .pc svg { width: 100%; height: 100%; display: block; pointer-events: none; }
-.pc.falling { transition: bottom .28s cubic-bezier(.55, 0, 1, .45); }
 .pc.born { animation: born .3s ease-out; }
 .pc.gone { transform: scale(.2); opacity: 0; }
 .pc.lifting { z-index: 5; transition: bottom .22s, left .16s, opacity .2s; filter: drop-shadow(0 6px 10px rgba(0,0,0,.7)); }
@@ -1528,18 +1527,17 @@ button.res { cursor: pointer; }
 .wb-eyes { animation: wbVein .9s ease-in-out infinite; }
 
 /* ---------- Escenarios por mundo ---------- */
+/* El SVG del escenario queda quieto (se pinta una vez); solo se mueven partículas HTML con transform. */
 .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sc-motes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.sc-motes i { position: absolute; border-radius: 50%; will-change: transform, opacity; }
 .sc-fly { animation: scFly 5s ease-in-out infinite alternate; opacity: .8; }
-@keyframes scFly { 0% { transform: translate(0, 0); opacity: .2; } 50% { opacity: 1; } 100% { transform: translate(6px, -10px); opacity: .3; } }
+@keyframes scFly { 0% { transform: translate(0, 0); opacity: .2; } 50% { opacity: 1; } 100% { transform: translate(12px, -20px); opacity: .3; } }
 .sc-snow { animation: scSnow 6s linear infinite; }
-@keyframes scSnow { from { transform: translate(0, -20px); opacity: 0; } 15% { opacity: .9; } to { transform: translate(-8px, 60px); opacity: 0; } }
+@keyframes scSnow { from { transform: translate(0, -40px); opacity: 0; } 15% { opacity: .9; } to { transform: translate(-16px, 120px); opacity: 0; } }
 .sc-ember { animation: scEmber 5s linear infinite; }
-@keyframes scEmber { from { transform: translate(0, 10px); opacity: 0; } 20% { opacity: 1; } to { transform: translate(5px, -50px); opacity: 0; } }
-.sc-glow { animation: scGlow 2.6s ease-in-out infinite alternate; }
-@keyframes scGlow { from { opacity: .55; } to { opacity: 1; } }
-.sc-cloud { animation: scCloud 26s linear infinite alternate; }
-@keyframes scCloud { from { transform: translateX(-14px); } to { transform: translateX(14px); } }
-.sc-aurora { animation: scGlow 4s ease-in-out infinite alternate; }
+@keyframes scEmber { from { transform: translate(0, 20px); opacity: 0; } 20% { opacity: 1; } to { transform: translate(10px, -100px); opacity: 0; } }
+.wr-scene .sc-motes { display: none; }
 
 /* Batalla: el escenario va detrás de todo */
 .bt-scene { position: absolute; inset: 0; z-index: 0; }
@@ -1650,7 +1648,9 @@ button.res { cursor: pointer; }
 /* ---------- Pelea dinámica ---------- */
 /* Ataque cargado */
 .charge-hud { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); z-index: 7; width: min(86%, 330px); text-align: center; pointer-events: none;
-  background: linear-gradient(180deg, rgba(120,10,10,.92), rgba(60,4,8,.92)); border: 2px solid #ff4a3a; border-radius: 14px; padding: 5px 10px 7px; box-shadow: 0 0 22px rgba(255,40,30,.6); animation: cgIn .25s ease-out, cgPulse .5s ease-in-out infinite alternate; }
+  background: linear-gradient(180deg, rgba(120,10,10,.94), rgba(60,4,8,.94)); border: 2px solid #ff4a3a; border-radius: 14px; padding: 5px 10px 7px; box-shadow: 0 0 26px rgba(255,50,30,.8); animation: cgIn .25s ease-out; }
+.charge-hud b { animation: cgWord .5s ease-in-out infinite alternate; }
+@keyframes cgWord { to { transform: scale(1.06); } }
 .charge-hud b { display: block; font-size: 15px; font-weight: 1000; letter-spacing: 1px; color: #fff; text-shadow: 0 2px 0 #000; }
 .charge-hud small { display: block; font-size: 10.5px; font-weight: 800; color: #ffd9d0; margin: 1px 0 4px; }
 .cg-bar { height: 7px; border-radius: 4px; background: rgba(0,0,0,.5); overflow: hidden; }
@@ -1662,8 +1662,9 @@ button.res { cursor: pointer; }
 .enemy.giant.charging { animation: none; }
 .enemy.charge-in { animation: cgGrow .35s ease-out; }
 @keyframes cgGrow { 50% { transform: scale(1.15); } }
-#board.charging .pc[data-k^="escudo"] { box-shadow: 0 0 0 3px #5cb0ff, 0 0 16px #5cb0ff; border-radius: 12px; animation: cgPiece .45s ease-in-out infinite alternate; }
-@keyframes cgPiece { to { box-shadow: 0 0 0 3px #bfe4ff, 0 0 24px #5cb0ff; } }
+#board.charging .pc[data-k^="escudo"] { box-shadow: 0 0 0 3px #8fd0ff, 0 0 16px #5cb0ff; border-radius: 12px; }
+#board.charging .pc[data-k^="escudo"] > svg { animation: cgPiece .45s ease-in-out infinite alternate; }
+@keyframes cgPiece { to { transform: scale(1.08); } }
 
 /* Furia del jefe y veneno */
 .enemy.enraged:not(.charging) { filter: drop-shadow(0 0 8px #ff3a2a) saturate(1.5) hue-rotate(-12deg); }
@@ -1712,8 +1713,8 @@ button.res { cursor: pointer; }
 .pc.webbed::after, .pc.iced::after, .pc.burning::after { content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none; display: grid; place-items: center; font-size: 26px; }
 .pc.webbed::after { content: '🕸️'; background: rgba(230,230,240,.35); }
 .pc.iced::after { content: '❄️'; background: rgba(150,210,255,.55); box-shadow: inset 0 0 0 2px #cfefff; }
-.pc.burning::after { content: '🔥'; font-size: 22px; place-items: end end; padding: 0 2px 2px 0; background: rgba(255,90,20,.25); box-shadow: inset 0 0 0 2px #ff6a1a, 0 0 12px #ff6a1a; animation: burnFlick .25s ease-in-out infinite alternate; }
-@keyframes burnFlick { to { box-shadow: inset 0 0 0 2px #ffb02e, 0 0 18px #ff3a1a; } }
+.pc.burning::after { content: '🔥'; font-size: 22px; place-items: end end; padding: 0 2px 2px 0; background: rgba(255,90,20,.25); box-shadow: inset 0 0 0 2px #ff6a1a, 0 0 14px #ff6a1a; animation: burnFlick .25s ease-in-out infinite alternate; }
+@keyframes burnFlick { from { opacity: .65; } to { opacity: 1; } }
 .pc.webbed, .pc.iced { filter: saturate(.6); }
 
 /* Truco del jefe en la ficha del nivel */
@@ -1733,20 +1734,22 @@ button.res { cursor: pointer; }
 .bh-col { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .bh-ico { font-size: 15px; filter: drop-shadow(0 1px 0 #000); }
 .bh-bar { position: relative; flex: 1; height: 11px; border-radius: 6px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.12); overflow: hidden; }
-.bh-bar i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .15s linear; }
+.bh-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transform-origin: left center; transform: scaleX(0); transition: transform .15s linear; }
 .bh-bar .bf { background: linear-gradient(180deg, #6dff8a, #22b04a); }
 .bh-bar .bs { background: rgba(110,180,255,.7); height: 45%; top: auto; }
-.bh-bar.foe .bf { left: auto; right: 0; background: linear-gradient(180deg, #ff7a6a, #d8301a); }
+.bh-bar.foe .bf { transform-origin: right center; background: linear-gradient(180deg, #ff7a6a, #d8301a); }
 .bh-atk { height: 4px; border-radius: 2px; background: rgba(0,0,0,.45); overflow: hidden; }
-.bh-atk i { display: block; height: 100%; margin-left: auto; background: #ffb02e; }
+.bh-atk i { display: block; height: 100%; width: 100%; transform-origin: right center; transform: scaleX(0); background: #ffb02e; }
 .board-hud.soon .bh-atk i { background: #ff3a2a; box-shadow: 0 0 6px #ff3a2a; }
 .board-hud.soon .bh-side.foe .bh-ico { animation: cgShake .12s linear infinite; }
-#board.low-hp { box-shadow: 0 0 0 2px #ff3a2a, 0 0 18px rgba(255,40,30,.6); animation: lowHp 1s ease-in-out infinite; border-radius: 16px; }
-@keyframes lowHp { 50% { box-shadow: 0 0 0 2px #ff3a2a, 0 0 4px rgba(255,40,30,.3); } }
+/* Brillos del tablero: un borde quieto que solo cambia de opacidad (no hay que volver a pintar el tablero). */
+.board-glow { position: absolute; inset: -3px; border-radius: 18px; pointer-events: none; z-index: 7; opacity: 0; will-change: opacity; }
+#board.low-hp .board-glow { box-shadow: 0 0 0 2px #ff3a2a, 0 0 18px rgba(255,40,30,.7); animation: glowPulse 1s ease-in-out infinite alternate; }
+#board.charging .board-glow { box-shadow: 0 0 0 3px #ff3a2a, 0 0 28px rgba(255,70,30,.95); animation: glowPulse .4s ease-in-out infinite alternate; }
+@keyframes glowPulse { from { opacity: .35; } to { opacity: 1; } }
 #board.hurt-flash { animation: hurtFlash .35s ease-out; }
 @keyframes hurtFlash { 0% { box-shadow: inset 0 0 0 999px rgba(255,30,30,.28), 0 0 24px #ff2a1a; } 100% { box-shadow: none; } }
-#board.charging { box-shadow: 0 0 0 3px #ff3a2a, 0 0 22px rgba(255,40,30,.8); border-radius: 16px; animation: cgFrame .4s ease-in-out infinite alternate; }
-@keyframes cgFrame { to { box-shadow: 0 0 0 3px #ffb02e, 0 0 30px rgba(255,80,30,.95); } }
+
 .bh-pop { position: absolute; left: 50%; top: 2px; transform: translateX(-50%); z-index: 9; pointer-events: none; font-size: 16px; font-weight: 1000; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 6px #000; animation: bhPop .9s ease-out forwards; }
 .bh-pop.ouch { left: 20%; color: #ff6a5a; }
 .bh-pop.word { font-size: 18px; }
@@ -1754,15 +1757,22 @@ button.res { cursor: pointer; }
 @keyframes bhPop { from { transform: translate(-50%, 6px) scale(.7); opacity: 0; } 20% { transform: translate(-50%, 0) scale(1.1); opacity: 1; } to { transform: translate(-50%, -16px); opacity: 0; } }
 
 /* El aviso de ataque fuerte tapa la franja (justo arriba del tablero). */
-.board-hud .charge-hud { top: -4px; left: 0; right: 54px; width: auto; transform: none; padding: 3px 8px 5px; animation: cgPulse .5s ease-in-out infinite alternate; }
+.board-hud .charge-hud { top: -4px; left: 0; right: 54px; width: auto; transform: none; padding: 3px 8px 5px; animation: none; }
 .board-hud .charge-hud b { font-size: 14px; }
 .board-hud .charge-hud small { margin: 0 0 3px; }
 
 /* Botón del especial en el centro de la franja */
 .board-hud .spec-btn { position: relative; left: auto; bottom: auto; transform: none; width: 46px; height: 46px; }
-.board-hud .spec-btn.ready { animation: sbReady2 .7s ease-in-out infinite alternate; }
-@keyframes sbReady2 { from { transform: scale(1); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 10px #ffb02e; } to { transform: scale(1.12); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 26px #ffd34d; } }
+.board-hud .spec-btn.ready { box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 20px #ffc23a; animation: sbReady2 .7s ease-in-out infinite alternate; will-change: transform; }
+@keyframes sbReady2 { from { transform: scale(1); } to { transform: scale(1.12); } }
 .board-hud .spec-btn.nope { animation: sbNope2 .3s; }
 @keyframes sbNope2 { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .board-hud .spec-btn small { font-size: 6.5px; }
 .bh-col .bh-bar { flex: none; }
+@keyframes scGlow { from { opacity: .55; } to { opacity: 1; } }
+
+/* Barras de la pelea: se llenan con transform (no obliga a recalcular el diseño en cada cuadro). */
+#hp-fill, #hero-hp, #hero-shield, #atk-fill, #cg-bar, #ch-bar, #fury-bar { width: 100% !important; transform-origin: left center; will-change: transform; }
+#hp-fill, #hero-hp { transition: transform .12s; }
+#ch-bar { transition: transform .1s linear; }
+#hero-shield { border-right: 0; }
