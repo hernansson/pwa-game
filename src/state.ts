@@ -54,6 +54,7 @@ export interface GameState {
   arms: Record<ArmFam, string>; // variante equipada de cada familia y skin
   freeChestAt: number; // cuándo se abrió el último cofre gratis
   passUntil: number; // hasta cuándo dura el pase mensual
+  pulls: Record<string, number>; // cofres abiertos de cada tipo (para las garantías)
   ownedSkins?: string[];
   league: {
     week: number;
@@ -98,6 +99,7 @@ export function newState(): GameState {
     arms: { ...STARTER_ARMS },
     freeChestAt: 0,
     passUntil: 0,
+    pulls: {},
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
     stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
     lastSeen: Date.now(),
@@ -174,6 +176,7 @@ export function migrate(raw: unknown): GameState {
   }
   if (typeof s.freeChestAt !== 'number') s.freeChestAt = 0;
   if (typeof s.passUntil !== 'number') s.passUntil = 0;
+  if (!s.pulls || typeof s.pulls !== 'object') s.pulls = {};
   // El tablero ahora crece como mucho 1 fila y 1 columna, y solo con dinero: se devuelven las gemas de la 2.ª fila.
   if (s.board.rows > MAX_EXTRA_ROWS) {
     s.gems += 120;

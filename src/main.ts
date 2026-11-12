@@ -4,9 +4,6 @@ import {
   ENERGY_COST,
   REFILL_GEMS,
   ENERGY_MAX,
-  BOOST_SECONDS,
-  CAPS,
-  COMBO_WINDOW,
   LEVELS_PER_WORLD,
   UPGRADES,
   UpgradeId,
@@ -17,10 +14,14 @@ import {
   enemyHp,
   upgradeCost,
   PASS,
+  GEM_PACKS,
+  GOLD_PACKS,
+  chestPrice,
+  goldPackAmount,
 } from './balance';
 import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
-import { ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
+import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
 import {
   DIVISIONS,
@@ -34,7 +35,7 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { ARMS, ArmDef, ArmFam, CHESTS, MAX_ARM_LEVEL, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, ArmDef, ArmFam, CHESTS, MAX_ARM_LEVEL, pityLeft, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
   exportCode,
@@ -138,9 +139,9 @@ function myHero(): string {
 
 document.querySelector('#app')!.innerHTML = `
   <header class="topbar">
-    <div class="res gold" title="Oro"><span class="ico">🪙</span><b id="gold">0</b></div>
-    <div class="res gems" title="Gemas"><span class="ico">💠</span><b id="gems">0</b></div>
-    <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small></button>
+    <button class="res gold" id="gold-btn" title="Oro"><span class="ico">🪙</span><b id="gold">0</b><i class="res-plus">+</i></button>
+    <button class="res gems" id="gems-btn" title="Gemas"><span class="ico">💠</span><b id="gems">0</b><i class="res-plus">+</i></button>
+    <button class="res energy" id="energy" title="Energía"><span class="ico">⚡</span><b id="energy-val">0</b><small id="energy-time"></small><i class="res-plus">+</i></button>
     <button id="install" class="install" hidden>Instalar</button>
     <button class="gear" id="fullscreen" aria-label="Pantalla completa">⛶</button>
     <button class="gear" id="settings" aria-label="Ajustes">⚙️</button>
@@ -204,10 +205,10 @@ document.querySelector('#app')!.innerHTML = `
   </section>
 
   <nav class="tabs" id="tabs">
+    <button data-tab="cofres"><span>🛒</span>Tienda<i class="dot" data-dot="cofres" hidden></i></button>
     <button data-tab="heroe"><span>🧝</span>Héroe<i class="dot" data-dot="heroe" hidden></i></button>
-    <button data-tab="arsenal"><span>⚔️</span>Arsenal<i class="dot" data-dot="arsenal" hidden></i></button>
-    <button data-tab="cofres"><span>🎁</span>Cofres<i class="dot" data-dot="cofres" hidden></i></button>
-    <button data-tab="liga"><span>🏆</span>Liga</button>
+    <button data-tab="combate" class="center"><span>⚔️</span>Combate</button>
+    <button data-tab="arsenal"><span>🛡️</span>Equipo<i class="dot" data-dot="arsenal" hidden></i></button>
     <button data-tab="eventos"><span>🐉</span>Eventos</button>
   </nav>
 
@@ -1066,22 +1067,21 @@ type Tab = 'heroe' | 'arsenal' | 'cofres' | 'liga' | 'eventos' | 'vip';
 let openTab: Tab | null = null;
 
 const TAB_TITLES: Record<Tab, [string, string]> = {
-  heroe: ['Tu héroe', 'Resumen y entrenamiento'],
-  arsenal: ['Arsenal', 'Armas, potenciadores y skins'],
-  cofres: ['Cofres', 'Fragmentos para el Arsenal'],
+  heroe: ['Tu héroe', 'Entrena ataque, vida y crítico'],
+  arsenal: ['Equipo', 'Armas, escudos, potenciadores y skins'],
+  cofres: ['Tienda', 'Cofres, oro y gemas'],
   liga: ['Liga semanal', 'Compite contra otros 29 héroes'],
   eventos: ['Eventos', 'Retos con amigos y lo que viene'],
   vip: ['Zona VIP', 'Ventajas para los que van en serio'],
 };
 
 function openSheet(tab: Tab) {
-  if (tab === 'heroe' && openTab !== 'heroe') heroView = 'resumen';
   openTab = tab;
   $('#sheet').hidden = false;
   $('#sheet').dataset.tab = tab;
   $('#sheet-title').textContent = TAB_TITLES[tab][0];
   $('#sheet-sub').textContent = TAB_TITLES[tab][1];
-  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab));
+  setNavActive(tab);
   track(game.s, `open:${tab}`);
   $('#sheet-body').scrollTop = 0;
   renderSheet(true);
@@ -1090,7 +1090,12 @@ function openSheet(tab: Tab) {
 function closeSheet() {
   openTab = null;
   $('#sheet').hidden = true;
-  document.querySelectorAll('#tabs button').forEach((b) => b.classList.remove('active'));
+  setNavActive('combate');
+}
+
+/** En la barra de abajo queda marcado lo que se ve; sin panel abierto, es Combate. */
+function setNavActive(tab: string) {
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab));
 }
 
 /** Vuelve a dibujar la pestaña abierta sin perder dónde estaba el scroll. */
@@ -1105,8 +1110,8 @@ function refreshSheet() {
 $('#tabs').addEventListener('click', (ev) => {
   const btn = (ev.target as HTMLElement).closest('button') as HTMLElement | null;
   if (!btn) return;
-  const tab = btn.dataset.tab as Tab;
-  if (openTab === tab) closeSheet();
+  const tab = btn.dataset.tab as Tab | 'combate';
+  if (tab === 'combate' || openTab === tab) closeSheet();
   else openSheet(tab);
 });
 $('#sheet-close').addEventListener('click', closeSheet);
@@ -1139,98 +1144,40 @@ function renderDots() {
   $('#vip-btn').hidden = !!s.run;
 }
 
-function section(title: string, sub: string, inner: string): string {
-  return `<section class="sec"><div class="sec-head"><b>${title}</b><small>${sub}</small></div>${inner}</section>`;
-}
-
-let heroView: 'resumen' | 'entrenar' = 'resumen';
-
+/** Héroe: el personaje al centro, sus 3 números (ataque, crítico y vida) para entrenar, y atajos al equipo. */
 function renderHeroSheet() {
   const s = game.s;
-  const canTrain = UPGRADES.some((u) => game.canBuy(u.id));
-  const seg = `<div class="seg hero-seg">
-    <button data-hero-view="resumen" class="${heroView === 'resumen' ? 'on' : ''}"><span>🧝</span>Resumen</button>
-    <button data-hero-view="entrenar" class="${heroView === 'entrenar' ? 'on' : ''}"><span>🏋️</span>Entrenar${canTrain ? '<i class="dot"></i>' : ''}</button>
-  </div>`;
-  if (heroView === 'entrenar') {
-    const talents = UPGRADES.map(
-      (u) => `<button class="upgrade" data-up="${u.id}">
-      <span class="u-ico">${u.icon}</span>
-      <span class="u-main"><b>${u.name} <small data-lvl></small></b><span class="u-desc" data-desc></span></span>
-      <span class="u-cost" data-cost></span>
-    </button>`,
-    ).join('');
-    $('#sheet-body').innerHTML = `${seg}
-      <div class="train-head"><span>Mejoras permanentes que se pagan con oro.</span><b>🪙 ${fmt(s.gold)}</b></div>
-      ${talents}`;
-    updateTalents();
-    return;
-  }
-  const dmg = Math.round((damageMultiplier(s) * (1 + game.mods.dmg) - 1) * 100);
-  const crit = Math.round(critChance(s) * 100);
   const skin = armById(s.arms.skin)!;
-  const skinLvl = s.arsenal[skin.id].lvl;
-  const skills = activeSkillList();
+  const dmg = Math.round((damageMultiplier(s) * (1 + game.mods.dmg) - 1) * 100);
+  const stat = (id: UpgradeId, ico: string, label: string, value: string) => `<div class="hs-stat">
+      <span class="hs-ico">${ico}</span><small>${label}</small><b>${value}</b>
+      <button class="upgrade hs-up" data-up="${id}"><span data-lvl></span><span class="u-cost" data-cost></span><span data-desc hidden></span></button>
+    </div>`;
   const slot = (f: ArmFam) => {
     const d = armById(s.arms[f])!;
-    const lv = s.arsenal[d.id].lvl;
-    return `<button class="gear-slot" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}"><div class="t-icon">${armIcon(d)}</div><b>${d.name}</b><small>Nv ${lv}</small></button>`;
+    const st = s.arsenal[d.id];
+    const goal = shardGoal(d.id);
+    const ready = armReady(d);
+    return `<button class="hs-slot ${ready ? 'ready' : ''}" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}">
+      <span class="t-icon">${armIcon(d)}</span><small>Nv ${st.lvl}</small>
+      <span class="hs-bar"><i style="width:${Math.min(100, (st.shards / goal) * 100)}%"></i></span><em>${st.shards}/${goal}</em>
+      ${ready ? '<i class="dot"></i>' : ''}
+    </button>`;
   };
-  $('#sheet-body').innerHTML = `${seg}
-    <div class="hero-card" style="--rar:${RARITY_COLORS[skin.rarity]}">
-      <div class="hero-big">${myHero()}</div>
-      <div class="hero-stats">
-        <b class="hero-name">${esc(s.playerName || 'Tu héroe')}</b>
-        <small class="hero-skin">${skin.name} · Nv ${skinLvl}</small>
-        <div class="power-big"><small>Poder</small><b>${fmt(power(s))}</b></div>
-      </div>
+  $('#sheet-body').innerHTML = `
+    <div class="hs" style="--rar:${RARITY_COLORS[skin.rarity]}">
+      <div class="hs-slots left">${slot('espada')}${slot('escudo')}</div>
+      <div class="hs-hero">${myHero()}</div>
+      <div class="hs-slots right">${slot('rayo')}${slot('skin')}</div>
     </div>
-    <div class="chips">
-      <span><small>Vida</small><b>❤️ ${fmt(maxHp(s))}</b></span>
-      <span><small>Daño</small><b>⚔️ +${dmg}%</b></span>
-      <span><small>Crítico</small><b>🎯 ${crit}%</b></span>
+    <div class="hs-name"><b>${esc(s.playerName || 'Tu héroe')}</b><span>⚔️ Poder <b>${fmt(power(s))}</b></span></div>
+    <div class="hs-stats">
+      ${stat('fuerza', '⚔️', 'Ataque', `+${dmg}%`)}
+      ${stat('critico', '🎯', 'Crítico', `${Math.round(critChance(s) * 100)}%`)}
+      ${stat('vida', '❤️', 'Vida', fmt(maxHp(s)))}
     </div>
-    ${section('Equipo', 'toca para cambiarlo', `<div class="gear-row">${(['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]).map(slot).join('')}</div>
-      <div class="companion soon"><span>🐾</span><b>Compañero</b><small>Muy pronto</small></div>`)}
-    <details class="fold">
-      <summary><span>✨ Habilidades activas</span><b>${skills.length}</b></summary>
-      ${skills.length ? `<ul class="active-skills">${skills.join('')}</ul>` : `<p class="note">Todavía ninguna. Sube tus armas y tu skin al nivel 5 en el Arsenal para desbloquear la primera habilidad de cada una.</p>`}
-    </details>
-    <details class="fold">
-      <summary><span>📊 Todas las estadísticas</span><b>${heroStats().length}</b></summary>
-      <div class="stat-grid">${heroStats().map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
-    </details>
-    ${canTrain ? `<button class="train-cta" data-hero-view="entrenar">🏋️ Tienes mejoras para entrenar <b>Entrenar →</b></button>` : ''}`;
-}
-
-/** Resumen de números del héroe: base + talentos + Arsenal. */
-function heroStats(): [string, string][] {
-  const s = game.s;
-  const m = game.mods;
-  const pct = (x: number) => `${Math.round(x * 100)}%`;
-  return [
-    ['❤️ Vida máxima', fmt(maxHp(s))],
-    ['⚔️ Daño extra', '+' + pct(damageMultiplier(s) * (1 + m.dmg) - 1)],
-    ['🎯 Crítico', `${pct(critChance(s))} (máx ${pct(CAPS.crit)})`],
-    ['💥 Golpe crítico', `x${String(2 + m.critMult).replace('.', ',')}`],
-    ['🛡️ Escudo por fusión', '+' + pct(m.shield)],
-    ['🧱 Daño recibido', `${m.reduce ? '-' + pct(m.reduce) : '0%'} (máx -${pct(CAPS.reduce)})`],
-    ['🔰 Escudo al empezar', m.startShield ? pct(m.startShield) + ' de la vida' : 'no'],
-    ['⚡ Potenciador', `${String(BOOST_SECONDS + m.boostSec).replace('.', ',')} s · +${pct(m.boostMult)}`],
-    ['🔥 Tiempo de combo', `${String(COMBO_WINDOW + m.combo).replace('.', ',')} s`],
-    ['🧪 Curación', m.heal ? '+' + pct(m.heal) : 'normal'],
-  ];
-}
-
-/** Habilidades desbloqueadas de todo lo equipado. */
-function activeSkillList(): string[] {
-  const items: string[] = [];
-  for (const f of ['espada', 'escudo', 'rayo', 'skin'] as ArmFam[]) {
-    const d = armById(game.s.arms[f])!;
-    const lv = game.s.arsenal[d.id].lvl;
-    for (const sk of d.skills) if (lv >= sk.at) items.push(`<li><span class="t-icon">${armIcon(d)}</span><span>${sk.text}</span><small>${d.name}</small></li>`);
-  }
-  return items;
+    <p class="note">Toca un arma, el escudo, el potenciador o la skin para subirlos en Equipo.</p>`;
+  updateTalents();
 }
 
 function updateTalents() {
@@ -1243,7 +1190,7 @@ function updateTalents() {
       const def = UPGRADES.find((u) => u.id === id)!;
       const lvl = game.s.upgrades[id];
       const maxed = lvl >= def.max;
-      el.querySelector('[data-lvl]')!.textContent = `Nv ${lvl}`;
+      el.querySelector('[data-lvl]')!.textContent = el.classList.contains('hs-up') ? (maxed ? `Nv ${lvl}` : `Nv ${lvl} → ${lvl + 1}`) : `Nv ${lvl}`;
       el.querySelector('[data-desc]')!.textContent = def.desc(lvl);
       el.querySelector('[data-cost]')!.textContent = maxed ? 'MÁX' : `🪙 ${fmt(upgradeCost(def, lvl))}`;
       el.classList.toggle('can', game.canBuy(id));
@@ -1292,26 +1239,82 @@ function timeText(ms: number): string {
   return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
 }
 
-function renderChests() {
+type ShopTab = 'cofres' | 'oro' | 'gemas';
+let shopTab: ShopTab = 'cofres';
+
+function openShop(tab: ShopTab = 'cofres') {
+  shopTab = tab;
+  if (openTab === 'cofres') {
+    renderShop();
+    $('#sheet-body').scrollTop = 0;
+  } else openSheet('cofres');
+}
+
+function usd(n: number) {
+  return 'US$ ' + n.toFixed(2).replace('.', ',');
+}
+
+function renderShop() {
   const s = game.s;
-  const wait = game.freeChestIn();
-  const free = CHESTS.find((c) => c.id === 'armas')!;
-  $('#sheet-body').innerHTML = `
+  const seg = `<div class="seg shop-seg">${(
+    [
+      ['cofres', '🎁', 'Cofres'],
+      ['oro', '🪙', 'Oro'],
+      ['gemas', '💠', 'Gemas'],
+    ] as [ShopTab, string, string][]
+  )
+    .map(([k, ico, label]) => `<button data-shop-tab="${k}" class="${shopTab === k ? 'on' : ''}"><span>${ico}</span>${label}${k === 'cofres' && !game.freeChestIn() ? '<i class="dot"></i>' : ''}</button>`)
+    .join('')}</div>`;
+  let inner = '';
+  if (shopTab === 'cofres') {
+    const wait = game.freeChestIn();
+    const free = CHESTS.find((c) => c.id === 'armas')!;
+    inner = `
     <div class="free-chest ${wait ? '' : 'ready'}">
       <div class="chest-art">${chestSvg('armas')}</div>
       <div class="fc-main"><small>Cofre gratis</small><b>${free.name}</b><span data-free-timer>${wait ? `Listo en ${timeText(wait)}` : `${Math.round(free.shards / 2)} fragmentos de regalo`}</span></div>
       <button data-free-chest ${wait ? 'disabled' : ''}>${wait ? 'Esperando' : 'Abrir'}</button>
     </div>
-    <div class="chests">${CHESTS.map(
-      (c) => `<div class="chest-card c-${c.id}">
+    ${CHESTS.map((c) => {
+      const left = pityLeft(s.pulls[c.id] ?? 0);
+      const p1 = c.gems;
+      const p10 = chestPrice(c.gems, 10);
+      return `<div class="shop-chest c-${c.id}">
         <div class="chest-art">${chestSvg(c.id)}</div>
-        <b>${c.name}</b>
-        <p>${c.desc}</p>
-        <small>${c.shards} fragmentos</small>
-        <button data-chest="${c.id}" class="${s.gems >= c.gems ? 'can' : ''}">💠 ${c.gems}</button>
-      </div>`,
+        <div class="sc-main">
+          <b>${c.name}</b>
+          <p>${c.desc} · ${c.shards} por cofre</p>
+          <div class="pity"><span>🎯 Épica segura en <b>${left.small}</b></span><span>👑 Legendaria en <b>${left.big}</b></span></div>
+          <div class="sc-buy">
+            <button data-chest="${c.id}" data-count="1" class="${s.gems >= p1 ? 'can' : ''}"><small>Abrir x1</small>💠 ${p1}</button>
+            <button data-chest="${c.id}" data-count="10" class="x10 ${s.gems >= p10 ? 'can' : ''}"><em>Paga 9</em><small>Abrir x10</small>💠 ${p10}</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+    <p class="note">Cada 10 cofres de un mismo tipo sale seguro una variante épica, y cada 100 una legendaria (mientras no haya legendarias, una épica completa para desbloquear). Los niveles también dan fragmentos.</p>`;
+  } else if (shopTab === 'oro') {
+    inner = `<div class="shop-grid">${GOLD_PACKS.map(
+      (p, i) => `<button class="shop-pack gold ${s.gems >= p.gems ? 'can' : ''}" data-gold-pack="${i}">
+        ${p.tag ? `<em>${p.tag}</em>` : ''}
+        <span class="pk-ico">${'🪙'.repeat(i + 1)}</span>
+        <b>${fmt(goldPackAmount(i, s.unlocked))}</b>
+        <span class="pk-price">💠 ${p.gems}</span>
+      </button>`,
     ).join('')}</div>
-    <p class="note">También ganas fragmentos al superar niveles. Los jefes de mundo (cada 10 niveles) dan el doble y además fragmentos de skin.</p>`;
+    <p class="note">El oro de cada paquete crece con tu nivel: siempre rinde como unos ${GOLD_PACKS[0].levels}, ${GOLD_PACKS[1].levels} o ${GOLD_PACKS[2].levels} niveles jugados donde estás.</p>`;
+  } else {
+    inner = `<div class="shop-grid gems">${GEM_PACKS.map(
+      (p, i) => `<button class="shop-pack gem" data-gem-pack="${i}">
+        ${p.tag ? `<em>${p.tag}</em>` : ''}
+        <span class="pk-ico">${'💠'.repeat(Math.min(3, i + 1))}</span>
+        <b>${fmt(p.gems)}</b>
+        <span class="pk-price money">${usd(p.usd)}</span>
+      </button>`,
+    ).join('')}</div>
+    <p class="note">Muy pronto se van a poder comprar. Toca el que te interesa y te avisamos.</p>`;
+  }
+  $('#sheet-body').innerHTML = seg + inner;
 }
 
 const CHEST_PAL: Record<string, [string, string, string]> = {
@@ -1354,20 +1357,26 @@ function shardGoal(id: string): number {
   return st.lvl === 0 ? unlockShards(armById(id)!.rarity) : upgradeShards(st.lvl);
 }
 
-function openChestUi(id: string, free: boolean) {
+function openChestUi(id: string, free: boolean, count = 1) {
   const chest = CHESTS.find((c) => c.id === id)!;
+  const price = chestPrice(chest.gems, count);
   const before: Record<string, number> = {};
   for (const a of ARMS) before[a.id] = game.s.arsenal[a.id].shards;
+  const name = count > 1 ? `${chest.name} x${count}` : chest.name;
+  if (!free && game.s.gems < price) {
+    track(game.s, `chest_nogems:${id}`);
+    toast(`Te faltan ${price - game.s.gems} 💠`);
+    openShop('gemas');
+    return;
+  }
   if (online()) {
     // Los dados del cofre los tira el servidor.
-    if (free ? game.freeChestIn() > 0 : game.s.gems < chest.gems) {
-      if (!free) toast(`Te faltan ${chest.gems - game.s.gems} 💠`);
-      return;
-    }
-    act<{ got: Record<string, number> }>('chest', { id, free }).then(
+    if (free && game.freeChestIn() > 0) return;
+    act<ChestResult>('chest', { id, free, count }).then(
       (a) => {
         applyServer(a.state);
-        chestShow(chest.id, chest.name, a.result.got, before, free);
+        refreshSheet();
+        chestShow(chest.id, name, a.result, before, free, count);
       },
       (e) => {
         toast(errorText(e));
@@ -1376,24 +1385,20 @@ function openChestUi(id: string, free: boolean) {
     );
     return;
   }
-  const got = game.openChest(id, free);
-  if (!got) {
-    if (!free) {
-      track(game.s, `chest_nogems:${id}`);
-      toast(`Te faltan ${chest.gems - game.s.gems} 💠`);
-    }
-    return;
-  }
+  const r = game.openChest(id, free, count);
+  if (!r) return;
   save(game.s);
   refreshSheet();
-  chestShow(chest.id, chest.name, got, before, free);
+  chestShow(chest.id, name, r, before, free, count);
 }
 
 /**
  * La apertura del cofre: cae, se toca 3 veces (cada toque brilla más y deja adivinar la rareza),
  * explota y van saliendo las cartas boca abajo, de la menos rara a la más rara.
  */
-function chestShow(id: string, name: string, got: Record<string, number>, before: Record<string, number>, free: boolean) {
+function chestShow(id: string, name: string, res: ChestResult, before: Record<string, number>, free: boolean, count = 1) {
+  const got = res.got;
+  const pityIds = new Set(res.pity.map((p) => p.id));
   const cards = Object.keys(got)
     .map((k) => ({ def: armById(k)!, n: got[k] }))
     .sort((a, b) => RAR_RANK[a.def.rarity] - RAR_RANK[b.def.rarity]);
@@ -1469,7 +1474,7 @@ function chestShow(id: string, name: string, got: Record<string, number>, before
     const locked = st.lvl === 0;
     const tag = ready ? (locked ? '¡Lista para desbloquear!' : '¡Puede subir de nivel!') : locked ? 'Bloqueada' : `Nivel ${st.lvl}`;
     (node.querySelector('.co-front') as HTMLElement).innerHTML = `
-      <div class="co-rar">${RAR_LABEL[c.def.rarity]}</div>
+      <div class="co-rar">${RAR_LABEL[c.def.rarity]}</div>${pityIds.has(c.def.id) ? '<div class="co-pity">🎯 Garantía</div>' : ''}
       <div class="co-art">${armShowcase(c.def)}</div>
       <b>${c.def.name}</b>
       <div class="co-n">+${c.n} 🧩</div>
@@ -1492,7 +1497,8 @@ function chestShow(id: string, name: string, got: Record<string, number>, before
     if (phase === 'done') return;
     phase = 'done';
     const chest = CHESTS.find((c) => c.id === id)!;
-    const canMore = game.s.gems >= chest.gems;
+    const again = chestPrice(chest.gems, count);
+    const canMore = game.s.gems >= again;
     const readyIds = cards.filter((c) => game.s.arsenal[c.def.id].shards >= shardGoal(c.def.id)).map((c) => c.def.id);
     el.classList.add('summary');
     (el.querySelector('.co-stage') as HTMLElement).innerHTML = `
@@ -1506,13 +1512,13 @@ function chestShow(id: string, name: string, got: Record<string, number>, before
             <div class="co-mini-art">${armIcon(c.def)}</div>
             <b>+${c.n}</b><small>${c.def.name}</small>
             <div class="co-bar sm"><i style="--from:${Math.min(100, (st.shards / goal) * 100)}%;--to:${Math.min(100, (st.shards / goal) * 100)}%"></i></div>
-            ${r ? '<em>¡Lista!</em>' : ''}
+            ${r ? '<em>¡Lista!</em>' : pityIds.has(c.def.id) ? '<em class="pity">Garantía</em>' : ''}
           </div>`;
         })
         .join('')}</div>
       <div class="co-btns">
         ${readyIds.length ? `<button class="primary" data-co-arm="${readyIds[readyIds.length - 1]}">Mejorar ahora</button>` : `<button class="primary" data-co-arm="${cards[cards.length - 1].def.id}">Ver en el Arsenal</button>`}
-        <button data-co-again class="${canMore ? 'can' : ''}">Abrir otro · 💠 ${chest.gems}</button>
+        <button data-co-again class="${canMore ? 'can' : ''}">${count > 1 ? `Abrir 10 más · 💠 ${again}` : `Abrir otro · 💠 ${again}`}</button>
         <button data-co-close class="co-ghost">Listo</button>
       </div>`;
   };
@@ -1528,13 +1534,15 @@ function chestShow(id: string, name: string, got: Record<string, number>, before
       const def = armById(arm.dataset.coArm)!;
       armTab = def.fam;
       armSel[def.fam] = def.id;
+      petsTab = false;
       el.remove();
+      closeSheet();
       openSheet('arsenal');
       return;
     }
     if (t.closest('[data-co-again]')) {
       el.remove();
-      openChestUi(id, false);
+      openChestUi(id, false, count);
       return;
     }
     if (t.closest('[data-co-close]')) {
@@ -1545,6 +1553,30 @@ function chestShow(id: string, name: string, got: Record<string, number>, before
     else if (phase === 'cards') shown < cards.length ? flip() : summary();
   });
   track(game.s, `chest_show:${id}:${best}`);
+}
+
+function buyGoldPack(i: number) {
+  const p = GOLD_PACKS[i];
+  if (game.s.gems < p.gems) {
+    toast(`Te faltan ${p.gems - game.s.gems} 💠`);
+    return openShop('gemas');
+  }
+  if (online()) {
+    act<{ gold: number }>('gold_pack', { pack: i }).then(
+      (a) => {
+        applyServer(a.state);
+        toast(`+${fmt(a.result.gold)} 🪙`);
+        refreshSheet();
+      },
+      (e) => toast(errorText(e)),
+    );
+    return;
+  }
+  const g = game.buyGold(i);
+  if (g == null) return;
+  save(game.s);
+  toast(`+${fmt(g)} 🪙`);
+  refreshSheet();
 }
 
 // ---------- Arsenal ----------
@@ -1605,16 +1637,26 @@ function armTile(def: ArmDef, sel: boolean): string {
   </button>`;
 }
 
+let petsTab = false;
+const FAM_CHEST: Record<ArmFam, string> = { espada: 'armas', escudo: 'armas', rayo: 'poder', skin: 'skins' };
+
 function renderArsenal() {
+  const segHtml = `<div class="seg arm-seg">${ARM_TABS.map(
+    ([f, ico, label]) => `<button data-arm-tab="${f}" class="${!petsTab && f === armTab ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
+  ).join('')}<button data-pets class="${petsTab ? 'on' : ''}"><span>🐾</span>Mascotas</button></div>`;
+  if (petsTab) {
+    $('#sheet-body').innerHTML = `${segHtml}
+      <div class="pets-soon"><div class="ps-art">🐾</div><b>Mascotas</b><p>Muy pronto vas a poder tener un compañero que pelea a tu lado y suma su propia habilidad.</p><button data-interest="pets">¡Me interesa!</button></div>`;
+    return;
+  }
   const fam = armTab;
   const list = ARMS.filter((a) => a.fam === fam);
   const def = armById(armSel[fam] ?? game.s.arms[fam]) ?? list[0];
   const st = game.s.arsenal[def.id];
   const locked = st.lvl === 0;
+  const chest = CHESTS.find((c) => c.id === FAM_CHEST[fam])!;
   $('#sheet-body').innerHTML = `
-    <div class="seg">${ARM_TABS.map(
-      ([f, ico, label]) => `<button data-arm-tab="${f}" class="${f === fam ? 'on' : ''}"><span>${ico}</span>${label}${ARMS.some((a) => a.fam === f && armReady(a)) ? '<i class="dot"></i>' : ''}</button>`,
-    ).join('')}</div>
+    ${segHtml}
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
       <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
       <div class="sc-info">
@@ -1625,6 +1667,7 @@ function renderArsenal() {
       </div>
     </div>
     <div class="sc-btns btns">${armButtons(def)}</div>
+    <button class="go-chest" data-go-shop="cofres"><span class="gc-art">${chestSvg(chest.id)}</span><span><b>Consigue fragmentos</b><small>${chest.name} · desde 💠 ${chest.gems}</small></span><em>Ir a cofres →</em></button>
     <div class="sec-head var-head"><b>Variantes</b><small>cada nivel ${levelGainText(fam)}</small></div>
     ${ARM_CATS.map(([title, rars, premium]) => {
       const items = list.filter((x) => rars.includes(x.rarity));
@@ -1756,7 +1799,7 @@ function renderSheet(full: boolean) {
   if (openTab === 'liga') return renderLeague(full);
   if (openTab === 'heroe') return full ? renderHeroSheet() : updateTalents();
   if (openTab === 'cofres') {
-    if (full) return renderChests();
+    if (full) return renderShop();
     // Si el cofre gratis quedó listo, se vuelve a dibujar; si no, solo el contador.
     const wait = game.freeChestIn();
     const btn = body.querySelector('[data-free-chest]');
@@ -1795,6 +1838,12 @@ $('#sheet-body').addEventListener('click', (ev) => {
       restartAnim(up, 'bought');
       lobbyKey = '';
       sync('buy', { id: up.dataset.up });
+      if (up.classList.contains('hs-up')) {
+        renderHeroSheet();
+        const again = $('#sheet-body').querySelector(`[data-up="${up.dataset.up}"]`) as HTMLElement | null;
+        if (again) restartAnim(again.closest('.hs-stat') as HTMLElement, 'bought');
+        return;
+      }
     }
     updateTalents();
     return;
@@ -1807,23 +1856,23 @@ $('#sheet-body').addEventListener('click', (ev) => {
   const dOpen = t.closest('[data-duel-open]') as HTMLElement | null;
   if (dOpen) return openDuel(dOpen.dataset.duelOpen!);
   if (t.closest('[data-login-settings]')) return showSettings();
-  const hv = t.closest('[data-hero-view]') as HTMLElement | null;
-  if (hv) {
-    heroView = hv.dataset.heroView as typeof heroView;
-    renderHeroSheet();
-    $('#sheet-body').scrollTop = 0;
-    return;
-  }
   if (armAction(t, false)) return;
   const gotoArm = t.closest('[data-goto-arm]') as HTMLElement | null;
   if (gotoArm) {
     armTab = gotoArm.dataset.gotoArm as ArmFam;
+    petsTab = false;
     openSheet('arsenal');
     return;
   }
   const tabEl = t.closest('[data-arm-tab]') as HTMLElement | null;
   if (tabEl) {
     armTab = tabEl.dataset.armTab as ArmFam;
+    petsTab = false;
+    renderArsenal();
+    return;
+  }
+  if (t.closest('[data-pets]')) {
+    petsTab = true;
     renderArsenal();
     return;
   }
@@ -1856,7 +1905,19 @@ $('#sheet-body').addEventListener('click', (ev) => {
   }
   if (t.closest('[data-free-chest]')) return openChestUi('armas', true);
   const chest = t.closest('[data-chest]') as HTMLElement | null;
-  if (chest) return openChestUi(chest.dataset.chest!, false);
+  if (chest) return openChestUi(chest.dataset.chest!, false, Number(chest.dataset.count) === 10 ? 10 : 1);
+  const shopT = t.closest('[data-shop-tab]') as HTMLElement | null;
+  if (shopT) return openShop(shopT.dataset.shopTab as ShopTab);
+  const goldP = t.closest('[data-gold-pack]') as HTMLElement | null;
+  if (goldP) return buyGoldPack(Number(goldP.dataset.goldPack));
+  const gemP = t.closest('[data-gem-pack]') as HTMLElement | null;
+  if (gemP) {
+    track(game.s, `interest:gems_${gemP.dataset.gemPack}`);
+    toast('¡Anotado! Te avisamos cuando se puedan comprar');
+    return;
+  }
+  const goShop = t.closest('[data-go-shop]') as HTMLElement | null;
+  if (goShop) return openShop(goShop.dataset.goShop as ShopTab);
   const interest = t.closest('[data-interest]') as HTMLElement | null;
   if (interest) {
     track(game.s, `interest:${interest.dataset.interest}`);
@@ -2120,6 +2181,8 @@ function showEnergyModal() {
     <div class="btns"><button data-close>Esperar</button><button data-refill class="primary">Recargar 💠${REFILL_GEMS}</button></div>`);
 }
 $('#energy').addEventListener('click', showEnergyModal);
+$('#gold-btn').addEventListener('click', () => openShop('oro'));
+$('#gems-btn').addEventListener('click', () => openShop('gemas'));
 
 function showLeagueResult() {
   const r = game.s.league.lastResult;
@@ -2218,3 +2281,4 @@ if (!game.s.playerName && !online()) {
 }
 requestAnimationFrame(frame);
 duelFromLink();
+setNavActive('combate');

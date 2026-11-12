@@ -166,6 +166,26 @@ export const CHESTS: ChestDef[] = [
 ];
 export const FREE_CHEST_HOURS = 4;
 
+/** Abrir 10 de una vez cuesta como 9. */
+export const CHEST_X10_PRICE = 9;
+/** Garantías: cada 10 cofres de un tipo sale seguro una épica; cada 100, una legendaria. */
+export const PITY = { every: 10, rarity: 'épica' as Rarity, bigEvery: 100, bigRarity: 'legendaria' as Rarity };
+
+/** La mejor rareza disponible hasta `r` en esas familias (si todavía no hay legendarias, da épica). */
+export function pityPick(fams: ArmFam[], r: Rarity, rand = Math.random): ArmDef {
+  const order: Rarity[] = ['común', 'rara', 'épica', 'legendaria'];
+  for (let i = order.indexOf(r); i >= 0; i--) {
+    const pool = ARMS.filter((a) => fams.includes(a.fam) && a.rarity === order[i]);
+    if (pool.length) return pool[Math.floor(rand() * pool.length)];
+  }
+  return ARMS.find((a) => fams.includes(a.fam))!;
+}
+
+/** Cuántos cofres faltan para cada garantía. `pulls` es cuántos se abrieron hasta ahora. */
+export function pityLeft(pulls: number) {
+  return { small: PITY.every - (pulls % PITY.every), big: PITY.bigEvery - (pulls % PITY.bigEvery) };
+}
+
 export const STARTER_ARMS: Record<ArmFam, string> = { espada: 'espada_recta', escudo: 'escudo_redondo', rayo: 'chispa', skin: 'caballero' };
 
 export function armById(id: string | undefined): ArmDef | undefined {

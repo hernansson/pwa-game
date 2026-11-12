@@ -174,3 +174,44 @@ export function heroMaxHp(vidaLvl: number): number {
 export function comboMultiplier(combo: number): number {
   return 1 + Math.min(combo, 20) * 0.1;
 }
+
+// ---------- Tienda: gemas, oro y precios ----------
+// Referencia: 100 gemas ≈ US$ 1 (paquete de 4,99). Los paquetes grandes dan un poco más por dólar.
+// Con eso: un cofre de armas (40 💠) ≈ US$ 0,40, una recarga de energía (30 💠) ≈ US$ 0,30,
+// y el pase mensual (US$ 4,99) vale lo mismo que 500 gemas.
+
+export const GEM_PACKS = [
+  { gems: 80, usd: 0.99 },
+  { gems: 500, usd: 4.99, tag: 'Popular' },
+  { gems: 1200, usd: 9.99, tag: '+20%' },
+  { gems: 2600, usd: 19.99, tag: '+30%' },
+  { gems: 7000, usd: 49.99, tag: 'Mejor precio' },
+];
+
+/** Precio en gemas de abrir `count` cofres (10 cuestan como 9). */
+export function chestPrice(gems: number, count: number): number {
+  return count === 10 ? gems * 9 : gems * count;
+}
+
+/** Oro que da superar una vez el nivel (todas las oleadas y el jefe). */
+export function levelGold(level: number): number {
+  return enemyGold(level, false) * ENEMIES_PER_WAVE * WAVES_PER_LEVEL + enemyGold(level, true);
+}
+
+/**
+ * Paquetes de oro. Se miden en "niveles de oro" del nivel donde estás: una recarga de energía (30 💠)
+ * da para 6 niveles, así que el oro sale un poco mejor que jugar esos niveles (pero sin fragmentos ni avance).
+ */
+export const GOLD_PACKS = [
+  { gems: 40, levels: 10 },
+  { gems: 180, levels: 50, tag: '+12%' },
+  { gems: 700, levels: 220, tag: '+26%' },
+];
+
+export function goldPackAmount(pack: number, level: number): number {
+  const p = GOLD_PACKS[pack];
+  if (!p) return 0;
+  const raw = p.levels * levelGold(Math.max(1, level));
+  const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+  return Math.round(raw / mag) * mag; // números redondos
+}

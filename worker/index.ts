@@ -190,10 +190,18 @@ async function act(env: Env, user: User, b: Record<string, unknown>) {
     case 'chest':
       return mutate(env, user, (_s, g) => {
         g.rand = Math.random; // en el servidor los dados no se pueden predecir desde el celu
-        const got = g.openChest(str('id'), !!b.free);
-        if (!got) throw new HttpError(400, 'cannot_open');
-        return { got };
+        const r = g.openChest(str('id'), !!b.free, Number(b.count) === 10 ? 10 : 1);
+        if (!r) throw new HttpError(400, 'cannot_open');
+        return r;
       });
+    case 'gold_pack':
+      return mutate(env, user, (_s, g) => {
+        const gold = g.buyGold(Number(b.pack));
+        if (gold == null) throw new HttpError(400, 'cannot_buy');
+        return { gold };
+      });
+    case 'gems_pack':
+      throw new HttpError(402, 'needs_payment'); // gemas con dinero real: cuando haya cobros
     case 'refill':
       return mutate(env, user, (_s, g) => {
         if (!g.refillEnergy()) throw new HttpError(400, 'cannot_refill');

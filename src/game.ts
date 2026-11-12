@@ -35,8 +35,8 @@ import {
   track,
   upgradeDef,
 } from './state';
-import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, armById, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
-import { ENERGY_MAX, LEVELS_PER_WORLD, PASS, REFILL_GEMS } from './balance';
+import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ENERGY_MAX, GOLD_PACKS, LEVELS_PER_WORLD, PASS, REFILL_GEMS, chestPrice, goldPackAmount } from './balance';
 
 export interface ClearReport {
   level: number;
@@ -49,6 +49,12 @@ export interface ClearReport {
   firstClear: boolean;
   shards: Record<string, number>; // fragmentos del Arsenal ganados
   damage?: number; // solo en el reto contra el jefe
+}
+
+/** Lo que salió de los cofres: fragmentos por variante y qué garantías tocaron. */
+export interface ChestResult {
+  got: Record<string, number>;
+  pity: { id: string; big: boolean }[];
 }
 
 /** Reto contra el jefe: dura esto y gana quien le hace más daño. */
@@ -432,21 +438,52 @@ export class Game {
     return Math.max(0, this.s.freeChestAt + FREE_CHEST_HOURS * 3600_000 - now);
   }
 
-  /** Abre un cofre de la tienda. El de armas puede ser gratis cada pocas horas. */
-  openChest(id: string, free = false): Record<string, number> | null {
+  /**
+   * Abre cofres de la tienda (1 o 10; 10 cuestan como 9). El de armas puede ser gratis cada pocas horas.
+   * Cada 10 cofres de un tipo sale seguro una épica y cada 100 una legendaria (la mejor que exista).
+   */
+  openChest(id: string, free = false, count = 1): ChestResult | null {
     const chest = CHESTS.find((c) => c.id === id);
-    if (!chest || this.s.run) return null;
+    if (!chest || this.s.run || (count !== 1 && count !== 10) || (free && count !== 1)) return null;
     if (free) {
       if (id !== 'armas' || this.freeChestIn() > 0) return null;
       this.s.freeChestAt = Date.now();
     } else {
-      if (this.s.gems < chest.gems) return null;
-      this.s.gems -= chest.gems;
+      const price = chestPrice(chest.gems, count);
+      if (this.s.gems < price) return null;
+      this.s.gems -= price;
     }
-    const shards = rollShards(free ? Math.round(chest.shards / 2) : chest.shards, chest.fams, this.rand);
-    for (const k in shards) this.s.arsenal[k].shards += shards[k];
-    track(this.s, `chest:${id}${free ? ':free' : ''}`);
-    return shards;
+    const got: Record<string, number> = {};
+    const pity: { id: string; big: boolean }[] = [];
+    const add = (k: string, n: number) => (got[k] = (got[k] ?? 0) + n);
+    for (let i = 0; i < count; i++) {
+      const n = (this.s.pulls[id] ?? 0) + 1;
+      this.s.pulls[id] = n;
+      for (const [k, v] of Object.entries(rollShards(free ? Math.round(chest.shards / 2) : chest.shards, chest.fams, this.rand))) add(k, v);
+      if (n % PITY.bigEvery === 0) {
+        const d = pityPick(chest.fams, PITY.bigRarity, this.rand);
+        add(d.id, unlockShards(d.rarity));
+        pity.push({ id: d.id, big: true });
+      } else if (n % PITY.every === 0) {
+        const d = pityPick(chest.fams, PITY.rarity, this.rand);
+        add(d.id, Math.round(unlockShards(d.rarity) / 4));
+        pity.push({ id: d.id, big: false });
+      }
+    }
+    for (const k in got) this.s.arsenal[k].shards += got[k];
+    track(this.s, `chest:${id}${free ? ':free' : ''}${count > 1 ? ':x' + count : ''}`);
+    return { got, pity };
+  }
+
+  /** Compra oro con gemas. El oro de cada paquete crece con tu nivel. */
+  buyGold(pack: number): number | null {
+    const p = GOLD_PACKS[pack];
+    if (!p || this.s.run || this.s.gems < p.gems) return null;
+    const gold = goldPackAmount(pack, this.s.unlocked);
+    this.s.gems -= p.gems;
+    this.s.gold += gold;
+    track(this.s, `gold_pack:${pack}`);
+    return gold;
   }
 
   /** Cierra la pantalla de resultado y vuelve al mapa. */
