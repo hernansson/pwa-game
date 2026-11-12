@@ -2316,11 +2316,11 @@ function renderArsenal() {
       ${(() => {
         // Vista previa de una forma más alta: se ve como si ya la tuvieras.
         const prev = def.rarity === 'legendaria' && evoPreview != null && evoPreview !== evoStage(st.lvl) ? evoPreview : null;
-        const shut = locked && prev == null;
-        // Forma que todavía no tenés (o la legendaria entera bloqueada): se ve, pero con candado.
+        // Forma que todavía no tenés (o la legendaria entera bloqueada): igual que la bloqueada, chica, apagada y con candado.
         const notYet = prev != null && (locked || prev > evoStage(st.lvl));
-        const cls = shut ? 'locked' : (def.fam === 'skin' ? 'skinv r-' + def.rarity : def.rarity === 'legendaria' ? 'legend ' + def.fam : '') + (notYet ? ' not-yet' : '');
-        return `<div class="sc-art ${cls}">${previewEvo(prev, () => armShowcase(def, !shut))}${shut ? '<span class="lock">🔒</span>' : notYet ? `<span class="lock evo-lock">🔒<small>Nv ${EVO_LEVELS[prev! - 1]}</small></span>` : ''}</div>`;
+        const shut = (locked && prev == null) || notYet;
+        const cls = shut ? 'locked' : def.fam === 'skin' ? 'skinv r-' + def.rarity : def.rarity === 'legendaria' ? 'legend ' + def.fam : '';
+        return `<div class="sc-art ${cls}">${previewEvo(prev, () => armShowcase(def, !shut))}${notYet ? `<span class="lock evo-lock">🔒<small>Nv ${EVO_LEVELS[prev! - 1]}</small></span>` : shut ? '<span class="lock">🔒</span>' : ''}</div>`;
       })()}
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
