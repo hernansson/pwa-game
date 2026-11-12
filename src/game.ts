@@ -83,7 +83,14 @@ export type GameEvent =
   | { type: 'wave'; wave: number; boss: boolean }
   | { type: 'spawn'; ids: number[] }
   | { type: 'discard'; col: number; row: number }
+  | { type: 'rebirth'; seconds: number }
   | { type: 'end'; report: ClearReport };
+
+/** Renacer del Fénix: segundos de furia inmune y cuánto multiplica el daño mientras dura. */
+export const REBIRTH_SECONDS = 8;
+export const REBIRTH_DAMAGE = 2;
+/** En la furia no hay defensa: los escudos se vuelven espadas y las pociones, rayos. */
+const FURY_FAM: Partial<Record<Family, Family>> = { escudo: 'espada', pocion: 'rayo' };
 
 type Listener = (e: GameEvent) => void;
 
@@ -137,7 +144,35 @@ export class Game {
   }
 
   private newPiece() {
-    return randomPiece(pieceOdds(this.s), this.rand);
+    const p = randomPiece(pieceOdds(this.s), this.rand);
+    if (this.s.run?.reborn?.left) p.fam = FURY_FAM[p.fam] ?? p.fam;
+    return p;
+  }
+
+  /** El Caballero Fénix en nivel 40 renace una vez por nivel. */
+  canRebirth(run: Run): boolean {
+    return !run.duel && !run.reborn?.used && this.s.arms.skin === 'fenix' && (this.s.arsenal['fenix']?.lvl ?? 0) >= 40;
+  }
+
+  get furyLeft(): number {
+    return this.s.run?.reborn?.left ?? 0;
+  }
+
+  private rebirth(run: Run) {
+    run.heroHp = 1;
+    run.shield = 0;
+    run.reborn = { left: REBIRTH_SECONDS, used: true };
+    // Las piezas de defensa arden y se vuelven de ataque (piezas nuevas, para que se vean cambiar).
+    for (const col of run.grid)
+      for (let r = 0; r < col.length; r++) {
+        const p = col[r];
+        const to = p && FURY_FAM[p.fam];
+        if (p && to) {
+          col[r] = makePiece(to, p.lvl);
+        }
+      }
+    this.emit({ type: 'rebirth', seconds: REBIRTH_SECONDS });
+    if (!hasPair(run.grid)) this.afterChange(run);
   }
 
   start(level: number): boolean {
@@ -270,7 +305,7 @@ export class Game {
     if (ev.fam === 'espada') run.look.sword = Math.max(run.look.sword ?? 1, ev.lvl);
     if (ev.fam === 'escudo') run.look.shield = Math.max(run.look.shield ?? 1, ev.lvl);
     const boost = run.boost > 0 ? run.boostMult : 1;
-    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 + m.critMult : 1) * boost * (1 + m.dmg);
+    const hit = swordBonus(run.look.sword) * BASE_DAMAGE * levelPower(run.level) * damageMultiplier(this.s) * v * comboMultiplier(run.combo - 1) * (crit ? 2 + m.critMult : 1) * boost * (1 + m.dmg) * (run.reborn?.left ? REBIRTH_DAMAGE : 1);
     const hp = maxHp(this.s);
     const r: MergeResult = { ev, combo: run.combo, dmg: 0, crit, gold: 0, shield: 0, heal: 0, stun: 0, boost: 0, boostMult: 1 };
     const fam: Family = ev.fam;
@@ -304,12 +339,14 @@ export class Game {
   }
 
   private hurt(run: Run, dmg: number, blockable: boolean) {
+    if (run.reborn?.left) return; // inmune durante la furia
     if (blockable) dmg *= Math.max(1 - CAPS.reduce, 1 - shieldReduction(run.look.shield) - this.mods.reduce);
     const blocked = blockable ? Math.min(run.shield, dmg) : 0;
     run.shield -= blocked;
     run.heroHp -= dmg - blocked;
     this.emit({ type: 'hurt', dmg: dmg - blocked, blocked });
     if (run.heroHp <= 0) {
+      if (this.canRebirth(run)) return this.rebirth(run);
       run.heroHp = 0;
       this.finish(false);
     }
@@ -342,6 +379,15 @@ export class Game {
       if (run.comboTimer <= 0) run.combo = 0;
     }
 
+    if (run.reborn?.left) {
+      run.reborn.left = Math.max(0, run.reborn.left - dt);
+      if (run.reborn.left <= 0) {
+        // Se acabó la furia sin ganar: ahora sí cae.
+        run.heroHp = 0;
+        this.finish(false);
+        return;
+      }
+    }
     if (this.respawnDelay > 0) {
       this.respawnDelay -= dt;
       return;
@@ -385,7 +431,7 @@ export class Game {
       run.wave++;
       run.enemyInWave = 0;
       // Pequeña curación entre oleadas.
-      run.heroHp = Math.min(maxHp(this.s), run.heroHp + maxHp(this.s) * 0.15);
+      if (!run.reborn?.left) run.heroHp = Math.min(maxHp(this.s), run.heroHp + maxHp(this.s) * 0.15);
       this.respawnDelay = 0.9;
       this.emit({ type: 'wave', wave: run.wave, boss: this.isBossWave(run) });
     }

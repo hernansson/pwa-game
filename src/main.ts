@@ -26,7 +26,7 @@ import {
 } from './balance';
 import { EVO_COLORS, Skin, previewEvo, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
-import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
+import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult, REBIRTH_DAMAGE, REBIRTH_SECONDS } from './game';
 import { RARITY_COLORS } from './items';
 import {
   DIVISIONS,
@@ -205,6 +205,7 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="combo" id="combo"></div>
       <div class="boost-label" id="boost-label"></div>
+      <div class="fury-hud" id="fury-hud" hidden><b>🔥 FURIA DEL FÉNIX</b><span id="fury-t">8.0</span><div class="fury-bar"><i id="fury-bar"></i></div></div>
       <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
     </div>
   </section>
@@ -709,6 +710,16 @@ function renderScreen() {
     ring.style.setProperty('--s', String(0.8 + Math.min(bLvl, 10) * 0.07));
   }
   ring.classList.toggle('on', boosted);
+  // Renacer del Fénix: barra de furia que se consume; mientras dura todo arde.
+  const fury = run.result ? 0 : game.furyLeft;
+  const fh = $('#fury-hud');
+  if (fh.hidden === fury > 0) fh.hidden = !(fury > 0);
+  $('#app').classList.toggle('fury', fury > 0);
+  if (fury > 0) {
+    $('#fury-t').textContent = fury.toFixed(1) + 's';
+    $('#fury-bar').style.width = (fury / REBIRTH_SECONDS) * 100 + '%';
+    fh.classList.toggle('hurry', fury < 3);
+  }
   const bl = $('#boost-label');
   bl.textContent = boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '';
   const app = $('#app');
@@ -931,6 +942,31 @@ function onMergeFx(r: MergeResult) {
   if (navigator.vibrate) navigator.vibrate(ev.burst ? 40 : 12);
 }
 
+/** El Caballero Fénix cae, se vuelve ceniza y renace en llamas. La pelea sigue mientras tanto. */
+function rebirthFx() {
+  const stage = $('#stage');
+  const old = stage.querySelector('.rb-ov');
+  old?.remove();
+  const el = document.createElement('div');
+  el.className = 'rb-ov';
+  const ash = Array.from({ length: 22 }, (_, i) => `<i style="--x:${(i * 37) % 100 - 50}px;--y:${-(20 + ((i * 53) % 70))}px;--t:${(i % 7) * 0.05}s"></i>`).join('');
+  const fire = Array.from({ length: 30 }, (_, i) => `<i style="--a:${i * 12}deg;--d:${90 + (i % 5) * 30}px;--t:${0.95 + (i % 6) * 0.03}s"></i>`).join('');
+  const wing = (m: string) =>
+    `<path transform="${m}" d="M60 62 Q40 30 4 18 Q16 32 14 40 Q0 40 -8 54 Q10 54 14 62 Q0 70 -4 84 Q20 76 34 80 Q46 70 60 74Z" fill="url(#rbw)" stroke="#fff3c4" stroke-width="1.4" stroke-linejoin="round"/>`;
+  el.innerHTML = `<div class="rb-dark"></div><div class="rb-ash">${ash}</div><div class="rb-pillar"></div><div class="rb-flash"></div><div class="rb-ring"></div><div class="rb-fire">${fire}</div>
+    <svg class="rb-bird" viewBox="-10 0 140 120" aria-hidden="true"><defs><linearGradient id="rbw" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6b0"/><stop offset=".45" stop-color="#ffb02e"/><stop offset="1" stop-color="#ff3d0a"/></linearGradient></defs>
+      <g class="rb-wings">${wing('')}${wing('translate(120 0) scale(-1 1)')}</g>
+      <path d="M60 30 Q68 44 66 60 Q70 80 60 104 Q50 80 54 60 Q52 44 60 30Z" fill="url(#rbw)" stroke="#fff3c4" stroke-width="1.2"/>
+      <path d="M60 22 Q64 30 62 36 L58 36 Q56 30 60 22Z M54 18 Q58 26 58 32 M66 18 Q62 26 62 32" fill="#fff1a8" stroke="#ffd34d" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <div class="rb-text"><small>EL FÉNIX</small><b>¡RENACE!</b><span>Inmune ${REBIRTH_SECONDS} s · daño x${REBIRTH_DAMAGE}</span></div>`;
+  stage.appendChild(el);
+  restartAnim($('#hero'), 'reborn');
+  restartAnim(stage, 'shake-big');
+  navigator.vibrate?.([80, 120, 40, 40, 40, 40, 160]);
+  setTimeout(() => restartAnim($('#board'), 'fury-wave'), 900);
+  setTimeout(() => el.remove(), 3200);
+}
+
 function wireGame() {
   game.on((e) => {
     if (e.type === 'merge') onMergeFx(e.r);
@@ -947,6 +983,8 @@ function wireGame() {
       if (e.boss) toast('¡Llegó el jefe!');
     } else if (e.type === 'discard') {
       // La pieza sale volando por arriba.
+    } else if (e.type === 'rebirth') {
+      rebirthFx();
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {

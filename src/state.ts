@@ -36,6 +36,8 @@ export interface Run {
   result: null | 'win' | 'lose';
   /** Reto contra el jefe: segundos que quedan y daño total hecho. */
   duel?: { left: number; dmg: number };
+  /** Renacer del Fénix (skin en nivel 40): segundos de furia que quedan; usado = ya renació en este nivel. */
+  reborn?: { left: number; used: boolean };
 }
 
 export interface GameState {
