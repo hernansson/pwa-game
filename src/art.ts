@@ -219,6 +219,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M45 49 Q48 46.5 52 46" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
       <path d="M38.5 71 L62.5 71 L62.5 75 L38.5 75Z" fill="#5a1a0a" stroke="${o}" stroke-width="1.4"/>
       <rect x="49.5" y="70" width="6" height="6" rx="1.4" fill="${gold}" stroke="${o}" stroke-width="1.2"/>
+      ${fight.bare ? bareArm('back', red, gold, o) : ''}
       <path d="M30 46 Q24 38 26 30 Q30 37 34 39 Q32 32 36 27 Q37 35 41 38Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
       <path d="M28 51 Q29 40 40 39 Q46 41 46 48 Q37 46 31 55Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
       <path d="M30.5 54 Q37 46 46 48" stroke="${red}" stroke-width="2.2" fill="none"/>
@@ -243,11 +244,12 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
         <path d="M56 13.5 L59 17.5 L56 22.5 L53 17.5Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
       </g></g>
       ${fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : ''}
+      ${fight.bare ? bareArm('front', red, gold, o) : ''}
       <path d="M62 43 Q64 34 72 32 Q70 38 72 41 Q75 36 80 35 Q76 41 74 46Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
       <path d="M56 47 Q58 38 67 39 Q74 41 73 51 Q66 46 58 50Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
       <path d="M58 50 Q66 46 73 51" stroke="${red}" stroke-width="2.2" fill="none"/>
       <path d="M60 43 Q63 40.5 68 41" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
-      <g class="hero-arm"><g class="fx-armidle">
+      <g class="hero-arm"${fight.bare ? ' display="none"' : ''}><g class="fx-armidle">
         <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
         ${fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel)}
         <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
@@ -255,6 +257,13 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       </g></g>
     </g></g>
   </svg>`;
+}
+
+/** Brazos sueltos a los costados, para mostrar la skin sola (sin espada ni escudo). */
+function bareArm(side: 'back' | 'front', dark: string, light: string, o: string): string {
+  return side === 'back'
+    ? `<path d="M31 49 L37.5 49 L36.5 66 L30 66Z" fill="${dark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/><rect x="28" y="63.5" width="9.5" height="8.5" rx="3.8" fill="${light}" stroke="${o}" stroke-width="2"/>`
+    : `<path d="M62 49 L68.5 49 L70 66 L63.5 66Z" fill="${dark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/><rect x="62.5" y="63.5" width="9.5" height="8.5" rx="3.8" fill="${light}" stroke="${o}" stroke-width="2"/>`;
 }
 
 /** La espada en la mano: más grande que antes, y la legendaria todavía más. El envoltorio permite crecerla en combate. */
@@ -311,13 +320,15 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
     <rect x="46.5" y="70" width="7" height="7" rx="1.5" fill="${skin.trim}" stroke="${o}" stroke-width="1.4"/>
     <path d="M43 76 L57 76 L56 89 L50 92 L44 89Z" fill="${skin.cape}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
     <path d="M44 79 L56 79" stroke="${skin.trim}" stroke-width="1.6"/>
+    ${fight.bare ? bareArm('back', skin.armorDark, skin.armor, o) : ''}
     <path d="M29 50 Q30 40 40 40 Q45 42 45 48 Q37 46 31 54Z" fill="${skin.armor}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M31 53 Q37 46 45 48" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     ${helmSvg(skin)}
     ${fight.shield ? heroShield(fight.shield, fight.shieldShape ?? 0) : ''}
+    ${fight.bare ? bareArm('front', skin.armorDark, skin.armor, o) : ''}
     <path d="M56 47 Q58 39 66 40 Q73 42 72 51 Q66 46 58 50Z" fill="${skin.armor}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M58 50 Q66 46 72 51" stroke="${skin.trim}" stroke-width="2" fill="none"/>
-    <g class="hero-arm">
+    <g class="hero-arm"${fight.bare ? ' display="none"' : ''}>
       <circle cx="64" cy="55" r="6.5" fill="${skin.armorDark}" stroke="${o}" stroke-width="2"/>
       ${fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel)}
       <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
