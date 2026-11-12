@@ -14,6 +14,7 @@ import {
   enemyHp,
   upgradeCost,
   PASS,
+  comboMultiplier,
   GEM_PACKS,
   GOLD_PACKS,
   chestPrice,
@@ -53,6 +54,7 @@ import {
   passActive,
   passDaysLeft,
   migrate,
+  comboTime,
   GameState,
 } from './state';
 import { act, errorText, fetchState, loginWithGoogle, logout, me, mountGoogleButton, online } from './net';
@@ -197,6 +199,7 @@ document.querySelector('#app')!.innerHTML = `
   <section class="lower" id="lower" hidden>
     <div class="forge" id="forge" hidden>
       <div class="legend" id="legend"></div>
+      <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
       </div>
@@ -646,22 +649,35 @@ function renderScreen() {
   atk.parentElement!.classList.toggle('soon', run.stun <= 0 && run.enemyTimer < 1);
   $('#enemy').classList.toggle('stunned', run.stun > 0);
   const combo = $('#combo');
-  const comboText = run.combo >= 2 && !run.result ? `COMBO x${run.combo}` : '';
-  if (combo.textContent !== comboText) {
-    combo.textContent = comboText;
-    if (comboText) restartAnim(combo, 'pop');
+  combo.textContent = '';
+  // Medidor de combo arriba del tablero: número grande y una barra que se vacía (si llega a cero, se corta).
+  const hud = $('#combo-hud');
+  const on = run.combo >= 2 && !run.result;
+  if (hud.hidden === on) hud.hidden = !on;
+  $('#legend').classList.toggle('dim', on);
+  if (on) {
+    const n = $('#ch-n');
+    const txt = 'x' + run.combo;
+    if (n.textContent !== txt) {
+      n.textContent = txt;
+      restartAnim(hud, 'pop');
+    }
+    const max = comboTime(game.s) + game.mods.combo;
+    $('#ch-bar').style.width = Math.max(0, Math.min(1, run.comboTimer / max)) * 100 + '%';
   }
   const tier = run.result ? 0 : Math.min(4, Math.floor(run.combo / 10));
   if (tier !== frenzyTier) {
     const board = $('#board');
+    const app = $('#app');
     for (let t = 1; t <= 4; t++) {
       board.classList.toggle('fz' + t, t === tier);
-      combo.classList.toggle('fz' + t, t === tier);
+      hud.classList.toggle('fz' + t, t === tier);
+      app.classList.toggle('fz' + t, t === tier);
     }
-    if (tier > frenzyTier) {
-      restartAnim(board, 'zap');
-      if (navigator.vibrate) navigator.vibrate(tier >= 3 ? [30, 40, 30] : 25);
-    }
+    app.classList.toggle('fz-on', tier > 0);
+    $('#ch-name').textContent = tier ? FRENZY_NAMES[tier - 1] : '';
+    if (tier > frenzyTier) frenzyUp(tier);
+    else if (tier === 0 && frenzyTier > 0 && !run.result) comboBroken();
     frenzyTier = tier;
   }
   $('#hero').classList.toggle('walking', game.respawning && !run.result && run.drops > 0);
@@ -741,6 +757,37 @@ function toast(text: string) {
 }
 
 let frenzyTier = 0;
+const FRENZY_NAMES = ['¡FRENESÍ!', '¡SÚPER COMBO!', '¡IMPARABLE!', '¡LEGENDARIO!'];
+const FRENZY_COLORS = ['#4fd8ff', '#b07bff', '#ff4fd8', '#ffd84f'];
+
+/** Subiste de nivel de frenesí: cartel gigante, destello, chispas y temblor. Cuanto más alto, más fuerte. */
+function frenzyUp(tier: number) {
+  const app = $('#app');
+  const col = FRENZY_COLORS[tier - 1];
+  document.querySelectorAll('.fz-announce').forEach((x) => x.remove());
+  const el = document.createElement('div');
+  el.className = `fz-announce t${tier}`;
+  el.style.setProperty('--c', col);
+  const ns = 14 + tier * 6;
+  const sparks = Array.from({ length: ns }, (_, i) => `<i style="--a:${(i * 360) / ns}deg;--d:${140 + (i % 4) * 40 + tier * 20}px;--t:${(i % 5) * 0.03}s"></i>`).join('');
+  el.innerHTML = `<div class="fza-flash"></div><div class="fza-ring"></div><div class="fza-sparks">${sparks}</div>
+    <div class="fza-text"><b>${FRENZY_NAMES[tier - 1]}</b><small>COMBO x${tier * 10} · daño x${comboMultiplier(tier * 10 - 1).toFixed(1).replace('.', ',')}</small></div>`;
+  app.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+  restartAnim($('#board'), 'zap');
+  restartAnim(app, tier >= 3 ? 'fz-shake-big' : 'fz-shake');
+  if (navigator.vibrate) navigator.vibrate(tier >= 3 ? [40, 30, 40, 30, 90] : [30, 30, 60]);
+}
+
+/** Se cortó un combo de frenesí: el tablero se apaga un instante. */
+function comboBroken() {
+  const el = document.createElement('div');
+  el.className = 'fz-broken';
+  el.textContent = 'Se cortó el combo';
+  $('#forge').appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+  restartAnim($('#board'), 'fz-off');
+}
 function restartAnim(el: HTMLElement, cls: string) {
   el.classList.remove(cls);
   void el.offsetWidth;
@@ -2282,3 +2329,5 @@ if (!game.s.playerName && !online()) {
 requestAnimationFrame(frame);
 duelFromLink();
 setNavActive('combate');
+// Solo fuera de la versión publicada: acceso para pruebas automáticas.
+if (!PROD) Object.defineProperty(window, '__game', { get: () => game });

@@ -1033,3 +1033,62 @@ button.res { cursor: pointer; }
 .topbar .gear { flex: 0 0 auto; }
 .res { padding: 4px 10px 4px 6px; gap: 4px; font-size: 14px; min-width: 0; }
 @media (max-width: 400px) { .res .ico { font-size: 14px; } .res { padding: 4px 9px 4px 5px; font-size: 13px; } .res.energy small { display: none; } }
+/* ---- Combo: medidor grande, cartel de frenesí y ambiente ---- */
+.forge { position: relative; }
+.legend { transition: opacity .2s; }
+.legend.dim { opacity: 0; }
+.combo-hud { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: min(92%, 380px); z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 3px; --c: var(--accent); }
+.combo-hud.pop .ch-row b { animation: chPop .22s ease-out; }
+.ch-row { display: flex; align-items: baseline; gap: 8px; line-height: 1; }
+.ch-row small { font-weight: 900; font-size: 13px; letter-spacing: 2px; color: var(--c); opacity: .9; }
+.ch-row b { font-size: 34px; font-weight: 900; color: #fff; text-shadow: 0 3px 0 #000, 0 0 16px var(--c); display: inline-block; }
+.ch-row span { font-weight: 900; font-size: 15px; color: var(--c); text-shadow: 0 2px 0 #000, 0 0 10px var(--c); }
+.ch-bar { width: 70%; height: 6px; border-radius: 6px; background: rgba(255,255,255,.12); overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.4); }
+.ch-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--c), #fff); box-shadow: 0 0 10px var(--c); transition: width .1s linear; }
+.combo-hud.fz1 { --c: #4fd8ff; } .combo-hud.fz2 { --c: #b07bff; } .combo-hud.fz3 { --c: #ff4fd8; } .combo-hud.fz4 { --c: #ffd84f; }
+.combo-hud.fz2 .ch-row b { font-size: 40px; }
+.combo-hud.fz3 .ch-row b { font-size: 46px; animation: fzJitter .12s steps(2) infinite; }
+.combo-hud.fz4 .ch-row b { font-size: 52px; animation: fzJitter .09s steps(2) infinite; background: linear-gradient(180deg, #fff, #ffd84f 60%, #ff6b3d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@keyframes chPop { from { transform: scale(1.7); } to { transform: scale(1); } }
+@keyframes fzJitter { 0% { transform: translate(1px, -1px) rotate(-1deg); } 100% { transform: translate(-1px, 1px) rotate(1deg); } }
+
+/* Cartel gigante al subir de nivel de frenesí */
+.fz-announce { position: fixed; inset: 0; z-index: 60; pointer-events: none; display: grid; place-items: center; }
+.fza-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 55%, var(--c), transparent 65%); opacity: 0; animation: fzaFlash .7s ease-out; mix-blend-mode: screen; }
+.fza-ring { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px; border-radius: 50%; border: 6px solid var(--c); box-shadow: 0 0 30px var(--c), inset 0 0 30px var(--c); animation: fzaRing .8s ease-out forwards; }
+.fza-sparks { position: absolute; left: 50%; top: 50%; }
+.fza-sparks i { position: absolute; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: var(--c); box-shadow: 0 0 12px var(--c), 0 0 4px #fff; animation: fzaSpark .9s cubic-bezier(.2,.7,.3,1) var(--t) forwards; opacity: 0; }
+.fza-text { position: relative; text-align: center; animation: fzaSlam 1.4s cubic-bezier(.2,1.4,.4,1) forwards; }
+.fza-text b { display: block; font-size: clamp(38px, 12vw, 64px); font-weight: 900; color: #fff; letter-spacing: 1px; transform: rotate(-4deg); -webkit-text-stroke: 2px #000; text-shadow: 0 5px 0 #000, 0 0 24px var(--c), 0 0 60px var(--c); }
+.fza-text small { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 99px; background: rgba(0,0,0,.6); border: 1px solid var(--c); color: var(--c); font-weight: 900; font-size: 14px; letter-spacing: 1px; }
+.fz-announce.t4 .fza-text b { background: linear-gradient(180deg, #fff, #ffd84f 55%, #ff6b3d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@keyframes fzaFlash { 0% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes fzaRing { 0% { transform: scale(.2); opacity: 1; } 100% { transform: scale(14); opacity: 0; } }
+@keyframes fzaSpark { 0% { opacity: 1; transform: rotate(var(--a)) translateX(0) scale(1.4); } 100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scale(.3); } }
+@keyframes fzaSlam { 0% { transform: scale(3.2); opacity: 0; } 14% { transform: scale(.92); opacity: 1; } 22% { transform: scale(1.06); } 30% { transform: scale(1); } 78% { transform: scale(1); opacity: 1; } 100% { transform: scale(.85) translateY(-40px); opacity: 0; } }
+#app.fz-shake { animation: fzShake .35s; }
+#app.fz-shake-big { animation: fzShake .5s; }
+@keyframes fzShake { 10%, 50%, 90% { transform: translate(-5px, 2px); } 30%, 70% { transform: translate(5px, -2px); } 100% { transform: none; } }
+
+/* Ambiente mientras dura el frenesí: bordes de la pantalla que laten y chispas que suben por el tablero */
+#app.fz-on::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 40; box-shadow: inset 0 0 var(--fzv, 40px) var(--fzc, #4fd8ff); animation: fzVignette var(--fzp, 1.2s) ease-in-out infinite; }
+#app.fz1 { --fzc: rgba(79,216,255,.55); --fzv: 40px; --fzp: 1.3s; }
+#app.fz2 { --fzc: rgba(176,123,255,.65); --fzv: 60px; --fzp: 1s; }
+#app.fz3 { --fzc: rgba(255,79,216,.7); --fzv: 80px; --fzp: .7s; }
+#app.fz4 { --fzc: rgba(255,200,80,.8); --fzv: 110px; --fzp: .45s; }
+@keyframes fzVignette { 50% { opacity: .45; } }
+.pboard.fz1 .pieces, .pboard.fz2 .pieces, .pboard.fz3 .pieces, .pboard.fz4 .pieces { z-index: 1; }
+.pboard.fz2 .pc svg, .pboard.fz3 .pc svg, .pboard.fz4 .pc svg { filter: drop-shadow(0 0 4px var(--fz-c1)); }
+.pboard.fz4 .pc svg { filter: drop-shadow(0 0 7px var(--fz-c1)) brightness(1.08); }
+.pboard.fz2::after, .pboard.fz3::after, .pboard.fz4::after {
+  background-image: radial-gradient(2px 2px at 10% 90%, #fff, transparent), radial-gradient(2px 2px at 30% 80%, var(--fz-c1), transparent), radial-gradient(3px 3px at 55% 95%, #fff, transparent), radial-gradient(2px 2px at 75% 85%, var(--fz-c2), transparent), radial-gradient(3px 3px at 90% 92%, var(--fz-c1), transparent),
+    radial-gradient(120% 70% at 50% 110%, var(--fz-glow), transparent 60%);
+  background-size: 100% 50%, 100% 50%, 100% 50%, 100% 50%, 100% 50%, 100% 100%; background-repeat: repeat-y;
+  animation: fzEmbers var(--fz-emb, 2s) linear infinite, fzFlicker var(--fz-flk, 1.6s) steps(1) infinite; }
+.pboard.fz3 { --fz-emb: 1.3s; } .pboard.fz4 { --fz-emb: .8s; }
+@keyframes fzEmbers { from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to { background-position: 0 -100%, 0 -100%, 0 -100%, 0 -100%, 0 -100%, 0 0; } }
+.pboard.fz-off { animation: fzOff .6s ease-out; }
+@keyframes fzOff { 0% { filter: grayscale(1) brightness(.6); } 100% { filter: none; } }
+.fz-broken { position: absolute; top: 40%; left: 0; right: 0; text-align: center; z-index: 8; pointer-events: none; font-weight: 900; font-size: 20px; color: #ff8a8a; text-shadow: 0 2px 0 #000; animation: fzBroken 1.1s ease-out forwards; }
+@keyframes fzBroken { 0% { transform: scale(1.4); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 70% { opacity: 1; } 100% { transform: translateY(30px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #app.fz-on::after, .combo-hud .ch-row b, .fza-text { animation: none !important; } }
