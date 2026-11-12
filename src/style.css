@@ -1312,3 +1312,22 @@ button.res { cursor: pointer; }
 .fenix-hero .fx-capewrap { transform-box: view-box; transform-origin: 56px 46px; animation: fxCape 2.3s ease-in-out infinite; }
 @keyframes fxCape { 50% { transform: skewX(4deg) rotate(2deg); } }
 @media (prefers-reduced-motion: reduce) { .fenix-hero .fx-body, .fenix-hero .fx-head, .fenix-hero .fx-armidle, .fenix-hero .fx-shidle, .fenix-hero .fx-capewrap { animation: none; } }
+/* ---- Vitrina de skins: la armadura sola, en pedestal y con foco ---- */
+.sc-art.skinv { flex-basis: 50%; animation: none; overflow: visible; }
+.sc-art.skinv::before { inset: 0; background: radial-gradient(circle at 50% 55%, color-mix(in srgb, var(--rar) 45%, transparent), transparent 65%); animation: lgPulse 2.2s ease-in-out infinite; }
+.sk-rays { position: absolute; inset: -12%; border-radius: 50%; background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--rar) 45%, transparent) 0 6deg, transparent 6deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 20%, transparent 66%); mask: radial-gradient(circle, #000 20%, transparent 66%); animation: lgSpin 14s linear infinite; pointer-events: none; opacity: .55; }
+.r-épica .sk-rays, .r-legendaria .sk-rays { opacity: 1; animation-duration: 9s; }
+.sk-light { position: absolute; left: 22%; right: 22%; top: -8%; bottom: 14%; background: linear-gradient(180deg, rgba(255,255,255,.28), color-mix(in srgb, var(--rar) 25%, transparent) 70%, transparent);
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%); pointer-events: none; animation: skLight 3s ease-in-out infinite; }
+.sk-ped { position: absolute; left: 14%; right: 14%; bottom: 4%; height: 15%; border-radius: 50%; background: radial-gradient(ellipse, color-mix(in srgb, var(--rar) 60%, #fff 10%), color-mix(in srgb, var(--rar) 25%, transparent) 55%, transparent 72%);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--rar) 60%, transparent); animation: skPed 2.2s ease-in-out infinite; }
+.sk-hero { position: relative; width: 108%; margin: -4% -8% 0 0; animation: idle 2.6s ease-in-out infinite; }
+.sk-hero svg { width: 100%; height: auto; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--rar) 75%, transparent)) drop-shadow(0 6px 8px rgba(0,0,0,.5)); }
+.sk-sparks { position: absolute; inset: 0; pointer-events: none; }
+.sk-sparks i { position: absolute; left: calc(12% + var(--i) * 8%); top: calc(16% + mod(var(--i) * 37, 60) * 1%); width: 6px; height: 6px; background: #fff; box-shadow: 0 0 8px var(--rar), 0 0 2px #fff;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: skTwinkle 1.8s ease-in-out infinite; animation-delay: calc(var(--i) * -0.27s); opacity: 0; }
+.r-legendaria .sk-sparks i { background: #ffd34d; width: 8px; height: 8px; }
+@keyframes skTwinkle { 0%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
+@keyframes skLight { 50% { opacity: .65; } }
+@keyframes skPed { 50% { box-shadow: 0 0 34px color-mix(in srgb, var(--rar) 80%, transparent); } }

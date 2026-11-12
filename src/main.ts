@@ -112,12 +112,17 @@ function myLook(): Skin {
 }
 /** Dibujo de una variante del Arsenal en su diseño base. Los diseños de niveles más altos se descubren jugando. */
 function armIcon(def: ArmDef): string {
-  if (def.fam === 'skin') return heroSvg(skinById(def.skin ?? 'caballero'), 1);
+  if (def.fam === 'skin') return heroSvg(skinById(def.skin ?? 'caballero'), 1, { bare: true });
   return pieceSvg(def.fam, 1, FAMILY_INFO[def.fam].color, def.shape);
 }
 /** El arma sola, sin el marco de la pieza, para la vitrina del Arsenal. */
 function armShowcase(def: ArmDef, big = false): string {
-  if (def.fam === 'skin') return armIcon(def);
+  if (def.fam === 'skin') {
+    if (!big) return armIcon(def);
+    // Vitrina de skin: la armadura sola sobre un pedestal con foco, rayos del color de la rareza y destellos.
+    const sparks = Array.from({ length: 10 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
+    return `<div class="sk-rays"></div><div class="sk-light"></div><div class="sk-ped"></div><div class="sk-hero">${armIcon(def)}</div><div class="sk-sparks">${sparks}</div>${def.rarity === 'legendaria' ? `<div class="lg-embers">${sparks}</div>` : ''}`;
+  }
   if (big && def.rarity === 'legendaria') {
     // Vitrina legendaria: rayos que giran, anillo de fuego, el arma más grande y brasas que suben.
     const embers = Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
@@ -1975,7 +1980,7 @@ function renderArsenal() {
   $('#sheet-body').innerHTML = `
     ${segHtml}
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
-      <div class="sc-art ${locked ? 'locked' : def.rarity === 'legendaria' && def.fam !== 'skin' ? 'legend ' + def.fam : ''}">${armShowcase(def, !locked)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+      <div class="sc-art ${locked ? 'locked' : def.fam === 'skin' ? 'skinv r-' + def.rarity : def.rarity === 'legendaria' ? 'legend ' + def.fam : ''}">${armShowcase(def, !locked)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>

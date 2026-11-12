@@ -178,6 +178,7 @@ export interface HeroFight {
   glow?: number; // nivel de la última poción: brillo cada vez más fuerte
   swordShape?: number; // diseño de la espada equipada en el Arsenal
   shieldShape?: number;
+  bare?: boolean; // sin espada: para mostrar solo la skin (la armadura)
 }
 
 /**
@@ -248,7 +249,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M60 43 Q63 40.5 68 41" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
       <g class="hero-arm"><g class="fx-armidle">
         <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
-        ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
+        ${fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel)}
         <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
         <path d="M65.5 58.5 L75.5 58.5" stroke="${red}" stroke-width="1.4"/>
       </g></g>
@@ -318,7 +319,7 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
     <path d="M58 50 Q66 46 72 51" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     <g class="hero-arm">
       <circle cx="64" cy="55" r="6.5" fill="${skin.armorDark}" stroke="${o}" stroke-width="2"/>
-      ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
+      ${fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel)}
       <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
       <path d="M68.5 55 L68.5 62.5 M71.5 55 L71.5 62.5" stroke="${o}" stroke-width="1" opacity=".5"/>
     </g>
