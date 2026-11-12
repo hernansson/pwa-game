@@ -1193,3 +1193,6 @@ button.res { cursor: pointer; }
 .hs-scene .hs-slot .t-icon > *:not(svg) { display: none; }
 .hs-scene .hs-slot.ready { border-color: var(--rar); box-shadow: 0 0 0 3px rgba(0,0,0,.35), 0 0 16px rgba(70,224,138,.6); }
 .hs-scene .hs-slot .dot { top: 0; right: 0; }
+.hs-scene .hs-slot .hs-ic { width: 40px; height: 40px; display: grid; place-items: center; }
+.hs-scene .hs-slot .hs-ic svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+.hs-scene .hs-slot[data-goto-arm="skin"] .hs-ic { width: 46px; height: 46px; margin-top: 2px; }

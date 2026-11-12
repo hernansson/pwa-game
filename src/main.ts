@@ -1322,7 +1322,7 @@ function renderHeroSheet() {
   const slot = (f: ArmFam) => {
     const d = armById(s.arms[f])!;
     return `<button class="hs-slot ${armReady(d) ? 'ready' : ''}" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}" aria-label="${d.name}">
-      <span class="t-icon">${armIcon(d)}</span>${armReady(d) ? '<i class="dot"></i>' : ''}
+      <span class="hs-ic">${armShowcase(d)}</span>${armReady(d) ? '<i class="dot"></i>' : ''}
     </button>`;
   };
 

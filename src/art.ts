@@ -197,9 +197,9 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
     <path d="M58 50 Q66 46 72 51" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     <g class="hero-arm">
       <circle cx="64" cy="55" r="6.5" fill="${skin.armorDark}" stroke="${o}" stroke-width="2"/>
-      <g transform="translate(41 25) scale(.62)">${famIcon('espada', fight.swordShape ?? 0, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g>
-      <rect x="65" y="54" width="10" height="9" rx="3" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
-      <path d="M66 57 L74 57" stroke="${skin.trim}" stroke-width="1.6"/>
+      <g transform="translate(70.5 58.5) rotate(68) scale(.68) translate(-43.25 -45.4)">${famIcon('espada', fight.swordShape ?? 0, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g>
+      <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
+      <path d="M68.5 55 L68.5 62.5 M71.5 55 L71.5 62.5" stroke="${o}" stroke-width="1" opacity=".5"/>
     </g>
   </svg>`;
 }
