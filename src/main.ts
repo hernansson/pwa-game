@@ -20,7 +20,7 @@ import {
 } from './balance';
 import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILIES, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
-import { ClearReport, Game, MergeResult } from './game';
+import { ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
 import {
   DIVISIONS,
@@ -157,7 +157,7 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="stage-card" id="stage-card"></div>
       <div class="rail right">
-        <button class="rail-btn" data-open="eventos"><span class="ri">🐉</span><small>Eventos</small><em>Pronto</em></button>
+        <button class="rail-btn" data-open="eventos"><span class="ri">🐉</span><small>Eventos</small><em>Retos</em></button>
         <button class="rail-btn vip" id="vip-btn" data-open="vip" hidden><span class="ri">👑</span><small>VIP</small></button>
       </div>
     </div>
@@ -389,6 +389,211 @@ function finishOnline(local: ClearReport) {
   );
 }
 
+// ---------- Retos entre amigos ----------
+// Uno crea un código, los demás lo ponen y todos pelean contra el mismo jefe con las mismas piezas
+// durante 60 segundos. El servidor rejuega cada pelea: el daño no se puede inventar.
+
+type DuelEntry = { name: string; damage: number; combo: number; done: boolean; me: boolean };
+type DuelInfo = {
+  code: string;
+  level: number;
+  seconds: number;
+  expires: number;
+  expired: boolean;
+  mineCreated: boolean;
+  played: boolean;
+  myDamage: number | null;
+  rank: number;
+  players: number;
+  entries: DuelEntry[];
+};
+type DuelMine = { code: string; level: number; created: number; mine: number; myDamage: number | null; players: number; best: number | null };
+
+let duelRunId: string | null = null;
+let duelCode: string | null = null;
+let duelBusy = false;
+
+function duelBox(): string {
+  const login = online()
+    ? `<div class="duel-actions">
+        <button class="primary" data-duel-create>⚔️ Crear reto</button>
+        <div class="duel-join"><input id="duel-code" maxlength="7" placeholder="CÓDIGO" autocomplete="off" autocapitalize="characters" spellcheck="false"><button data-duel-join>Unirme</button></div>
+      </div>
+      <div id="duel-mine" class="duel-mine"></div>`
+    : `<button class="primary" data-login-settings>Entra con Google para retar amigos</button>`;
+  return `<div class="event duel">
+    <div class="duel-head"><div class="ev-art">${levelEnemySvg(Math.max(1, game.s.unlocked), true)}</div>
+      <div class="ev-body"><small>NUEVO</small><b>Reto contra el jefe</b>
+      <p>Crea un código y pásaselo a tus amigos. Todos pelean contra el mismo jefe, con las mismas piezas, durante ${DUEL_SECONDS} segundos. Gana quien le hace más daño. Un solo intento cada uno.</p></div></div>
+    ${login}
+  </div>`;
+}
+
+function loadMyDuels() {
+  act<{ duels: DuelMine[] }>('duel_mine').then(
+    (a) => {
+      const el = document.querySelector('#duel-mine');
+      if (!el) return;
+      const list = a.result.duels;
+      el.innerHTML = list.length
+        ? `<small class="duel-mine-t">Tus retos</small>` +
+          list
+            .map(
+              (d) => `<button class="duel-row" data-duel-open="${d.code}"><b>${d.code}</b><span>Nivel ${d.level} · ${d.players} ${d.players === 1 ? 'jugador' : 'jugadores'}</span>
+              <em>${d.myDamage == null ? (d.mine ? 'Te falta jugar' : 'Sin jugar') : d.myDamage === d.best && d.best ? '👑 ' + fmt(d.myDamage) : '💥 ' + fmt(d.myDamage)}</em></button>`,
+            )
+            .join('')
+        : '';
+    },
+    () => {},
+  );
+}
+
+function createDuel() {
+  if (duelBusy) return;
+  duelBusy = true;
+  act<{ code: string }>('duel_create').then(
+    (a) => {
+      duelBusy = false;
+      openDuel(a.result.code, true);
+    },
+    (e) => {
+      duelBusy = false;
+      toast(errorText(e));
+    },
+  );
+}
+
+function openDuel(raw: string, fresh = false) {
+  const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 6) return toast('El código tiene 6 letras o números.');
+  if (!online()) return toast('Entra con Google en Ajustes para jugar retos.');
+  act<DuelInfo>('duel_get', { code }).then(
+    (a) => showDuel(a.result, fresh),
+    (e) => toast(errorText(e)),
+  );
+}
+
+function duelRanking(d: DuelInfo): string {
+  const done = d.entries.filter((e) => e.done);
+  const playing = d.entries.filter((e) => !e.done);
+  if (!d.entries.length) return `<p class="note">Todavía nadie jugó. ¡Sé el primero!</p>`;
+  return `<ol class="duel-rank">${done
+    .map((e, i) => `<li class="${e.me ? 'me' : ''}"><span class="pos">${i === 0 ? '👑' : i + 1}</span><b>${esc(e.name)}</b><small>combo x${e.combo}</small><em>💥 ${fmt(e.damage)}</em></li>`)
+    .join('')}${playing.map((e) => `<li class="${e.me ? 'me' : ''} playing"><span class="pos">…</span><b>${esc(e.name)}</b><small></small><em>jugando</em></li>`).join('')}</ol>`;
+}
+
+function showDuel(d: DuelInfo, fresh = false) {
+  const left = d.expires - Date.now();
+  const when = d.expired ? 'Terminado' : left > 36 * 3600_000 ? `Termina en ${Math.round(left / 86400_000)} días` : `Termina en ${timeText(left)}`;
+  const action = d.expired
+    ? ''
+    : d.played
+      ? `<p class="duel-done">${d.myDamage == null ? 'Tu intento quedó sin terminar.' : `Hiciste 💥 <b>${fmt(d.myDamage)}</b> · puesto <b>#${d.rank}</b> de ${d.players}`}</p>`
+      : `<button class="primary big" data-duel-play="${d.code}">⚔️ Jugar mi intento</button>`;
+  showModal(`<div class="duel-modal">
+    <button class="x" data-close>✕</button>
+    <div class="duel-boss">${levelEnemySvg(d.level, true)}</div>
+    <h2>Reto contra ${esc(levelEnemyName(d.level, d.level % LEVELS_PER_WORLD === 0))}</h2>
+    <p class="duel-meta">Nivel ${d.level} · ${d.seconds} segundos · ${when}</p>
+    <div class="duel-code-big">${d.code.split('').map((c) => `<span>${c}</span>`).join('')}</div>
+    ${fresh ? `<p class="note">Pásale este código a tus amigos, o toca Compartir.</p>` : ''}
+    <div class="duel-btns"><button data-duel-share="${d.code}">📤 Compartir</button><button data-duel-refresh="${d.code}">🔄 Actualizar</button></div>
+    ${action}
+    <div class="sec-head"><b>Ranking</b><small>${d.players} ${d.players === 1 ? 'jugador' : 'jugadores'}</small></div>
+    ${duelRanking(d)}
+  </div>`);
+}
+
+function duelLink(code: string) {
+  return `${location.origin}${location.pathname}?reto=${code}`;
+}
+
+async function shareDuel(code: string) {
+  const text = `¡Te reto en Héroes de la Forja! Código ${code}. ¿Quién le hace más daño al jefe en ${DUEL_SECONDS} segundos?`;
+  const url = PROD ? duelLink(code) : '';
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Reto contra el jefe', text, ...(url ? { url } : {}) });
+      return;
+    }
+  } catch {
+    return; // canceló
+  }
+  try {
+    await navigator.clipboard.writeText(url ? `${text} ${url}` : text);
+    toast('Copiado. Pégalo en el chat con tus amigos.');
+  } catch {
+    toast(`Código: ${code}`);
+  }
+}
+
+function playDuel(code: string) {
+  if (duelBusy || game.s.run) return;
+  duelBusy = true;
+  act<{ runId: string; seed: number; level: number }>('duel_start', { code }).then(
+    (a) => {
+      duelBusy = false;
+      applyServer(a.state);
+      duelRunId = a.result.runId;
+      duelCode = code;
+      game.rand = seeded(a.result.seed);
+      if (game.startDuel(a.result.level)) {
+        heroKeyCache = enemyKeyCache = '';
+        resetBoardView();
+        closeSheet();
+        hideModal();
+        toast(`¡${DUEL_SECONDS} segundos! Hazle todo el daño que puedas`);
+      }
+    },
+    (e) => {
+      duelBusy = false;
+      toast(errorText(e));
+    },
+  );
+}
+
+function finishDuel(local: ClearReport) {
+  const id = duelRunId;
+  const code = duelCode;
+  duelRunId = null;
+  if (!id || !code) return;
+  const t0 = Date.now();
+  const alive = (game.s.run?.heroHp ?? 0) > 0;
+  const show = (html: string) => setTimeout(() => showModal(html, true), Math.max(0, 1100 - (Date.now() - t0)));
+  act<{ damage: number; info: DuelInfo }>('duel_finish', { runId: id, log: game.log }).then(
+    (a) => {
+      const d = a.result.info;
+      const first = d.rank === 1 && d.entries.filter((e) => e.done).length > 1;
+      show(`<div class="result duel-result ${first ? 'win' : ''}">
+        <div class="big-ico">${first ? '👑' : '💥'}</div>
+        <h2>${fmt(a.result.damage)} de daño</h2>
+        <p class="duel-meta">${local.win ? '¡Aguantaste los ' + DUEL_SECONDS + ' segundos!' : alive ? 'Terminaste antes de tiempo.' : 'Tu héroe cayó antes de tiempo.'} Mejor combo x${local.maxCombo}.</p>
+        <p class="duel-done">Puesto <b>#${d.rank}</b> de ${d.players} en el reto <b>${d.code}</b></p>
+        ${duelRanking(d)}
+        <div class="btns"><button data-leave>Inicio</button><button class="primary" data-duel-share="${d.code}">📤 Retar a más</button></div>
+      </div>`);
+      if (a.result.damage !== local.damage) console.warn('daño local', local.damage, 'servidor', a.result.damage);
+    },
+    (e) => {
+      show(`<div class="result lose"><div class="big-ico">⚠️</div><h2>No se pudo anotar</h2><p>${errorText(e)}</p><div class="btns"><button data-leave>Inicio</button></div></div>`);
+    },
+  );
+}
+
+/** Link de invitación: ?reto=CODIGO abre el reto apenas carga el juego. */
+function duelFromLink() {
+  const code = new URLSearchParams(location.search).get('reto');
+  if (!code) return;
+  history.replaceState(null, '', location.pathname);
+  if (online()) openDuel(code);
+  else {
+    pendingDuel = code;
+    toast('Entra con Google en Ajustes para jugar el reto');
+  }
+}
+let pendingDuel: string | null = null;
+
 // ---------- Combate ----------
 
 let heroKeyCache = '';
@@ -482,6 +687,19 @@ function renderScreen() {
   ring.classList.toggle('on', boosted);
   const bl = $('#boost-label');
   bl.textContent = boosted ? `⚡ x${run.boostMult.toFixed(2).replace(/0$/, '')} ${run.boost.toFixed(1)}s` : '';
+  const app = $('#app');
+  app.classList.toggle('in-duel', !!run.duel);
+  if (run.duel) {
+    $('#run-title').textContent = `Reto ${duelCode ?? ''}`;
+    const left = Math.ceil(run.duel.left);
+    const html = `<span class="duel-time ${left <= 10 ? 'hurry' : ''}">⏱ ${left}s</span><span class="duel-dmg">💥 ${fmt(run.duel.dmg)}</span>`;
+    const r = $('#route');
+    if (r.dataset.k !== html) {
+      r.innerHTML = html;
+      r.dataset.k = html;
+    }
+    return;
+  }
   $('#run-title').textContent = `Nivel ${run.level}`;
   const route: string[] = [];
   for (let w = 0; w < WAVES_PER_LEVEL; w++) {
@@ -618,6 +836,7 @@ function wireGame() {
     } else if (e.type === 'spawn') {
       for (const id of e.ids) fromTop.add(id);
     } else if (e.type === 'end') {
+      if (e.report.damage !== undefined) return finishDuel(e.report);
       finishOnline(e.report);
       setTimeout(() => showResult(e.report), 1100);
     }
@@ -626,6 +845,10 @@ function wireGame() {
 wireGame();
 
 $('#flee').addEventListener('click', () => {
+  if (game.s.run?.duel) {
+    if (confirm('¿Terminar el reto ahora? Cuenta el daño que llevas y no hay otro intento.')) game.abandon();
+    return;
+  }
   if (confirm('¿Abandonar el nivel? No se devuelve la energía.')) game.abandon();
 });
 
@@ -847,7 +1070,7 @@ const TAB_TITLES: Record<Tab, [string, string]> = {
   arsenal: ['Arsenal', 'Armas, potenciadores y skins'],
   cofres: ['Cofres', 'Fragmentos para el Arsenal'],
   liga: ['Liga semanal', 'Compite contra otros 29 héroes'],
-  eventos: ['Eventos', 'Lo que viene'],
+  eventos: ['Eventos', 'Retos con amigos y lo que viene'],
   vip: ['Zona VIP', 'Ventajas para los que van en serio'],
 };
 
@@ -1547,6 +1770,7 @@ function renderSheet(full: boolean) {
   if (openTab === 'vip') return renderVip();
   if (openTab === 'eventos') {
     body.innerHTML = `
+      ${duelBox()}
       <div class="event world-boss">
         <div class="ev-art">${enemySvg(21, true)}</div>
         <div class="ev-body"><small>PRÓXIMAMENTE</small><b>Jefe Mundial</b>
@@ -1559,6 +1783,7 @@ function renderSheet(full: boolean) {
           <p>Forma un grupo de hasta 4 amigos y venzan juntos jefes que solos son imposibles. Cada uno pone su héroe con su equipo.</p>
           <button data-interest="raids">¡Me interesa!</button></div>
       </div>`;
+    if (online()) loadMyDuels();
   }
 }
 
@@ -1574,6 +1799,14 @@ $('#sheet-body').addEventListener('click', (ev) => {
     updateTalents();
     return;
   }
+  if (t.closest('[data-duel-create]')) return createDuel();
+  if (t.closest('[data-duel-join]')) {
+    const v = (document.querySelector('#duel-code') as HTMLInputElement | null)?.value ?? '';
+    return openDuel(v);
+  }
+  const dOpen = t.closest('[data-duel-open]') as HTMLElement | null;
+  if (dOpen) return openDuel(dOpen.dataset.duelOpen!);
+  if (t.closest('[data-login-settings]')) return showSettings();
   const hv = t.closest('[data-hero-view]') as HTMLElement | null;
   if (hv) {
     heroView = hv.dataset.heroView as typeof heroView;
@@ -1765,6 +1998,11 @@ function wireLogin() {
             viewLevel = game.s.unlocked;
             hideModal();
             toast(`¡Hola, ${me()?.name.split(' ')[0] ?? ''}! Tu progreso ya se guarda en la nube`);
+            if (pendingDuel) {
+              const c = pendingDuel;
+              pendingDuel = null;
+              openDuel(c);
+            }
           });
         },
         (e) => {
@@ -1824,6 +2062,12 @@ $('#modal').addEventListener('click', (ev) => {
   } else if (t.closest('[data-goto]')) {
     hideModal();
     openSheet((t.closest('[data-goto]') as HTMLElement).dataset.goto as Tab);
+  } else if (t.closest('[data-duel-play]')) {
+    playDuel((t.closest('[data-duel-play]') as HTMLElement).dataset.duelPlay!);
+  } else if (t.closest('[data-duel-share]')) {
+    shareDuel((t.closest('[data-duel-share]') as HTMLElement).dataset.duelShare!);
+  } else if (t.closest('[data-duel-refresh]')) {
+    openDuel((t.closest('[data-duel-refresh]') as HTMLElement).dataset.duelRefresh!);
   } else if (t.closest('[data-leave]')) backHome();
   else if (t.closest('[data-next]')) {
     const lvl = Number((t.closest('[data-next]') as HTMLElement).dataset.next);
@@ -1973,3 +2217,4 @@ if (!game.s.playerName && !online()) {
   track(game.s, 'first_open');
 }
 requestAnimationFrame(frame);
+duelFromLink();

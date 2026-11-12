@@ -12,7 +12,7 @@ export const MAX_STEPS = 10 * 60 * 30;
 
 export type ReplayResult = { ok: true; state: GameState; report: ClearReport; steps: number } | { ok: false; error: string };
 
-export function replayRun(snapshot: GameState, level: number, seed: number, log: RunAction[]): ReplayResult {
+export function replayRun(snapshot: GameState, level: number, seed: number, log: RunAction[], duel = false): ReplayResult {
   const s: GameState = JSON.parse(JSON.stringify(snapshot));
   s.energy = 999; // la energía ya se cobró al empezar
   s.run = null;
@@ -22,7 +22,7 @@ export function replayRun(snapshot: GameState, level: number, seed: number, log:
   game.on((e) => {
     if (e.type === 'end') report = e.report;
   });
-  if (!game.start(level)) return { ok: false, error: 'cannot_start' };
+  if (!(duel ? game.startDuel(level) : game.start(level))) return { ok: false, error: 'cannot_start' };
   let prev = -MIN_GAP;
   for (const a of log) {
     if (!Array.isArray(a) || a.length > 6 || !a.every((n) => Number.isInteger(n) && n >= 0 && n <= MAX_STEPS)) return { ok: false, error: 'bad_action' };

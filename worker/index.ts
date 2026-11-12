@@ -8,7 +8,7 @@
 //   GET  /state                     -> {state, me}
 //   POST /act {type, ...}           -> {state, me, result}
 
-import { Game } from '../src/game';
+import { DUEL_SECONDS, Game } from '../src/game';
 import { GameState, newState, migrate, regenEnergy } from '../src/state';
 import { rolloverLeague } from '../src/league';
 import { replayRun } from '../src/replay';
@@ -209,6 +209,16 @@ async function act(env: Env, user: User, b: Record<string, unknown>) {
       return runStart(env, user, Number(b.level));
     case 'run_finish':
       return runFinish(env, user, str('runId'), b.log);
+    case 'duel_create':
+      return duelCreate(env, user);
+    case 'duel_get':
+      return duelGet(env, user, str('code'));
+    case 'duel_start':
+      return duelStart(env, user, str('code'));
+    case 'duel_finish':
+      return duelFinish(env, user, str('runId'), b.log);
+    case 'duel_mine':
+      return duelMine(env, user);
     case 'pass':
       throw new HttpError(402, 'needs_payment'); // se activa cuando haya cobros reales
     // Solo para la cuenta de administrador.
@@ -290,6 +300,140 @@ async function runFinish(env: Env, user: User, runId: string, log: unknown) {
     for (const k of Object.keys(s.stats) as (keyof GameState['stats'])[]) s.stats[k] += after.stats[k] - snap.stats[k];
     return { report: out.report };
   });
+}
+
+// ---------- Retos entre amigos ----------
+// Un código = un jefe y una semilla. Cada persona tiene un solo intento de 60 segundos y el servidor
+// rejuega su pelea para saber el daño real. Sirve igual para 2 amigos o para miles (jefe mundial).
+
+const DUEL_TTL = 3 * 24 * 3600 * 1000; // un reto dura 3 días
+const DUEL_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin letras que se confunden (0/O, 1/I/L)
+const DUELS_PER_DAY = 20;
+
+function duelCode(): string {
+  const b = crypto.getRandomValues(new Uint8Array(6));
+  return [...b].map((x) => DUEL_ALPHABET[x % DUEL_ALPHABET.length]).join('');
+}
+function cleanCode(c: string): string {
+  const v = c.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (v.length !== 6) throw new HttpError(400, 'bad_code');
+  return v;
+}
+
+async function readUser(env: Env, user: User) {
+  const out = await mutate(env, user, () => null); // también aplica el límite de pedidos
+  return out;
+}
+
+async function duelCreate(env: Env, user: User) {
+  const now = Date.now();
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM duels WHERE sub = ? AND created > ?').bind(user.sub, now - 24 * 3600 * 1000).first<{ n: number }>();
+  if ((n?.n ?? 0) >= DUELS_PER_DAY && !user.admin) throw new HttpError(429, 'too_many_duels');
+  const base = await readUser(env, user);
+  // El jefe del reto es el del nivel más alto que tiene disponible quien lo crea.
+  const level = Math.max(1, base.state.unlocked);
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+  for (let i = 0; i < 5; i++) {
+    const code = duelCode();
+    const r = await env.DB.prepare('INSERT OR IGNORE INTO duels (code, sub, level, seed, created, expires) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(code, user.sub, level, seed, now, now + DUEL_TTL)
+      .run();
+    if (r.meta.changes === 1) return { ...base, result: { code, level, seconds: DUEL_SECONDS, expires: now + DUEL_TTL } };
+  }
+  throw new HttpError(503, 'busy');
+}
+
+async function duelInfo(env: Env, user: User, code: string) {
+  const d = await env.DB.prepare('SELECT code, sub, level, created, expires FROM duels WHERE code = ?')
+    .bind(code)
+    .first<{ code: string; sub: string; level: number; created: number; expires: number }>();
+  if (!d) throw new HttpError(404, 'duel_not_found');
+  const top = await env.DB.prepare(
+    "SELECT json_group_array(json_object('name', name, 'damage', damage, 'combo', combo, 'done', done, 'me', sub = ?)) AS j FROM (SELECT * FROM duel_entries WHERE code = ? ORDER BY done DESC, damage DESC, started ASC LIMIT 50)",
+  )
+    .bind(user.sub, code)
+    .first<{ j: string }>();
+  const mine = await env.DB.prepare('SELECT damage, done FROM duel_entries WHERE code = ? AND sub = ?').bind(code, user.sub).first<{ damage: number; done: number }>();
+  const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM duel_entries WHERE code = ?').bind(code).first<{ n: number }>();
+  let rank = 0;
+  if (mine?.done) {
+    const above = await env.DB.prepare('SELECT COUNT(*) AS n FROM duel_entries WHERE code = ? AND done = 1 AND damage > ?').bind(code, mine.damage).first<{ n: number }>();
+    rank = (above?.n ?? 0) + 1;
+  }
+  const entries = (JSON.parse(top?.j || '[]') as { name: string; damage: number; combo: number; done: number; me: number }[]).map((e) => ({ ...e, done: !!e.done, me: !!e.me }));
+  return {
+    code: d.code,
+    level: d.level,
+    seconds: DUEL_SECONDS,
+    expires: d.expires,
+    expired: d.expires < Date.now(),
+    mineCreated: d.sub === user.sub,
+    played: !!mine,
+    myDamage: mine?.done ? mine.damage : null,
+    rank,
+    players: count?.n ?? 0,
+    entries,
+  };
+}
+
+async function duelGet(env: Env, user: User, code: string) {
+  const base = await readUser(env, user);
+  return { ...base, result: await duelInfo(env, user, cleanCode(code)) };
+}
+
+async function duelStart(env: Env, user: User, raw: string) {
+  const code = cleanCode(raw);
+  const now = Date.now();
+  const d = await env.DB.prepare('SELECT level, seed, expires FROM duels WHERE code = ?').bind(code).first<{ level: number; seed: number; expires: number }>();
+  if (!d) throw new HttpError(404, 'duel_not_found');
+  if (d.expires < now) throw new HttpError(410, 'duel_expired');
+  const base = await readUser(env, user);
+  const runId = randHex(16);
+  const name = (base.state.playerName || user.name.split(' ')[0] || 'Héroe').replace(/[<>]/g, '').slice(0, 14);
+  // Se anota el intento antes de jugar: si se corta o cierra la app, no hay segunda oportunidad.
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO duel_entries (code, sub, name, run_id, snapshot, started) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(code, user.sub, name, runId, JSON.stringify(base.state), now)
+    .run();
+  if (r.meta.changes !== 1) throw new HttpError(409, 'duel_already_played');
+  return { ...base, result: { runId, seed: d.seed, level: d.level, seconds: DUEL_SECONDS } };
+}
+
+async function duelFinish(env: Env, user: User, runId: string, log: unknown) {
+  if (!/^[a-f0-9]{32}$/.test(runId)) throw new HttpError(400, 'bad_run');
+  const e = await env.DB.prepare('SELECT e.code AS code, e.snapshot AS snapshot, e.started AS started, e.done AS done, d.level AS level, d.seed AS seed FROM duel_entries e JOIN duels d ON d.code = e.code WHERE e.run_id = ? AND e.sub = ?')
+    .bind(runId, user.sub)
+    .first<{ code: string; snapshot: string; started: number; done: number; level: number; seed: number }>();
+  if (!e || e.done) throw new HttpError(404, 'run_not_found');
+  if (!Array.isArray(log) || log.length > 5000) throw new HttpError(400, 'bad_log');
+  const out = replayRun(migrate(JSON.parse(e.snapshot)), e.level, e.seed, log as number[][], true);
+  if (!out.ok) throw new HttpError(422, 'replay_' + out.error);
+  const elapsed = (Date.now() - e.started) / 1000;
+  if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
+  if (Date.now() - e.started > RUN_TTL) throw new HttpError(410, 'run_expired');
+  const damage = Math.max(0, Math.round(out.report.damage ?? 0));
+  const claim = await env.DB.prepare('UPDATE duel_entries SET damage = ?, combo = ?, done = 1, snapshot = \'\' WHERE run_id = ? AND done = 0')
+    .bind(damage, out.report.maxCombo, runId)
+    .run();
+  if (claim.meta.changes !== 1) throw new HttpError(404, 'run_not_found');
+  const base = await readUser(env, user);
+  return { ...base, result: { damage, info: await duelInfo(env, user, e.code) } };
+}
+
+async function duelMine(env: Env, user: User) {
+  const base = await readUser(env, user);
+  const since = Date.now() - DUEL_TTL;
+  const row = await env.DB.prepare(
+    `SELECT json_group_array(json_object('code', code, 'level', level, 'created', created, 'mine', mine, 'myDamage', my_damage, 'players', players, 'best', best)) AS j FROM (
+      SELECT d.code AS code, d.level AS level, d.created AS created, d.sub = ?1 AS mine,
+        (SELECT damage FROM duel_entries WHERE code = d.code AND sub = ?1 AND done = 1) AS my_damage,
+        (SELECT COUNT(*) FROM duel_entries WHERE code = d.code) AS players,
+        (SELECT MAX(damage) FROM duel_entries WHERE code = d.code AND done = 1) AS best
+      FROM duels d WHERE d.created > ?2 AND (d.sub = ?1 OR d.code IN (SELECT code FROM duel_entries WHERE sub = ?1))
+      ORDER BY d.created DESC LIMIT 10)`,
+  )
+    .bind(user.sub, since)
+    .first<{ j: string }>();
+  return { ...base, result: { duels: JSON.parse(row?.j || '[]') } };
 }
 
 // ---------- Google ----------

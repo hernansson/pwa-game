@@ -26,3 +26,27 @@ CREATE TABLE IF NOT EXISTS runs (
   done INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS runs_sub ON runs(sub, started);
+-- Retos entre amigos: un código, un jefe, 60 segundos. Gana quien le hace más daño.
+CREATE TABLE IF NOT EXISTS duels (
+  code TEXT PRIMARY KEY,
+  sub TEXT NOT NULL,             -- quien lo creó
+  level INTEGER NOT NULL,
+  seed INTEGER NOT NULL,         -- todos juegan con las mismas piezas
+  created INTEGER NOT NULL,
+  expires INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS duels_sub ON duels(sub, created);
+CREATE TABLE IF NOT EXISTS duel_entries (
+  code TEXT NOT NULL,
+  sub TEXT NOT NULL,
+  name TEXT NOT NULL,
+  damage INTEGER NOT NULL DEFAULT 0,
+  combo INTEGER NOT NULL DEFAULT 0,
+  run_id TEXT NOT NULL,
+  snapshot TEXT NOT NULL,        -- el progreso al empezar: con esto se rejuega
+  started INTEGER NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0, -- un solo intento por persona
+  PRIMARY KEY (code, sub)
+);
+CREATE INDEX IF NOT EXISTS duel_entries_sub ON duel_entries(sub, started);
+CREATE INDEX IF NOT EXISTS duel_entries_run ON duel_entries(run_id);

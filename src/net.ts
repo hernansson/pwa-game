@@ -149,6 +149,11 @@ export function errorText(e: unknown): string {
     needs_payment: 'Muy pronto se va a poder comprar.',
     admin_only: 'Solo para administradores.',
     run_expired: 'La pelea tardó demasiado y venció.',
+    bad_code: 'El código tiene 6 letras o números.',
+    duel_not_found: 'No existe un reto con ese código.',
+    duel_expired: 'Ese reto ya terminó.',
+    duel_already_played: 'Ya jugaste este reto: hay un solo intento.',
+    too_many_duels: 'Creaste muchos retos hoy. Prueba mañana.',
   };
   if (m[code]) return m[code];
   if (code.startsWith('replay_')) return 'El servidor no pudo validar esa pelea.';

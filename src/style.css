@@ -898,3 +898,46 @@ textarea.code { width: 100%; height: 90px; margin-top: 8px; border-radius: 10px;
 .train-cta b { color: var(--gold); white-space: nowrap; }
 .train-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 10px; font-size: 13px; color: var(--muted); }
 .train-head b { color: var(--gold); font-size: 16px; white-space: nowrap; }
+/* Reto contra el jefe */
+.event.duel { flex-direction: column; border-color: #ff4fd8; background: radial-gradient(circle at 15% 25%, #4a1640, var(--panel) 70%); }
+.duel-head { display: flex; gap: 10px; }
+.duel-actions { display: flex; flex-direction: column; gap: 8px; }
+.event.duel .primary, .duel-modal .primary { border: 0; border-radius: 12px; padding: 11px; font-weight: 900; font-size: 15px; background: linear-gradient(180deg, #ff6bd9, #c3279f); color: #fff; box-shadow: 0 3px 0 #6b0f55; width: 100%; }
+.duel-join { display: flex; gap: 6px; }
+.duel-join input { flex: 1; min-width: 0; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.35); color: var(--text); padding: 10px 12px; font: 900 17px/1 ui-monospace, monospace; letter-spacing: 4px; text-transform: uppercase; text-align: center; }
+.duel-join button { border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; font-weight: 800; background: var(--card2); color: var(--text); }
+.duel-mine { display: flex; flex-direction: column; gap: 6px; }
+.duel-mine:empty { display: none; }
+.duel-mine-t { color: var(--muted); font-size: 12px; font-weight: 800; margin-top: 4px; }
+.duel-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; text-align: left; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.25); color: var(--text); }
+.duel-row b { font-family: ui-monospace, monospace; letter-spacing: 2px; }
+.duel-row span { font-size: 12px; color: var(--muted); }
+.duel-row em { font-style: normal; font-weight: 800; font-size: 13px; color: var(--gold); white-space: nowrap; }
+.duel-modal { position: relative; text-align: center; }
+.duel-modal .x { position: absolute; top: -4px; right: -4px; }
+.duel-boss { width: 110px; margin: 0 auto -4px; }
+.duel-boss svg { width: 100%; height: auto; }
+.duel-modal h2 { margin: 4px 0 2px; font-size: 20px; }
+.duel-meta { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.duel-code-big { display: flex; justify-content: center; gap: 5px; margin: 6px 0 8px; }
+.duel-code-big span { width: 36px; height: 44px; display: grid; place-items: center; border-radius: 10px; background: rgba(0,0,0,.4); border: 1px solid #ff4fd8; font: 900 24px/1 ui-monospace, monospace; color: #ffd6f5; box-shadow: 0 0 12px rgba(255,79,216,.25) inset; }
+.duel-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 12px; }
+.duel-btns button { border: 1px solid var(--line); border-radius: 12px; padding: 9px; font-weight: 800; background: var(--card2); color: var(--text); }
+.duel-done { background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 12px; }
+.duel-modal .sec-head { margin-top: 6px; }
+.duel-rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; text-align: left; max-height: 38dvh; overflow: auto; }
+.duel-rank li { display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.duel-rank li.me { border-color: #ff4fd8; background: rgba(255,79,216,.12); }
+.duel-rank li.playing { opacity: .6; }
+.duel-rank .pos { text-align: center; font-weight: 900; color: var(--muted); }
+.duel-rank li:first-child .pos { font-size: 18px; }
+.duel-rank b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-rank small { font-size: 11px; color: var(--muted); }
+.duel-rank em { font-style: normal; font-weight: 900; color: var(--gold); white-space: nowrap; }
+.duel-result .duel-rank { margin-bottom: 12px; }
+#app.in-duel .route { display: flex; justify-content: center; gap: 14px; font-weight: 900; font-size: 18px; }
+.duel-time { color: var(--text); }
+.duel-time.hurry { color: #ff5a5a; animation: fzThrob .5s ease-in-out infinite; }
+.duel-dmg { color: var(--gold); text-shadow: 0 0 10px rgba(255,210,90,.5); }
+.duel-modal .primary.big { margin-bottom: 14px; padding: 13px; font-size: 16px; }
+#app.in-duel .enemy-name { visibility: hidden; }

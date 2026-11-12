@@ -34,6 +34,8 @@ export interface Run {
   drops: number;
   merges: number;
   result: null | 'win' | 'lose';
+  /** Reto contra el jefe: segundos que quedan y daño total hecho. */
+  duel?: { left: number; dmg: number };
 }
 
 export interface GameState {

@@ -48,7 +48,13 @@ export interface ClearReport {
   maxCombo: number;
   firstClear: boolean;
   shards: Record<string, number>; // fragmentos del Arsenal ganados
+  damage?: number; // solo en el reto contra el jefe
 }
+
+/** Reto contra el jefe: dura esto y gana quien le hace más daño. */
+export const DUEL_SECONDS = 60;
+/** En el reto cada golpe del jefe quita esta parte de la vida máxima (antes de escudos). */
+export const DUEL_HIT = 0.065;
 
 /** Lo que produjo una fusión, para mostrarlo en pantalla. */
 export interface MergeResult {
@@ -162,6 +168,44 @@ export class Game {
     return true;
   }
 
+  /**
+   * Reto contra el jefe: sin energía ni premios. El jefe del nivel no muere (se le vuelve a llenar la vida)
+   * y hay 60 segundos para hacerle todo el daño posible. Mismo nivel y misma semilla para todos.
+   */
+  startDuel(level: number): boolean {
+    if (this.s.run || !Number.isInteger(level) || level < 1) return false;
+    this.modsCache = null;
+    const boss = true;
+    this.s.run = {
+      level,
+      wave: WAVES_PER_LEVEL,
+      enemyInWave: 0,
+      enemyHp: enemyHp(level, boss),
+      enemyTimer: enemyAttackSeconds(boss),
+      stun: 0,
+      heroHp: maxHp(this.s),
+      shield: maxHp(this.s) * Math.min(1, arsenalMods(this.s).startShield),
+      boost: 0,
+      boostMult: 1,
+      look: {},
+      grid: startingGrid(BASE_COLS + this.s.board.cols, BASE_ROWS + this.s.board.rows, pieceOdds(this.s), this.rand),
+      combo: 0,
+      comboTimer: 0,
+      maxCombo: 0,
+      gold: 0,
+      drops: 0,
+      merges: 0,
+      result: null,
+      duel: { left: DUEL_SECONDS, dmg: 0 },
+    };
+    this.respawnDelay = 1;
+    this.step = 0;
+    this.acc = 0;
+    this.log = [];
+    this.emit({ type: 'wave', wave: WAVES_PER_LEVEL, boss: true });
+    return true;
+  }
+
   /** Abandona el nivel actual (la energía no se devuelve). */
   abandon() {
     if (!this.fighting) return;
@@ -240,7 +284,12 @@ export class Game {
       }
     }
     this.emit({ type: 'merge', r });
-    if (r.dmg > 0) {
+    if (r.dmg > 0 && run.duel) {
+      run.duel.dmg += r.dmg;
+      run.enemyHp -= r.dmg;
+      const max = enemyHp(run.level, true);
+      while (run.enemyHp <= 0) run.enemyHp += max; // el jefe del reto no muere
+    } else if (r.dmg > 0) {
       run.enemyHp -= r.dmg;
       if (run.enemyHp <= 0) this.kill(run);
     }
@@ -289,6 +338,13 @@ export class Game {
       this.respawnDelay -= dt;
       return;
     }
+    if (run.duel) {
+      run.duel.left = Math.max(0, run.duel.left - dt);
+      if (run.duel.left <= 0) {
+        this.finish(true);
+        return;
+      }
+    }
     if (run.stun > 0) {
       run.stun = Math.max(0, run.stun - dt);
       return;
@@ -297,7 +353,8 @@ export class Game {
     if (run.enemyTimer <= 0) {
       const boss = this.isBossWave(run);
       run.enemyTimer = enemyAttackSeconds(boss);
-      this.hurt(run, enemyHit(run.level, boss), true);
+      // En el reto el jefe pega una parte de tu vida: así un amigo nuevo también puede aguantar y competir.
+      this.hurt(run, run.duel ? maxHp(this.s) * DUEL_HIT : enemyHit(run.level, boss), true);
     }
   }
 
@@ -330,6 +387,11 @@ export class Game {
   private finish(win: boolean) {
     const run = this.s.run!;
     run.result = win ? 'win' : 'lose';
+    if (run.duel) {
+      const damage = Math.round(run.duel.dmg);
+      this.emit({ type: 'end', report: { level: run.level, win, stars: 0, gold: 0, gems: 0, points: 0, maxCombo: run.maxCombo, firstClear: false, shards: {}, damage } });
+      return;
+    }
     let stars = 0;
     let gems = 0;
     let points = 0;
