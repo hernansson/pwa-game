@@ -36,7 +36,7 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { ARMS, ArmDef, ArmFam, CHESTS, MAX_ARM_LEVEL, pityLeft, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, ArmDef, ArmFam, CHESTS, FENIX_SET, MAX_ARM_LEVEL, pityLeft, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
   exportCode,
@@ -1282,6 +1282,30 @@ function renderDots() {
   $('#vip-btn').hidden = !!s.run;
 }
 
+/** Fondo del Caballero Fénix: volcán al atardecer, sol eclipsado con corona de fuego, ríos de lava y brasas que suben. */
+function fenixSceneSvg(): string {
+  const embers = Array.from({ length: 16 }, (_, i) => `<circle class="fxs-em" cx="${(i * 53) % 400}" cy="${300 + (i * 37) % 110}" r="${1.2 + (i % 3) * 0.8}" fill="${['#ffd34d', '#ff8a1f', '#fff1a8'][i % 3]}" style="--d:${2.6 + (i % 5) * 0.6}s;--dl:${-(i * 0.37).toFixed(2)}s;--x:${(i % 2 ? 1 : -1) * (8 + (i % 4) * 6)}px"/>`).join('');
+  return `<svg class="hs-bg fenix" viewBox="0 0 400 420" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="fxsSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c0408"/><stop offset=".45" stop-color="#6a1210"/><stop offset=".75" stop-color="#d4421a"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+      <radialGradient id="fxsSun" cx=".5" cy=".5" r=".5"><stop offset=".35" stop-color="#ffe9a8"/><stop offset=".55" stop-color="#ff8a1f" stop-opacity=".8"/><stop offset="1" stop-color="#ff3b1f" stop-opacity="0"/></radialGradient>
+      <linearGradient id="fxsLava" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".4" stop-color="#ff8a1f"/><stop offset="1" stop-color="#c2210f"/></linearGradient>
+      <linearGradient id="fxsFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a0c0a"/><stop offset="1" stop-color="#0e0405"/></linearGradient>
+    </defs>
+    <rect width="400" height="420" fill="url(#fxsSky)"/>
+    <g class="fxs-sun"><circle cx="200" cy="120" r="95" fill="url(#fxsSun)"/><circle cx="200" cy="120" r="34" fill="#2a0805"/><circle cx="200" cy="120" r="34" fill="none" stroke="#fff1a8" stroke-width="3"/></g>
+    <path d="M0 260 L60 200 L95 225 L150 150 L185 175 L200 165 L215 175 L250 150 L305 225 L340 200 L400 260 V310 H0Z" fill="#3a0a0a"/>
+    <path d="M150 150 L170 160 L185 175 L200 165 L215 175 L230 160 L250 150 L240 170 L222 190 L214 230 L206 260 L194 260 L186 230 L178 190 L160 170Z" fill="#200606"/>
+    <path class="fxs-lava" d="M196 168 Q200 200 192 230 Q188 255 196 300 L206 300 Q212 255 208 230 Q202 200 204 168Z" fill="url(#fxsLava)"/>
+    <path class="fxs-lava" d="M62 205 Q70 240 58 300 L66 300 Q78 240 68 205Z M338 205 Q330 240 342 300 L334 300 Q322 240 332 205Z" fill="url(#fxsLava)" opacity=".8"/>
+    <path d="M0 290 L40 270 L80 285 L120 268 L170 284 L230 270 L280 286 L330 268 L400 288 V320 H0Z" fill="#1a0505"/>
+    <path d="M0 305 H400 V420 H0Z" fill="url(#fxsFloor)"/>
+    <g class="fxs-cracks" stroke="#ff7a1a" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M20 340 L70 352 L110 345 M290 345 L330 356 L385 342 M60 395 L120 386 L150 400 M250 400 L290 388 L345 398"/></g>
+    <g class="hs-runes"><ellipse cx="200" cy="352" rx="124" ry="27" fill="#ff7a1a" opacity=".22"/><ellipse cx="200" cy="352" rx="124" ry="27" fill="none" stroke="#ffb02e" stroke-width="3"/><ellipse cx="200" cy="352" rx="100" ry="20" fill="none" stroke="#fff1a8" stroke-width="1.6" stroke-dasharray="7 7"/></g>
+    <g>${embers}</g>
+  </svg>`;
+}
+
 /** Fondo del héroe: patio del castillo de noche, antorchas y un círculo de runas bajo los pies. */
 function heroSceneSvg(): string {
   return `<svg class="hs-bg" viewBox="0 0 400 420" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
@@ -1329,7 +1353,7 @@ function renderHeroSheet() {
   $('#sheet-body').innerHTML = `
     <div class="hero-page">
       <div class="hs-scene" style="--rar:${RARITY_COLORS[skin.rarity]}">
-        ${heroSceneSvg()}
+        ${skin.id === 'fenix' ? fenixSceneSvg() : heroSceneSvg()}
         <div class="hs-name"><b>${esc(s.playerName || 'Tu héroe')}</b><span>⚔️ Poder <b>${fmt(power(s))}</b></span></div>
         <div class="hs-slots left">${slot('espada')}${slot('escudo')}</div>
         <div class="hs-hero">${myHero()}</div>
@@ -1414,6 +1438,22 @@ function openShop(tab: ShopTab = 'cofres') {
   } else openSheet('cofres');
 }
 
+/** Vidriera del set legendario del Fénix, arriba de la tienda. */
+function fenixCard(): string {
+  const owned = FENIX_SET.every((id) => game.s.arsenal[id]?.lvl > 0);
+  const items = FENIX_SET.map((id) => armById(id)!);
+  return `<div class="fenix-card">
+    <div class="fc-sky"></div>
+    <div class="fc-head"><small>👑 LEGENDARIO · SET COMPLETO</small><b>Set del Fénix</b></div>
+    <div class="fc-items">${items
+      .map((d) => `<button class="fc-item" data-fenix-see="${d.fam}"><span class="fc-art">${armShowcase(d)}</span><small>${d.name}</small></button>`)
+      .join('')}</div>
+    <p>Hoja de fuego, escudo con el fénix y armadura dorada con alas de llamas. Arrancan como una básica nivel 26.</p>
+    ${owned ? `<button class="fc-buy owned" disabled>¡Ya es tuyo! 🔥</button>` : `<button class="fc-buy" data-interest="fenix_set">US$ 9,99 · Muy pronto</button>`}
+    <small class="fc-alt">También salen en cofres: legendaria segura cada 100.</small>
+  </div>`;
+}
+
 function usd(n: number) {
   return 'US$ ' + n.toFixed(2).replace('.', ',');
 }
@@ -1434,6 +1474,7 @@ function renderShop() {
     const wait = game.freeChestIn();
     const free = CHESTS.find((c) => c.id === 'armas')!;
     inner = `
+    ${fenixCard()}
     <div class="free-chest ${wait ? '' : 'ready'}">
       <div class="chest-art">${chestSvg('armas')}</div>
       <div class="fc-main"><small>Cofre gratis</small><b>${free.name}</b><span data-free-timer>${wait ? `Listo en ${timeText(wait)}` : `${Math.round(free.shards / 2)} fragmentos de regalo`}</span></div>
@@ -2127,6 +2168,14 @@ $('#sheet-body').addEventListener('click', (ev) => {
     toast('¡Anotado! Te avisamos cuando se puedan comprar');
     return;
   }
+  const fSee = t.closest('[data-fenix-see]') as HTMLElement | null;
+  if (fSee) {
+    const fam = fSee.dataset.fenixSee as ArmFam;
+    armTab = fam;
+    armSel[fam] = FENIX_SET.find((id) => armById(id)!.fam === fam);
+    petsTab = false;
+    return openSheet('arsenal');
+  }
   const goShop = t.closest('[data-go-shop]') as HTMLElement | null;
   if (goShop) return openShop(goShop.dataset.goShop as ShopTab);
   const interest = t.closest('[data-interest]') as HTMLElement | null;
@@ -2160,6 +2209,7 @@ function showSettings() {
     </div>`}
     ${testTools() ? `<div class="set-box test"><b>Herramientas de administrador</b><p>${online() ? 'Solo tu cuenta las ve. Los cambios se hacen en el servidor.' : 'Solo fuera de la página publicada, para probar.'}</p>
       <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div>
+      <div class="btns"><button data-test-fenix>🔥 Desbloquear set del Fénix</button></div>
       <div class="btns"><button data-test-board="rows">${game.s.board.rows ? 'Quitar' : 'Poner'} +1 fila</button><button data-test-board="cols">${game.s.board.cols ? 'Quitar' : 'Poner'} +1 columna</button></div></div>` : ''}
     ${!online() || me()?.admin ? `<details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>` : ''}
   </div>`);
@@ -2194,6 +2244,19 @@ $('#modal').addEventListener('click', (ev) => {
       <div class="btns"><button data-close>Cancelar</button><button data-do-import class="primary">Cargar</button></div>`);
   } else if (t.closest('[data-logout]')) {
     doLogout();
+  } else if (t.closest('[data-test-fenix]')) {
+    const done = () => {
+      hideModal();
+      armTab = 'skin';
+      petsTab = false;
+      openSheet('heroe');
+      toast('🔥 Set del Fénix equipado');
+    };
+    if (online()) act('admin_fenix').then((a) => (applyServer(a.state), done()), (e) => toast(errorText(e)));
+    else if (game.unlockFenix()) {
+      save(game.s);
+      done();
+    } else toast('Termina la pelea primero');
   } else if (online() && t.closest('[data-test-gems], [data-test-gold], [data-test-board]')) {
     const b = t.closest('[data-test-board]') as HTMLElement | null;
     const type = b ? 'admin_board' : t.closest('[data-test-gems]') ? 'admin_gems' : 'admin_gold';

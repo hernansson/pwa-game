@@ -1196,3 +1196,53 @@ button.res { cursor: pointer; }
 .hs-scene .hs-slot .hs-ic { width: 40px; height: 40px; display: grid; place-items: center; }
 .hs-scene .hs-slot .hs-ic svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
 .hs-scene .hs-slot[data-goto-arm="skin"] .hs-ic { width: 46px; height: 46px; margin-top: 2px; }
+/* ---- Set del Fénix: animaciones ---- */
+.fx-fl { transform-box: fill-box; transform-origin: 50% 100%; animation: fxFlick .45s ease-in-out infinite alternate; }
+.fx-fl.f2 { animation-duration: .38s; animation-delay: -.2s; }
+.fx-fl.f3 { animation-duration: .52s; animation-delay: -.1s; }
+@keyframes fxFlick { 0% { transform: scaleY(.9) skewX(-5deg); } 100% { transform: scaleY(1.14) skewX(5deg); } }
+.fx-em { transform-box: fill-box; animation: fxEmber 1.7s linear infinite; opacity: 0; }
+.fx-em.e2 { animation-delay: -.45s; } .fx-em.e3 { animation-delay: -.9s; } .fx-em.e4 { animation-delay: -1.3s; }
+@keyframes fxEmber { 0% { transform: translate(0, 4px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(3px, -18px); opacity: 0; } }
+.fx-ring { transform-box: fill-box; transform-origin: center; animation: spin 5s linear infinite; }
+.fx-pulse { transform-box: fill-box; transform-origin: center; animation: fxPulse 1.3s ease-in-out infinite; }
+@keyframes fxPulse { 0%, 100% { transform: scale(.9); opacity: .18; } 50% { transform: scale(1.06); opacity: .42; } }
+.fx-bird { transform-box: fill-box; transform-origin: 50% 60%; animation: fxBird 1.8s ease-in-out infinite; }
+@keyframes fxBird { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.07); filter: brightness(1.35); } }
+.fx-vein { stroke-dasharray: 4 3; animation: fxVein .5s linear infinite; }
+@keyframes fxVein { to { stroke-dashoffset: -14; } }
+.fx-eyes { animation: fxEyes 1.4s ease-in-out infinite; }
+@keyframes fxEyes { 50% { stroke: #fff1a8; filter: drop-shadow(0 0 2px #ffb02e); } }
+.fx-wing { transform-box: view-box; transform-origin: 46px 52px; animation: fxFlap 1.6s ease-in-out infinite; }
+.fx-wing.back { animation-name: fxFlapBack; opacity: .7; }
+@keyframes fxFlap { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-9deg) scale(1.04); } }
+@keyframes fxFlapBack { 0%, 100% { transform: translate(4px, -6px) rotate(16deg); } 50% { transform: translate(4px, -6px) rotate(6deg) scale(1.04); } }
+.fx-crest .fx-fl { animation-duration: .35s; }
+.hero-embers .fx-em { animation-duration: 2.2s; }
+/* Escenario del Fénix */
+.fxs-sun { transform-box: fill-box; transform-origin: center; animation: fxPulse 3s ease-in-out infinite; }
+.fxs-sun { animation-name: fxsSun; }
+@keyframes fxsSun { 50% { transform: scale(1.05); filter: brightness(1.15); } }
+.fxs-lava { animation: fxsLava 2.4s ease-in-out infinite; }
+@keyframes fxsLava { 50% { filter: brightness(1.35); } }
+.fxs-cracks { animation: fxsCracks 1.8s ease-in-out infinite; filter: drop-shadow(0 0 4px #ff5a1f); }
+@keyframes fxsCracks { 50% { opacity: .45; } }
+.fxs-em { transform-box: fill-box; animation: fxsEm var(--d, 3s) linear var(--dl, 0s) infinite; }
+@keyframes fxsEm { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--x, 10px), -300px); opacity: 0; } }
+.hs-scene:has(.hs-bg.fenix) { border-color: #ff8a1f; box-shadow: inset 0 0 40px rgba(0,0,0,.4), 0 0 24px rgba(255,120,30,.35); }
+@media (prefers-reduced-motion: reduce) { .fx-fl, .fx-em, .fx-ring, .fx-pulse, .fx-bird, .fx-vein, .fx-wing, .fxs-em, .fxs-sun, .fxs-lava, .fxs-cracks { animation: none !important; } .fx-em, .fxs-em { opacity: 0; } }
+/* Vidriera del set del Fénix */
+.fenix-card { position: relative; overflow: hidden; border-radius: 20px; padding: 14px 12px 12px; margin-bottom: 12px; text-align: center; border: 2px solid #ffb02e; background: linear-gradient(180deg, #3a0a0a, #1c0607); box-shadow: 0 0 26px rgba(255,120,30,.35), inset 0 0 30px rgba(255,90,30,.25); }
+.fc-sky { position: absolute; inset: 0; background: radial-gradient(60% 50% at 50% 30%, rgba(255,140,40,.45), transparent 70%), repeating-conic-gradient(from 0deg at 50% 35%, rgba(255,180,60,.12) 0 8deg, transparent 8deg 22deg); animation: spin 30s linear infinite; transform-origin: 50% 35%; width: 200%; height: 200%; left: -50%; top: -50%; pointer-events: none; }
+.fenix-card > :not(.fc-sky) { position: relative; }
+.fc-head small { display: block; font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #ffd34d; }
+.fc-head b { display: block; font-size: 26px; font-weight: 900; background: linear-gradient(180deg, #fff6c8, #ffb02e 55%, #ff5a1f); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 #000); }
+.fc-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 6px; }
+.fc-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border-radius: 14px; border: 1px solid rgba(255,176,46,.5); background: radial-gradient(circle at 50% 40%, rgba(255,120,30,.35), rgba(20,6,6,.6) 70%); color: #fff1a8; }
+.fc-art { width: 64px; height: 64px; display: grid; place-items: center; }
+.fc-art svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 8px rgba(255,140,40,.7)); }
+.fc-item small { font-size: 11px; font-weight: 800; line-height: 1.1; }
+.fenix-card p { font-size: 12px; color: #ffd9b0; margin: 4px 0 10px; }
+.fc-buy { width: 100%; border: 0; border-radius: 14px; padding: 12px; font-weight: 900; font-size: 16px; color: #2a0a00; background: linear-gradient(180deg, #ffe17a, #ff8a1f); box-shadow: 0 4px 0 #8a2a05, 0 0 18px rgba(255,140,40,.5); }
+.fc-buy.owned { background: linear-gradient(180deg, #5ef09a, #22a95c); box-shadow: 0 4px 0 #0b5a2a; color: #04240f; }
+.fc-alt { display: block; margin-top: 8px; font-size: 11px; color: #c99a7a; }

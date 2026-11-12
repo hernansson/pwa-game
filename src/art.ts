@@ -71,7 +71,7 @@ export interface Skin {
   cape: string;
   visor: string;
   aura: string | null;
-  helm: 'knight' | 'kabuto' | 'cyber';
+  helm: 'knight' | 'kabuto' | 'cyber' | 'fenix';
   helmColor?: string;
 }
 
@@ -115,6 +115,19 @@ export const SKINS: Skin[] = [
     aura: '#29f0ff',
     helm: 'cyber',
   },
+  {
+    id: 'fenix',
+    name: 'Caballero Fénix',
+    rarity: 'legendaria',
+    price: 0,
+    armor: '#efb02c',
+    armorDark: '#a3301b',
+    trim: '#fff1a8',
+    cape: '#ff5a1f',
+    visor: '#2a0805',
+    aura: '#ff8a1f',
+    helm: 'fenix',
+  },
 ];
 
 export function skinById(id: string): Skin {
@@ -127,6 +140,21 @@ export function helmSvg(s: Skin): string {
       <path d="M38 28 Q30 10 24 8 Q34 18 40 26Z M62 28 Q70 10 76 8 Q66 18 60 26Z" fill="${s.trim}" stroke="#14080c" stroke-width="1.5"/>
       <rect x="40" y="33" width="20" height="6" rx="2" fill="${s.visor}"/>
       <circle cx="50" cy="24" r="3" fill="${s.trim}"/></g>`;
+  }
+  if (s.helm === 'fenix') {
+    // Yelmo del fénix: dorado, corona de plumas de fuego que se mueven y visera con ojos de brasa.
+    return `<g class="fx-crest">
+      <path class="fx-fl f1" d="M50 -6 Q57 4 54 14 L46 14 Q43 4 50 -6Z" fill="#ff5a1f"/>
+      <path class="fx-fl f2" d="M40 0 Q46 6 46 15 L39 15 Q36 7 40 0Z" fill="#ff8a1f"/>
+      <path class="fx-fl f3" d="M60 0 Q64 7 61 15 L54 15 Q54 6 60 0Z" fill="#ff8a1f"/>
+      <path class="fx-fl f2" d="M50 2 Q54 8 52 14 L48 14 Q46 8 50 2Z" fill="#ffd34d"/></g>
+    <path d="M33 42 L33 27 Q33 11 50 11 Q67 11 67 27 L67 42 Q50 47 33 42Z" fill="${s.armor}" stroke="#3a0d05" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M33 22 Q41 18 50 22 Q59 18 67 22 L67 26 Q59 22 50 26 Q41 22 33 26Z" fill="${s.armorDark}" stroke="#3a0d05" stroke-width="1.2"/>
+    <path d="M37 26 Q38 15 49 14" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
+    <path d="M36 28 L64 28 L62 35 Q50 38 38 35Z" fill="${s.visor}" stroke="#3a0d05" stroke-width="1.6"/>
+    <path d="M40 31.5 L46 31.5 M54 31.5 L60 31.5" stroke="#ffb02e" stroke-width="2.4" stroke-linecap="round" class="fx-eyes"/>
+    <path d="M50 37 L53 41 L50 45 L47 41Z" fill="#ff3b1f" stroke="#3a0d05" stroke-width="1"/>
+    <path d="M33 30 Q26 26 22 16 Q30 22 34 26Z M67 30 Q74 26 78 16 Q70 22 66 26Z" fill="${s.trim}" stroke="#3a0d05" stroke-width="1.2"/>`;
   }
   if (s.helm === 'cyber') {
     return `<g transform="translate(50 30) scale(1.22) translate(-50 -30)"><path d="M35 38 L37 24 Q50 14 63 24 L65 38Z" fill="${s.helmColor ?? s.armor}" stroke="#05060c" stroke-width="2"/>
@@ -152,6 +180,16 @@ export interface HeroFight {
   shieldShape?: number;
 }
 
+/** Alas de fuego del Caballero Fénix: aletean despacio y sueltan brasas. */
+function fenixWings(): string {
+  const wing = (k: string) => `<g class="fx-wing ${k}">
+      <path d="M46 48 Q28 26 4 22 Q14 30 12 36 Q4 36 0 42 Q12 44 14 50 Q6 54 4 62 Q20 58 30 62 Q36 56 46 58Z" fill="#ff5a1f" stroke="#7a1a05" stroke-width="1.6" stroke-linejoin="round" opacity=".92"/>
+      <path class="fx-fl f1" d="M44 50 Q30 34 12 30 Q20 38 18 42 Q28 44 30 52 Q36 52 44 56Z" fill="#ffb02e"/>
+      <path class="fx-fl f2" d="M42 52 Q34 44 24 42 Q30 48 30 54 Q36 54 42 56Z" fill="#fff1a8" opacity=".85"/></g>`;
+  return `<g class="fx-wings">${wing('back')}${wing('front')}</g>
+    <g class="fx-embers hero-embers"><circle class="fx-em e1" cx="20" cy="70" r="1.6" fill="#ffd34d"/><circle class="fx-em e2" cx="78" cy="60" r="1.3" fill="#ff8a1f"/><circle class="fx-em e3" cx="30" cy="40" r="1.2" fill="#fff1a8"/><circle class="fx-em e4" cx="70" cy="86" r="1.4" fill="#ffd34d"/></g>`;
+}
+
 /** Escudo en el brazo de atrás: el mismo dibujo que la pieza del tablero. */
 function heroShield(lvl: number, shape: number): string {
   const sc = 0.62 + Math.min(lvl, 10) * 0.02;
@@ -171,6 +209,7 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
   return `<svg viewBox="0 0 120 110" class="hero-svg" aria-hidden="true">
     ${glow}${aura}
     <ellipse cx="50" cy="104" rx="28" ry="5" fill="#000" opacity=".3"/>
+    ${skin.helm === 'fenix' ? fenixWings() : ''}
     <path d="M40 44 Q20 60 18 100 Q26 95 32 100 Q38 94 45 99 Q50 94 54 98 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M40 48 Q26 64 25 94 Q30 92 33 95 Q36 70 46 50Z" fill="#000" opacity=".22"/>
     <path d="M41 78 L48 78 L47 96 L40 96Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
@@ -361,6 +400,24 @@ const SWORDS: Icon[] = [
     <rect x="29" y="46" width="6" height="10" rx="1.5" fill="#3b2a20" stroke="${d}" stroke-width="1"/>
     ${l >= 5 ? gem(32, 43, 3.5, f) : ''}
     <circle cx="32" cy="58" r="3.5" fill="${c}" stroke="${d}" stroke-width="1"/></g>`,
+  // Espada del Fénix (legendaria): hoja de fuego con llamas que titilan, brasas que suben y guarda de alas.
+  (_c, _d, l, f) => `<g transform="rotate(-40 32 32)">
+    <defs><linearGradient id="fxBladeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset=".4" stop-color="#ffab2e"/><stop offset="1" stop-color="#c8230f"/></linearGradient></defs>
+    <g class="fx-flames">
+      <path class="fx-fl f1" d="M32 -2 Q41 9 38.5 20 Q43 29 38.5 40 L25.5 40 Q21 29 25.5 20 Q23 9 32 -2Z" fill="#ff6a1a" opacity=".5"/>
+      <path class="fx-fl f2" d="M32 3 Q38 13 36 23 Q39 31 36 40 L28 40 Q25 31 28 23 Q26 13 32 3Z" fill="#ffc23a" opacity=".55"/>
+    </g>
+    <path d="M32 5 L37.5 13.5 L37 40 L27 40 L26.5 13.5Z" fill="url(#fxBladeG)" stroke="#3a0d05" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M32 8 L34.6 14.5 L34.3 38.5 L32 38.5Z" fill="#fff" opacity=".7"/>
+    <path class="fx-vein" d="M31.5 16 Q29.8 21 31.6 26 Q33.4 31 31.6 37" stroke="#fff6c8" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+    <path d="M15 39.5 Q19 33 25.5 38.5 L32 40.5 L38.5 38.5 Q45 33 49 39.5 Q45 46.5 38.5 44.5 L25.5 44.5 Q19 46.5 15 39.5Z" fill="#ffc83a" stroke="#3a0d05" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M18 39.5 Q21 36.5 25 39.5 M46 39.5 Q43 36.5 39 39.5" stroke="#fff1a8" stroke-width="1.2" fill="none"/>
+    ${gem(32, 42.2, 3.3, '#ff3b1f')}
+    <rect x="29.5" y="45" width="5" height="9" rx="1.5" fill="#5a1a0a" stroke="#3a0d05" stroke-width="1"/>
+    <path d="M29.5 47.5 L34.5 49.5 M29.5 50.5 L34.5 52.5" stroke="#ffb02e" stroke-width="1"/>
+    <path d="M32 53.5 Q36.5 57 32 62.5 Q27.5 57 32 53.5Z" fill="#ffb02e" stroke="#3a0d05" stroke-width="1"/>
+    <g class="fx-embers"><circle class="fx-em e1" cx="27" cy="26" r="1.4" fill="#ffd34d"/><circle class="fx-em e2" cx="37" cy="18" r="1.1" fill="#fff1a8"/><circle class="fx-em e3" cx="29" cy="12" r="1.2" fill="#ff8a1f"/><circle class="fx-em e4" cx="36" cy="30" r="1" fill="#ffd34d"/></g>
+    ${l >= 9 ? `<path d="M32 -4 L40 12 L40 42 L24 42 L24 12Z" fill="${f}" opacity=".2"/>` : ''}</g>`,
 ];
 
 const SHIELDS: Icon[] = [
@@ -387,6 +444,17 @@ const SHIELDS: Icon[] = [
     ${l >= 3 ? [14, 50].map((y) => `<circle cx="20" cy="${y}" r="1.8" fill="${f}"/><circle cx="44" cy="${y}" r="1.8" fill="${f}"/>`).join('') : ''}
     ${l >= 7 ? `<path d="M32 24 L38 32 L32 40 L26 32Z" fill="${f}"/>` : ''}
     ${l >= 5 ? gem(32, 32, 4, f) : ''}`,
+  // Égida del Fénix (legendaria): escudo dorado con el fénix, anillo de fuego que gira y brillo que late.
+  (_c, _d, l, f) => `<defs><linearGradient id="fxShieldG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1a8"/><stop offset=".5" stop-color="#f5b52e"/><stop offset="1" stop-color="#b8660c"/></linearGradient>
+      <radialGradient id="fxShieldR" cx=".5" cy=".4" r=".6"><stop offset="0" stop-color="#ff5a2a"/><stop offset="1" stop-color="#8e0f0a"/></radialGradient></defs>
+    <circle class="fx-pulse" cx="32" cy="33" r="28" fill="#ff7a1a" opacity=".28"/>
+    <g class="fx-ring"><circle cx="32" cy="33" r="29" fill="none" stroke="#ffb02e" stroke-width="2.4" stroke-dasharray="7 6" stroke-linecap="round"/><circle cx="32" cy="33" r="25.5" fill="none" stroke="#ff5a1f" stroke-width="1.2" stroke-dasharray="3 7" opacity=".9"/></g>
+    <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="url(#fxShieldG)" stroke="#3a0d05" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M32 11 L48.5 16.5 Q49 38 32 52.5 Q15 38 15.5 16.5Z" fill="url(#fxShieldR)" stroke="#ffe27a" stroke-width="1.4"/>
+    <g class="fx-bird"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#ffd34d" stroke="#5a1a0a" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 24 Q33 28 32 33 Q31 28 32 24Z" fill="#fff6c8"/></g>
+    <path d="M18 17 Q24 13 31 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
+    ${l >= 5 ? gem(32, 50, 2.6, f) : ''}`,
 ];
 
 const POTIONS: Icon[] = [

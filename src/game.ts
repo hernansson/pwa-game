@@ -35,7 +35,7 @@ import {
   track,
   upgradeDef,
 } from './state';
-import { CHESTS, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { CHESTS, FENIX_SET, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import { ENERGY_MAX, GOLD_PACKS, LEVELS_PER_WORLD, PASS, REFILL_GEMS, chestPrice, goldPackAmount } from './balance';
 
 export interface ClearReport {
@@ -473,6 +473,18 @@ export class Game {
     for (const k in got) this.s.arsenal[k].shards += got[k];
     track(this.s, `chest:${id}${free ? ':free' : ''}${count > 1 ? ':x' + count : ''}`);
     return { got, pity };
+  }
+
+  /** Prueba de administrador: desbloquea y equipa el set del Fénix (cuando haya cobros, será la compra). */
+  unlockFenix(): boolean {
+    if (this.s.run) return false;
+    for (const id of FENIX_SET) {
+      const st = this.s.arsenal[id];
+      if (st && !st.lvl) st.lvl = 1;
+      this.equipArm(id);
+    }
+    track(this.s, 'fenix_test');
+    return true;
   }
 
   /** Compra oro con gemas. El oro de cada paquete crece con tu nivel. */

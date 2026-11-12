@@ -89,6 +89,12 @@ export const ARMS: ArmDef[] = [
     s(20, '+0,3 s para mantener el combo y +8% de daño', { combo: 0.3, dmg: 0.08 }),
     s(40, '+10% de crítico y los críticos pegan x3', { crit: 0.1, critMult: 0.5 }),
   ] },
+  { id: 'fenix_espada', fam: 'espada', name: 'Espada del Fénix', rarity: 'legendaria', shape: 3, skills: [
+    s(5, '+8% de daño y +4% de crítico', { dmg: 0.08, crit: 0.04 }),
+    s(10, 'Los críticos pegan x2,5 y +8% de daño', { critMult: 0.5, dmg: 0.08 }),
+    s(20, '+0,3 s para mantener el combo y +10% de daño', { combo: 0.3, dmg: 0.1 }),
+    s(40, '+8% de crítico, los críticos pegan x3 y +8% de daño', { crit: 0.08, critMult: 0.5, dmg: 0.08 }),
+  ] },
   // Escudos
   { id: 'escudo_redondo', fam: 'escudo', name: 'Rodela', rarity: 'común', shape: 0, skills: [
     s(5, 'Empiezas el nivel con escudo (10% de la vida)', { startShield: 0.1 }),
@@ -107,6 +113,12 @@ export const ARMS: ArmDef[] = [
     s(10, '-6% de daño recibido', { reduce: 0.06 }),
     s(20, '+20% de escudo y empiezas con más (20% de la vida)', { shield: 0.2, startShield: 0.05 }),
     s(40, '-8% de daño recibido', { reduce: 0.08 }),
+  ] },
+  { id: 'fenix_escudo', fam: 'escudo', name: 'Égida del Fénix', rarity: 'legendaria', shape: 3, skills: [
+    s(5, 'Empiezas el nivel con escudo (15% de la vida) y +10% de curación', { startShield: 0.15, heal: 0.1 }),
+    s(10, '-6% de daño recibido y +15% de escudo', { reduce: 0.06, shield: 0.15 }),
+    s(20, '+25% de curación y +5% de vida', { heal: 0.25, hp: 0.05 }),
+    s(40, '-8% de daño recibido y empiezas con más escudo (25% de la vida)', { reduce: 0.08, startShield: 0.1 }),
   ] },
   // Rayos
   { id: 'chispa', fam: 'rayo', name: 'Chispa', rarity: 'común', shape: 0, skills: [
@@ -146,7 +158,16 @@ export const ARMS: ArmDef[] = [
     s(20, '+0,5 s para mantener el combo', { combo: 0.5 }),
     s(40, '+60% de potencia y +12% de daño', { boostMult: 0.6, dmg: 0.12 }),
   ] },
+  { id: 'fenix', fam: 'skin', name: 'Caballero Fénix', rarity: 'legendaria', shape: 3, skin: 'fenix', skills: [
+    s(5, '+6% de daño y +6% de vida', { dmg: 0.06, hp: 0.06 }),
+    s(10, '+6% de crítico y +20% de curación', { crit: 0.06, heal: 0.2 }),
+    s(20, '+0,4 s para mantener el combo y +6% de vida', { combo: 0.4, hp: 0.06 }),
+    s(40, 'Los críticos pegan x2,5, +10% de daño y +6% de vida', { critMult: 0.5, dmg: 0.1, hp: 0.06 }),
+  ] },
 ];
+
+/** El set legendario del Fénix: espada, escudo y skin. */
+export const FENIX_SET = ['fenix_espada', 'fenix_escudo', 'fenix'];
 
 /** Cofres de la tienda. */
 export interface ChestDef {
