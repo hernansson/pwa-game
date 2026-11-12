@@ -71,7 +71,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .neon { filter: drop-shadow(0 0 3px #29f0ff); }
 @keyframes pulse { 50% { opacity: .35; transform: scale(1.06); } }
 .enemy-wrap { position: absolute; right: 6%; bottom: 0; width: 40%; max-width: 170px; text-align: center; }
-.enemy-name { font-size: 12px; color: var(--muted); font-weight: 700; }
+.enemy-name { font-size: 12px; color: #fff; font-weight: 800; text-shadow: 0 1px 0 #000, 0 0 4px #000, 0 0 2px #000; }
 .hp { height: 8px; background: rgba(0,0,0,.55); border-radius: 4px; overflow: hidden; margin: 3px 10% 4px; border: 1px solid #000; }
 .hp-fill { height: 100%; background: linear-gradient(90deg, #ff4d6a, #ff8a5a); transition: width .12s; }
 .enemy { transition: opacity .2s, transform .2s; }
@@ -1526,3 +1526,96 @@ button.res { cursor: pointer; }
 .wb-veins { animation: wbVein 1.6s ease-in-out infinite; }
 @keyframes wbVein { 50% { opacity: .45; } }
 .wb-eyes { animation: wbVein .9s ease-in-out infinite; }
+
+/* ---------- Escenarios por mundo ---------- */
+.scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sc-fly { animation: scFly 5s ease-in-out infinite alternate; opacity: .8; }
+@keyframes scFly { 0% { transform: translate(0, 0); opacity: .2; } 50% { opacity: 1; } 100% { transform: translate(6px, -10px); opacity: .3; } }
+.sc-snow { animation: scSnow 6s linear infinite; }
+@keyframes scSnow { from { transform: translate(0, -20px); opacity: 0; } 15% { opacity: .9; } to { transform: translate(-8px, 60px); opacity: 0; } }
+.sc-ember { animation: scEmber 5s linear infinite; }
+@keyframes scEmber { from { transform: translate(0, 10px); opacity: 0; } 20% { opacity: 1; } to { transform: translate(5px, -50px); opacity: 0; } }
+.sc-glow { animation: scGlow 2.6s ease-in-out infinite alternate; }
+@keyframes scGlow { from { opacity: .55; } to { opacity: 1; } }
+.sc-cloud { animation: scCloud 26s linear infinite alternate; }
+@keyframes scCloud { from { transform: translateX(-14px); } to { transform: translateX(14px); } }
+.sc-aurora { animation: scGlow 4s ease-in-out infinite alternate; }
+
+/* Batalla: el escenario va detrás de todo */
+.bt-scene { position: absolute; inset: 0; z-index: 0; }
+.bt-scene:not(:empty) ~ .battle { z-index: 1; }
+.stage:has(.bt-scene:not(:empty))::after { display: none; }
+.bt-scene::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.35), transparent 35%, transparent 75%, rgba(0,0,0,.25)); }
+
+/* ---------- Mapa de niveles ---------- */
+.sc-scene { background: #000; }
+.sc-scene::after { display: none; }
+.sc-scene::before { content: ''; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.25), transparent 22%, transparent 62%, rgba(0,0,0,.55)); }
+.stage-card { padding-bottom: 10px; }
+.map { position: relative; flex: 1; width: 100%; min-height: 220px; margin: 6px 0 4px; }
+.map-path { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.map-path path { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.mp-shadow { stroke: rgba(0,0,0,.45); stroke-width: 16px; }
+.mp-road { stroke: #e9d6a8; stroke-width: 10px; stroke-dasharray: 2 12; stroke-width: 8px; opacity: .7; }
+.mp-done { stroke: #ffd35a; stroke-width: 8px; filter: drop-shadow(0 0 4px rgba(255,200,60,.8)); }
+.mnode { position: absolute; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; padding: 0; display: grid; place-items: center;
+  border: 3px solid #1b1430; background: radial-gradient(circle at 35% 30%, #fff, #c9c2e0); color: #2a1f4a; box-shadow: 0 4px 0 rgba(0,0,0,.5), 0 0 0 2px rgba(255,255,255,.35); }
+.mnode b { font-size: 16px; font-weight: 900; }
+.mnode.done { background: radial-gradient(circle at 35% 30%, #fff3b0, #ffb51f 60%, #d98400); color: #4a2600; }
+.mnode.locked { background: radial-gradient(circle at 35% 30%, #5a5470, #2c2840); color: #fff; font-size: 15px; box-shadow: 0 3px 0 rgba(0,0,0,.5); }
+.mnode.now { width: 48px; height: 48px; border-color: #fff; box-shadow: 0 4px 0 rgba(0,0,0,.5), 0 0 0 4px rgba(255,255,255,.35), 0 0 22px rgba(255,255,255,.7); animation: nodePulse 1.6s ease-in-out infinite; }
+@keyframes nodePulse { 50% { box-shadow: 0 4px 0 rgba(0,0,0,.5), 0 0 0 8px rgba(255,255,255,.12), 0 0 30px rgba(255,255,255,.9); } }
+.mn-stars { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 1px; display: flex; font-size: 11px; line-height: 1; text-shadow: 0 1px 0 #000; white-space: nowrap; }
+.mn-stars i { font-style: normal; color: rgba(255,255,255,.35); }
+.mn-stars i.on { color: #ffd35a; }
+.mn-hero { position: absolute; bottom: 70%; left: 50%; width: 54px; height: 60px; transform: translateX(-50%); pointer-events: none; animation: heroHop 1.2s ease-in-out infinite; filter: drop-shadow(0 4px 3px rgba(0,0,0,.6)); }
+.mn-hero svg { width: 100%; height: 100%; overflow: visible; }
+@keyframes heroHop { 50% { transform: translate(-50%, -5px); } }
+.mnode.boss { width: 78px; height: 78px; border: 4px solid #ffd35a; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--acc, #ff8a3d) 60%, #000), #140a1e 75%); box-shadow: 0 5px 0 rgba(0,0,0,.55), 0 0 26px color-mix(in srgb, var(--acc, #ff8a3d) 70%, transparent); overflow: visible; }
+.stage-card:has(.sc-scene) .mnode.boss { background: radial-gradient(circle at 50% 40%, #6a4a20, #140a1e 75%); }
+.mnode.boss.now { width: 84px; height: 84px; border-color: #fff; }
+.mnode.boss.locked .mn-boss { filter: brightness(0) drop-shadow(0 0 3px rgba(255,255,255,.5)); }
+.mn-boss { width: 118%; height: 118%; display: grid; place-items: center; margin-top: -14%; }
+.mn-boss svg { width: 100%; height: 100%; overflow: visible; }
+.mn-boss svg * { animation: none !important; }
+.mn-lock { position: absolute; bottom: -6px; right: -6px; font-size: 18px; }
+.mnode.boss .mn-hero { bottom: 86%; }
+
+.lvl-info { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 18px; background: linear-gradient(180deg, rgba(20,12,40,.82), rgba(12,8,26,.92)); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.lvl-info.boss { border-color: #ffd35a; box-shadow: 0 0 18px rgba(255,200,60,.35); }
+.li-art { width: 86px; height: 78px; flex: 0 0 86px; display: grid; place-items: center; }
+.li-art svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 6px 6px rgba(0,0,0,.6)); animation: idle 2.6s ease-in-out infinite; }
+.li-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.li-main small { font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); }
+.li-main b { font-size: 17px; font-weight: 900; line-height: 1.1; text-shadow: 0 2px 0 #000; }
+.li-main .lvl-stars { font-size: 17px; margin: 1px 0 2px; }
+.li-rew { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 12px; font-weight: 800; }
+.li-rew em { font-style: normal; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-right: 2px; }
+.li-rew span { background: rgba(255,255,255,.1); border-radius: 999px; padding: 2px 7px; }
+
+/* Lista de mundos con su escenario */
+.world-row { position: relative; overflow: hidden; }
+.wr-scene { position: absolute; inset: 0; z-index: 0; opacity: .75; }
+.wr-scene::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,6,24,.2), rgba(10,6,24,.85) 70%); }
+.wr-scene svg * { animation: none !important; }
+.world-row > :not(.wr-scene) { position: relative; z-index: 1; }
+
+/* ---------- Animaciones de los monstruos ---------- */
+.mo .mo-squish { transform-origin: 55px 92px; animation: moSquish 1.4s ease-in-out infinite; }
+@keyframes moSquish { 50% { transform: scale(1.06, .93); } }
+.mo .mo-bob { animation: moBob 2s ease-in-out infinite; }
+@keyframes moBob { 50% { transform: translateY(-2.5px); } }
+.mo .mo-fly { animation: moFly 1.6s ease-in-out infinite; }
+@keyframes moFly { 50% { transform: translateY(-6px); } }
+.mo .mo-wing { animation: moWing .35s ease-in-out infinite alternate; }
+.mo .mo-wing.l { transform-origin: 40px 46px; }
+.mo .mo-wing.r { transform-origin: 70px 46px; animation-name: moWingR; }
+@keyframes moWing { to { transform: rotate(14deg) scaleY(.85); } }
+@keyframes moWingR { to { transform: rotate(-14deg) scaleY(.85); } }
+.mo .mo-stomp { animation: moStomp 1.8s ease-in-out infinite; transform-origin: 55px 92px; }
+@keyframes moStomp { 50% { transform: translateY(-2px) rotate(-1.5deg); } }
+.mo .mo-tail { transform-origin: 70px 62px; animation: moTail 1.4s ease-in-out infinite; }
+@keyframes moTail { 50% { transform: rotate(-6deg); } }
+.mo .mo-glow { animation: scGlow 1.2s ease-in-out infinite alternate; }
+.mo .mo-aura { transform-origin: 55px 60px; animation: moAura 2s ease-in-out infinite; }
+@keyframes moAura { 50% { transform: scale(1.08); opacity: .7; } }

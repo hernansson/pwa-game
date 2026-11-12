@@ -1,3 +1,4 @@
+import { levelMonster } from './monsters';
 // Arte vectorial del prototipo. Todo es SVG en línea: liviano y nítido en cualquier pantalla.
 
 export interface Tier {
@@ -441,13 +442,16 @@ export function levelEnemy(level: number) {
     hue,
   };
 }
-export function levelEnemySvg(level: number, boss: boolean): string {
-  const e = levelEnemy(level);
-  return enemySvg(e.wave, boss, e.opts);
+const TITAN_ART = () => worldBossArt({ color: '#8a96a3', eyes: '#5ad1ff', horns: true, spikes: true });
+/** Monstruo de un nivel: el jefe del nivel (boss) o uno de la oleada `wave`/`enemy`. */
+export function levelMob(level: number, boss: boolean, wave = 0, enemy = 0) {
+  return levelMonster(level, wave, enemy, boss, TITAN_ART);
 }
-export function levelEnemyName(level: number, worldBoss: boolean): string {
-  const e = levelEnemy(level);
-  return `${worldBoss ? 'Rey ' : ''}${enemyName(e.wave, false)} ${e.title}`;
+export function levelEnemySvg(level: number, boss: boolean): string {
+  return levelMob(level, boss).svg;
+}
+export function levelEnemyName(level: number, _worldBoss?: boolean): string {
+  return levelMob(level, true).name;
 }
 
 export function enemyName(wave: number, boss: boolean): string {

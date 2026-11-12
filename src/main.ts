@@ -25,8 +25,11 @@ import {
   dayNumber,
   WORLD_BOSS,
   worldBossOf,
+  firstClearGems,
 } from './balance';
-import { EVO_COLORS, Skin, worldBossArt, previewEvo, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
+import { WORLDS, worldName, worldTheme } from './monsters';
+import { sceneSvg } from './scenes';
+import { EVO_COLORS, Skin, worldBossArt, previewEvo, setEvoSource, enemySvg, famIcon, heroSvg, levelEnemyName, levelEnemySvg, levelMob, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult, REBIRTH_DAMAGE, REBIRTH_SECONDS } from './game';
 import { RARITY_COLORS } from './items';
@@ -107,13 +110,15 @@ function sync(type: string, data: Record<string, unknown> = {}) {
   );
 }
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
-const WORLD_NAMES = ['Bosque Viscoso', 'Cuevas del Eco', 'Picos de Piedra'];
 
 function worldOf(level: number) {
   return Math.ceil(level / LEVELS_PER_WORLD);
 }
-function worldName(w: number) {
-  return WORLD_NAMES[(w - 1) % WORLD_NAMES.length] + (w > WORLD_NAMES.length ? ` ${Math.ceil(w / WORLD_NAMES.length)}` : '');
+const MAP_X = [36, 60, 70, 50, 30, 38, 60, 70, 56];
+/** Dónde va cada nivel en el camino del mapa (en % del área del mapa): zigzag de abajo hacia arriba. */
+function mapNode(i: number): [number, number] {
+  if (i === LEVELS_PER_WORLD - 1) return [50, 18];
+  return [MAP_X[i % MAP_X.length], 93 - i * 7.9];
 }
 function myLook(): Skin {
   return skinById(armById(game.s.arms.skin)?.skin ?? 'caballero');
@@ -182,6 +187,7 @@ document.querySelector('#app')!.innerHTML = `
   </section>
 
   <section class="stage" id="stage" hidden>
+    <div class="bt-scene" id="bt-scene"></div>
     <div class="battle" id="battle">
       <div class="run-top">
         <button class="flee" id="flee" aria-label="Abandonar">✕</button>
@@ -265,24 +271,47 @@ function renderLobby() {
   const first = (world - 1) * LEVELS_PER_WORLD + 1;
   const worldBoss = lvl % LEVELS_PER_WORLD === 0;
   const stars = s.stars[lvl] ?? 0;
-  const e = levelEnemy(lvl);
-  const track = Array.from({ length: LEVELS_PER_WORLD }, (_, i) => {
+  const theme = worldTheme(world);
+  const pts = Array.from({ length: LEVELS_PER_WORLD }, (_, i) => mapNode(i));
+  const path = pts.map(([x, y], i) => {
+    if (!i) return `M${x} ${y}`;
+    const [px, py] = pts[i - 1];
+    return `C${px} ${(py + y) / 2} ${x} ${(py + y) / 2} ${x} ${y}`;
+  }).join(' ');
+  const reached = Math.max(0, Math.min(LEVELS_PER_WORLD - 1, s.unlocked - first));
+  const nodes = pts.map(([x, y], i) => {
     const n = first + i;
-    const cls = n === lvl ? 'now' : n > s.unlocked ? 'locked' : s.stars[n] ? 'done' : 'open';
-    return `<i class="${cls} ${n % LEVELS_PER_WORLD === 0 ? 'crown' : ''}" data-view="${n}">${n % LEVELS_PER_WORLD === 0 ? '👑' : ''}</i>`;
+    const boss = i === LEVELS_PER_WORLD - 1;
+    const st = s.stars[n] ?? 0;
+    const cls = n > s.unlocked ? 'locked' : st ? 'done' : 'open';
+    const inner = boss ? `<span class="mn-boss">${levelEnemySvg(n, true)}</span>` : n > s.unlocked ? '🔒' : `<b>${n}</b>`;
+    const pips = st && n <= s.unlocked ? `<span class="mn-stars">${[1, 2, 3].map((k) => `<i class="${k <= st ? 'on' : ''}">★</i>`).join('')}</span>` : '';
+    return `<button class="mnode ${cls} ${boss ? 'boss' : ''} ${n === lvl ? 'now' : ''}" style="left:${x}%;top:${y}%" data-view="${n}" ${n > s.unlocked ? 'disabled' : ''} aria-label="Nivel ${n}">
+      ${inner}${pips}${n === lvl ? `<span class="mn-hero">${myHero()}</span>` : ''}${boss && n > s.unlocked ? '<span class="mn-lock">🔒</span>' : ''}</button>`;
   }).join('');
+  const firstWin = !stars;
+  const rew = firstWin
+    ? `<span>💎 ${firstClearGems(lvl)}</span><span>🧩 ${(10 + lvl * 2) * (worldBoss ? 2 : 1)}</span>${worldBoss ? '<span>✨ Skin</span>' : ''}`
+    : `<span>🪙 Oro</span><span>🧩 ${(3 + stars + Math.floor(lvl / 3)) * (worldBoss ? 2 : 1)}+</span>`;
   $('#stage-card').innerHTML = `
-    <div class="sc-bg" style="--h:${e.hue};--w:${(world * 67) % 360}"></div>
+    <div class="sc-bg sc-scene" style="--acc:${theme.accent}">${sceneSvg(theme, 'map')}</div>
     <button class="world-name" data-worlds><small>Mundo ${world}</small><b>${worldName(world)}</b><span>🗺️</span></button>
-    <div class="lvl-nav">
-      <button data-step="-1" ${lvl <= 1 ? 'disabled' : ''} aria-label="Nivel anterior">‹</button>
-      <div class="lvl-title"><small>${worldBoss ? 'Jefe del mundo' : 'Nivel'}</small><b>${lvl}</b></div>
-      <button data-step="1" ${lvl >= s.unlocked ? 'disabled' : ''} aria-label="Nivel siguiente">›</button>
+    <div class="map">
+      <svg class="map-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="${path}" class="mp-shadow"/><path d="${path}" class="mp-road"/>
+        <path d="${path}" class="mp-done" pathLength="${LEVELS_PER_WORLD - 1}" style="stroke-dasharray:${reached} 99"/>
+      </svg>
+      ${nodes}
     </div>
-    <div class="boss-art ${worldBoss ? 'world-boss' : ''}"><div class="boss-glow"></div>${levelEnemySvg(lvl, true)}</div>
-    <div class="boss-name">${levelEnemyName(lvl, worldBoss)}</div>
-    <div class="lvl-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}">★</span>`).join('')}</div>
-    <div class="world-track">${track}</div>`;
+    <div class="lvl-info ${worldBoss ? 'boss' : ''}">
+      <div class="li-art">${levelEnemySvg(lvl, true)}</div>
+      <div class="li-main">
+        <small>${worldBoss ? '👑 Jefe del mundo' : `Nivel ${lvl}`}</small>
+        <b>${esc(levelEnemyName(lvl))}</b>
+        <div class="lvl-stars">${[1, 2, 3].map((i) => `<span class="${i <= stars ? 'on' : ''}">★</span>`).join('')}</div>
+        <div class="li-rew"><em>${firstWin ? 'Primera victoria' : 'Recompensa'}</em>${rew}</div>
+      </div>
+    </div>`;
   const cleared = lvl < s.unlocked;
   $('#lobby-play').innerHTML = `
     <button class="play big" data-level="${lvl}"><b>${cleared ? 'Repetir' : 'Jugar'}</b><span>⚡${ENERGY_COST}</span></button>
@@ -297,9 +326,10 @@ function timeShort(ms: number): string {
 function stepLevel(d: number) {
   const next = Math.max(1, Math.min(game.s.unlocked, viewLevel + d));
   if (next === viewLevel) return;
+  const changed = worldOf(next) !== worldOf(viewLevel);
   viewLevel = next;
   renderLobby();
-  restartAnim($('#stage-card'), d > 0 ? 'slide-l' : 'slide-r');
+  if (changed) restartAnim($('#stage-card'), d > 0 ? 'slide-l' : 'slide-r');
 }
 
 function showWorlds() {
@@ -313,7 +343,7 @@ function showWorlds() {
     for (let n = first; n < first + LEVELS_PER_WORLD; n++) st += s.stars[n] ?? 0;
     const done = Math.max(0, Math.min(LEVELS_PER_WORLD, s.unlocked - first));
     return `<button class="world-row ${locked ? 'locked' : ''}" ${locked ? 'disabled' : `data-goto-world="${w}"`} style="--h:${(w * 67) % 360}">
-      <span class="wr-art">${locked ? '🔒' : levelEnemySvg(first + LEVELS_PER_WORLD - 1, true)}</span>
+      <span class="wr-scene">${sceneSvg(worldTheme(w), 'battle')}</span><span class="wr-art">${locked ? '🔒' : levelEnemySvg(first + LEVELS_PER_WORLD - 1, true)}</span>
       <span class="wr-main"><small>Mundo ${w} · niveles ${first}-${first + LEVELS_PER_WORLD - 1}</small><b>${worldName(w)}</b>
         <i class="wr-bar"><i style="width:${done * 10}%"></i></i></span>
       <span class="wr-stars">${locked ? '' : `★ ${st}/${LEVELS_PER_WORLD * 3}`}</span>
@@ -791,6 +821,7 @@ function renderHero() {
 }
 
 let enemyKeyCache = '';
+let sceneKeyCache = '';
 function renderScreen() {
   const run = game.s.run;
   $('#lobby').hidden = !!run;
@@ -806,7 +837,12 @@ function renderScreen() {
   renderBoard();
   const boss = game.isBossWave(run);
   renderHero();
-  const ek = `${run.level}:${boss}:${wbView ?? ''}`;
+  const ek = `${run.level}:${boss}:${boss ? '' : run.wave + '.' + run.enemyInWave}:${wbView ?? ''}`;
+  const sk = wbView != null ? 'wb' : String(worldOf(run.level));
+  if (sk !== sceneKeyCache) {
+    sceneKeyCache = sk;
+    $('#bt-scene').innerHTML = sceneSvg(wbView != null ? WORLDS[WORLDS.length - 1] : worldTheme(worldOf(run.level)), 'battle');
+  }
   if (ek !== enemyKeyCache) {
     enemyKeyCache = ek;
     const el = $('#enemy');
@@ -816,9 +852,10 @@ function renderScreen() {
       el.classList.add('boss');
       $('#enemy-name').textContent = worldBossOf(wbView).name;
     } else {
-    el.innerHTML = levelEnemySvg(run.level, boss);
+    const mob = levelMob(run.level, boss, run.wave, run.enemyInWave);
+    el.innerHTML = mob.svg;
     el.classList.toggle('boss', boss);
-    $('#enemy-name').textContent = boss ? levelEnemyName(run.level, run.level % LEVELS_PER_WORLD === 0) : enemyName(levelEnemy(run.level).wave, false);
+    $('#enemy-name').textContent = mob.name;
     }
   }
   const max = enemyHp(run.level, boss);
