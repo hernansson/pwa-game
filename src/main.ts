@@ -116,8 +116,13 @@ function armIcon(def: ArmDef): string {
   return pieceSvg(def.fam, 1, FAMILY_INFO[def.fam].color, def.shape);
 }
 /** El arma sola, sin el marco de la pieza, para la vitrina del Arsenal. */
-function armShowcase(def: ArmDef): string {
+function armShowcase(def: ArmDef, big = false): string {
   if (def.fam === 'skin') return armIcon(def);
+  if (big && def.rarity === 'legendaria') {
+    // Vitrina legendaria: rayos que giran, anillo de fuego, el arma más grande y brasas que suben.
+    const embers = Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join('');
+    return `<div class="lg-rays"></div><div class="lg-ring"></div><svg class="lg-art" viewBox="4 4 56 56" aria-hidden="true">${famIcon(def.fam, def.shape, 1, FAMILY_INFO[def.fam].color)}</svg><div class="lg-embers">${embers}</div>`;
+  }
   return `<svg viewBox="4 4 56 56" aria-hidden="true">${famIcon(def.fam, def.shape, 1, FAMILY_INFO[def.fam].color)}</svg>`;
 }
 function boardShape(f: Family): number {
@@ -1970,7 +1975,7 @@ function renderArsenal() {
   $('#sheet-body').innerHTML = `
     ${segHtml}
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
-      <div class="sc-art ${locked ? 'locked' : ''}">${armShowcase(def)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+      <div class="sc-art ${locked ? 'locked' : def.rarity === 'legendaria' && def.fam !== 'skin' ? 'legend ' + def.fam : ''}">${armShowcase(def, !locked)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
