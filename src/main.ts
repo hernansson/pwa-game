@@ -832,6 +832,63 @@ function boltFx(lvl: number) {
   setTimeout(() => b.remove(), 600);
 }
 
+// ---- Poder que crece en la pelea: cada fusión de espadas o escudos suma y el héroe se ve cada vez más fuerte ----
+const POWER_STEPS = [3, 8, 16, 28, 45];
+const SWORD_TIERS = ['Filo despierto', 'Espada ardiente', 'Hoja en llamas', 'Furia del filo', '¡ESPADA DIVINA!'];
+const SHIELD_TIERS = ['Guardia firme', 'Escudo brillante', 'Muralla', 'Bastión', '¡ESCUDO SAGRADO!'];
+const SWORD_COLORS = ['#ffffff', '#ffd34d', '#ff8a1f', '#ff3b5c', '#c77dff'];
+const SHIELD_COLORS = ['#9fe8ff', '#5c9bff', '#46e0c8', '#8f7bff', '#ffe17a'];
+let swordHeat = 0;
+let shieldHeat = 0;
+const tierOf = (heat: number) => POWER_STEPS.filter((t) => heat >= t).length;
+
+function resetPower() {
+  swordHeat = shieldHeat = 0;
+  const h = $('#hero');
+  for (let i = 1; i <= 5; i++) h.classList.remove('sw-' + i, 'sh-' + i);
+}
+
+function powerUp(kind: 'sw' | 'sh', lvl: number) {
+  const before = tierOf(kind === 'sw' ? swordHeat : shieldHeat);
+  if (kind === 'sw') swordHeat += lvl;
+  else shieldHeat += lvl;
+  const tier = tierOf(kind === 'sw' ? swordHeat : shieldHeat);
+  const hero = $('#hero');
+  const col = (kind === 'sw' ? SWORD_COLORS : SHIELD_COLORS)[Math.max(0, tier - 1)];
+  hero.style.setProperty(kind === 'sw' ? '--swc' : '--shc', col);
+  for (let i = 1; i <= 5; i++) hero.classList.toggle(`${kind}-${i}`, i === tier);
+  restartAnim(hero, kind === 'sw' ? 'blade-pulse' : 'shield-pulse');
+  if (tier >= 2) powerSparks(kind, tier, col);
+  if (tier > before) {
+    floatText(`${kind === 'sw' ? '⚔️' : '🛡️'} ${(kind === 'sw' ? SWORD_TIERS : SHIELD_TIERS)[tier - 1]}`, `power-up ${kind} t${tier}`, kind === 'sw' ? 52 : 30, kind === 'sw' ? 10 : 26);
+    const ring = document.createElement('div');
+    ring.className = `power-ring ${kind}`;
+    ring.style.setProperty('--c', col);
+    ring.style.setProperty('--s', String(1 + tier * 0.25));
+    $('#hero-fx').appendChild(ring);
+    setTimeout(() => ring.remove(), 700);
+    if (navigator.vibrate) navigator.vibrate(tier >= 4 ? [30, 30, 60] : 30);
+  }
+}
+
+/** Chispas que salen de la espada (o del escudo); más cuanto más poder. */
+function powerSparks(kind: 'sw' | 'sh', tier: number, col: string) {
+  const box = $('#hero-fx');
+  const n = tier * 3;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('i');
+    p.className = 'pw-spark';
+    p.style.setProperty('--c', col);
+    p.style.left = (kind === 'sw' ? 64 : 26) + Math.random() * 10 + '%';
+    p.style.top = (kind === 'sw' ? 22 : 48) + Math.random() * 16 + '%';
+    p.style.setProperty('--dx', (Math.random() * 2 - 1) * (20 + tier * 8) + 'px');
+    p.style.setProperty('--dy', -(10 + Math.random() * (20 + tier * 10)) + 'px');
+    p.style.animationDelay = Math.random() * 0.12 + 's';
+    box.appendChild(p);
+    setTimeout(() => p.remove(), 800);
+  }
+}
+
 /** Efectos en pantalla de cada fusión. */
 function onMergeFx(r: MergeResult) {
   const { ev } = r;
@@ -850,7 +907,9 @@ function onMergeFx(r: MergeResult) {
     floatText(`⚡ x${r.boostMult.toFixed(2).replace(/0$/, '')}`, 'boost', 50, 30);
   }
   // Cuanto más alto el nivel, un poco mejor se ve el efecto (sin iluminar toda la pantalla).
-  if (ev.fam === 'espada' && r.dmg > 0) slashFx(ev.lvl);
+  if (ev.fam === 'espada' && r.dmg > 0) slashFx(ev.lvl + tierOf(swordHeat));
+  if (ev.fam === 'espada') powerUp('sw', ev.lvl);
+  if (ev.fam === 'escudo') powerUp('sh', ev.lvl);
   if (r.heal > 0 || ev.fam === 'pocion') healFx(ev.lvl);
   if (r.boost > 0) boltFx(ev.lvl);
   if (ev.lvl >= 8) restartAnim($('#board'), 'quake');
@@ -1046,6 +1105,7 @@ function legendWord(f: Family) {
 
 function resetBoardView() {
   renderLegend();
+  resetPower();
   pieceEls.forEach((el) => el.remove());
   pieceEls.clear();
   fromTop.clear();

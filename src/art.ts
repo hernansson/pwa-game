@@ -180,6 +180,71 @@ export interface HeroFight {
   shieldShape?: number;
 }
 
+/**
+ * Caballero Fénix: un personaje propio. Máscara de ave dorada con pico y cresta de plumas de fuego,
+ * hombreras de plumas, peto con sol, faldón de plumas en capas, bufanda de llamas y alas que aletean.
+ */
+function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: string): string {
+  const o = '#3a0d05';
+  const gold = skin.armor;
+  const red = skin.armorDark;
+  return `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero" aria-hidden="true">
+    ${back}
+    <ellipse cx="50" cy="104" rx="28" ry="5" fill="#000" opacity=".3"/>
+    ${fenixWings()}
+    <path class="fx-scarf" d="M44 44 Q30 50 22 64 Q16 74 10 78 Q22 78 28 70 Q26 80 20 88 Q32 84 38 70 Q40 58 48 48Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M42 80 L48 80 L48 95 L41 95Z M53 80 L59 80 L61 95 L54 95Z" fill="${red}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M40 86 L44.5 81 L49 86 L44.5 90Z M52 86 L56.5 81 L61 86 L56.5 90Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M37 95 L49 95 L50 103 L34 103 Q34 98 37 95Z M53 95 L64 95 Q68 98 69 103 L53 103Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M34 103 L50 103 M53 103 L69 103" stroke="${red}" stroke-width="2"/>
+    <g class="fx-skirt">
+      <path d="M36 72 L41 90 L45 76 L50 92 L55 76 L59 90 L64 72Z" fill="${red}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M38 72 L42 84 L46 74 L50 86 L54 74 L58 84 L62 72Z" fill="${gold}" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+    <path d="M37 46 Q50 41 63 46 L61 73 Q50 77 39 73Z" fill="${red}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M41 49 Q50 45 59 49 L57.5 70 Q50 73 42.5 70Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
+    <g class="fx-sun"><circle cx="50" cy="58" r="5.2" fill="#ff5a1f" stroke="${o}" stroke-width="1.2"/>
+      ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path d="M50 50.5 L51.3 53 L48.7 53Z" fill="#fff1a8" transform="rotate(${a} 50 58)"/>`).join('')}
+      <circle cx="50" cy="58" r="2.4" fill="#fff1a8"/></g>
+    <path d="M42 49 Q45 46.5 49 46" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
+    <path d="M38 71 L62 71 L62 75 L38 75Z" fill="#5a1a0a" stroke="${o}" stroke-width="1.4"/>
+    <g>
+      <path d="M44 46 Q34 40 26 44 Q30 46 30 48 Q24 49 22 54 Q28 53 31 55 Q27 58 27 62 Q35 56 44 54Z" fill="${gold}" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M43 48 Q35 45 30 47 M42 51 Q33 51 28 54" stroke="${red}" stroke-width="1.4" fill="none"/>
+    </g>
+    <g class="fx-helm">
+      <g class="fx-crest">
+        <path class="fx-fl f1" d="M40 20 Q26 10 14 12 Q24 16 26 20 Q16 20 10 26 Q22 26 30 28Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+        <path class="fx-fl f2" d="M44 14 Q34 2 22 0 Q32 8 34 14 Q28 14 22 20 Q34 18 42 22Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+        <path class="fx-fl f3" d="M50 12 Q46 0 36 -6 Q44 6 44 12 Z" fill="#ffd34d" stroke="${o}" stroke-width="1.2"/>
+      </g>
+      <path d="M36 40 Q33 26 40 18 Q48 11 58 15 Q64 18 66 24 L78 28 Q72 31 66 32 Q66 38 62 42 Q50 46 36 40Z" fill="${gold}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M66 24 L80 28.5 L66 32Z" fill="#ffb02e" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M66 28.4 L78 28.5" stroke="${o}" stroke-width="1" opacity=".6"/>
+      <path d="M40 22 Q46 15 55 16" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".55"/>
+      <path d="M42 30 Q50 25 63 26 Q60 31 52 32 Q46 33 42 30Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.2"/>
+      <path class="fx-eyes" d="M53 28.6 Q57 27.4 61 28" stroke="#ffb02e" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      <path d="M38 36 Q46 40 58 38 Q50 44 40 41Z" fill="${red}" stroke="${o}" stroke-width="1.2"/>
+      <path d="M50 20 Q52 16 50 12 Q48 16 50 20Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
+    </g>
+    ${fight.shield ? heroShield(fight.shield, fight.shieldShape ?? 0) : ''}
+    <path d="M56 46 Q60 38 68 41 Q74 44 72 52 Q66 47 58 50Z" fill="${gold}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M60 46 Q66 43 70 47 M58 49 Q65 47 71 51" stroke="${red}" stroke-width="1.3" fill="none"/>
+    <g class="hero-arm">
+      <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
+      ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
+      <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
+      <path d="M65.5 58.5 L75.5 58.5" stroke="${red}" stroke-width="1.4"/>
+    </g>
+  </svg>`;
+}
+
+/** La espada en la mano: más grande que antes, y la legendaria todavía más. El envoltorio permite crecerla en combate. */
+function heroBlade(shape: number, weaponLevel: number): string {
+  const sc = shape === 3 ? 1.02 : 0.88;
+  return `<g class="hero-blade"><g transform="translate(70.5 58.5) rotate(68) scale(${sc}) translate(-43.25 -45.4)">${famIcon('espada', shape, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g></g>`;
+}
+
 /** Alas de fuego del Caballero Fénix: aletean despacio y sueltan brasas. */
 function fenixWings(): string {
   const wing = (k: string) => `<g class="fx-wing ${k}">
@@ -205,11 +270,11 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
   const glow = g
     ? `<ellipse cx="50" cy="62" rx="${30 + g * 2.5}" ry="${38 + g * 2.5}" fill="${pieceFrame(g)}" opacity="${Math.min(0.55, 0.12 + g * 0.045)}" class="aura potion-glow"/>`
     : '';
+  if (skin.helm === 'fenix') return fenixHero(skin, weaponLevel, fight, glow + aura);
   const o = '#141826';
   return `<svg viewBox="0 0 120 110" class="hero-svg" aria-hidden="true">
     ${glow}${aura}
     <ellipse cx="50" cy="104" rx="28" ry="5" fill="#000" opacity=".3"/>
-    ${skin.helm === 'fenix' ? fenixWings() : ''}
     <path d="M40 44 Q20 60 18 100 Q26 95 32 100 Q38 94 45 99 Q50 94 54 98 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M40 48 Q26 64 25 94 Q30 92 33 95 Q36 70 46 50Z" fill="#000" opacity=".22"/>
     <path d="M41 78 L48 78 L47 96 L40 96Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
@@ -236,7 +301,7 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
     <path d="M58 50 Q66 46 72 51" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     <g class="hero-arm">
       <circle cx="64" cy="55" r="6.5" fill="${skin.armorDark}" stroke="${o}" stroke-width="2"/>
-      <g transform="translate(70.5 58.5) rotate(68) scale(.68) translate(-43.25 -45.4)">${famIcon('espada', fight.swordShape ?? 0, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g>
+      ${heroBlade(fight.swordShape ?? 0, weaponLevel)}
       <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
       <path d="M68.5 55 L68.5 62.5 M71.5 55 L71.5 62.5" stroke="${o}" stroke-width="1" opacity=".5"/>
     </g>

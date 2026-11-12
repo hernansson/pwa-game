@@ -1246,3 +1246,38 @@ button.res { cursor: pointer; }
 .fc-buy { width: 100%; border: 0; border-radius: 14px; padding: 12px; font-weight: 900; font-size: 16px; color: #2a0a00; background: linear-gradient(180deg, #ffe17a, #ff8a1f); box-shadow: 0 4px 0 #8a2a05, 0 0 18px rgba(255,140,40,.5); }
 .fc-buy.owned { background: linear-gradient(180deg, #5ef09a, #22a95c); box-shadow: 0 4px 0 #0b5a2a; color: #04240f; }
 .fc-alt { display: block; margin-top: 8px; font-size: 11px; color: #c99a7a; }
+/* ---- Poder que crece en la pelea ---- */
+.hero .hero-blade { transform-box: view-box; transform-origin: 70.5px 58.5px; transition: transform .35s cubic-bezier(.2, 1.5, .4, 1), filter .35s; }
+.hero .hero-shield { transition: filter .35s; }
+.hero.sw-1 .hero-blade { transform: scale(1.06); filter: drop-shadow(0 0 2px var(--swc)); }
+.hero.sw-2 .hero-blade { transform: scale(1.12); filter: drop-shadow(0 0 3px var(--swc)) drop-shadow(0 0 2px #fff); }
+.hero.sw-3 .hero-blade { transform: scale(1.2); filter: drop-shadow(0 0 4px var(--swc)) drop-shadow(0 0 7px var(--swc)); animation: bladeHum .5s ease-in-out infinite alternate; }
+.hero.sw-4 .hero-blade { transform: scale(1.34); filter: drop-shadow(0 0 5px var(--swc)) drop-shadow(0 0 10px var(--swc)) brightness(1.15); animation: bladeHum .35s ease-in-out infinite alternate; }
+.hero.sw-5 .hero-blade { transform: scale(1.48); filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 12px var(--swc)) drop-shadow(0 0 20px var(--swc)) brightness(1.25); animation: bladeHum .22s ease-in-out infinite alternate; }
+@keyframes bladeHum { from { filter: drop-shadow(0 0 4px var(--swc)) drop-shadow(0 0 8px var(--swc)); } to { filter: drop-shadow(0 0 7px #fff) drop-shadow(0 0 14px var(--swc)) brightness(1.2); } }
+.hero.sh-1 .hero-shield { filter: drop-shadow(0 0 2px var(--shc)); }
+.hero.sh-2 .hero-shield { filter: drop-shadow(0 0 4px var(--shc)); }
+.hero.sh-3 .hero-shield { filter: drop-shadow(0 0 5px var(--shc)) drop-shadow(0 0 9px var(--shc)); }
+.hero.sh-4 .hero-shield { filter: drop-shadow(0 0 6px var(--shc)) drop-shadow(0 0 12px var(--shc)) brightness(1.15); animation: shieldHum .5s ease-in-out infinite alternate; }
+.hero.sh-5 .hero-shield { filter: drop-shadow(0 0 7px #fff) drop-shadow(0 0 16px var(--shc)) brightness(1.25); animation: shieldHum .3s ease-in-out infinite alternate; }
+@keyframes shieldHum { to { filter: drop-shadow(0 0 9px #fff) drop-shadow(0 0 20px var(--shc)) brightness(1.3); } }
+.hero.blade-pulse .hero-svg { animation: bladePulse .3s ease-out; }
+.hero.shield-pulse .hero-svg { animation: shieldPulse .3s ease-out; }
+@keyframes bladePulse { 0% { filter: brightness(1.6) drop-shadow(0 0 8px var(--swc, #fff)); } 100% { filter: none; } }
+@keyframes shieldPulse { 0% { filter: brightness(1.4) drop-shadow(0 0 8px var(--shc, #5c9bff)); } 100% { filter: none; } }
+/* Aura detrás del héroe: naranja por la espada y azul por el escudo, cada vez más fuerte */
+.hero { position: relative; }
+.hero::before { content: ''; position: absolute; left: 10%; right: 10%; top: 10%; bottom: 0; border-radius: 50%; pointer-events: none; z-index: -1; opacity: 0; transition: opacity .4s, box-shadow .4s;
+  background: radial-gradient(circle at 60% 40%, color-mix(in srgb, var(--swc, #ff8a1f) 55%, transparent), transparent 60%), radial-gradient(circle at 30% 60%, color-mix(in srgb, var(--shc, #5c9bff) 55%, transparent), transparent 60%); }
+.hero[class*="sw-"]::before, .hero[class*="sh-"]::before { opacity: .35; animation: auraBreath 1.4s ease-in-out infinite; }
+.hero.sw-3::before, .hero.sh-3::before { opacity: .55; }
+.hero.sw-4::before, .hero.sh-4::before, .hero.sw-5::before, .hero.sh-5::before { opacity: .8; animation-duration: .8s; }
+@keyframes auraBreath { 50% { transform: scale(1.08); } }
+.pw-spark { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c), 0 0 2px #fff; animation: pwSpark .7s ease-out forwards; pointer-events: none; }
+@keyframes pwSpark { 0% { transform: translate(0, 0) scale(1.3); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
+.power-ring { position: absolute; left: 50%; top: 45%; width: 60px; height: 60px; margin: -30px; border-radius: 50%; border: 4px solid var(--c); box-shadow: 0 0 18px var(--c), inset 0 0 12px var(--c); animation: powerRing .65s ease-out forwards; pointer-events: none; }
+@keyframes powerRing { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(calc(2.4 * var(--s))); opacity: 0; } }
+.float.power-up { font-weight: 900; font-size: 15px; white-space: nowrap; color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px #ff8a1f; animation-duration: 1.4s; }
+.float.power-up.sh { text-shadow: 0 2px 0 #000, 0 0 10px #5c9bff; }
+.float.power-up.t4, .float.power-up.t5 { font-size: 19px; }
+.float.power-up.t5 { color: #ffe17a; }
