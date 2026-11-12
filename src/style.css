@@ -1440,3 +1440,7 @@ button.res { cursor: pointer; }
 .evo-info button { margin-top: 16px; width: 100%; border: 0; border-radius: 14px; padding: 13px; font-size: 18px; font-weight: 900; color: #0b0718; background: linear-gradient(180deg, #fff, var(--ec)); box-shadow: 0 4px 0 rgba(0,0,0,.4), 0 0 20px var(--ec); }
 @media (prefers-reduced-motion: reduce) { .evo-art.old, .evo-motes i, .evo-rays { animation: none; } }
 .evo-art.old { margin-top: 40px; }
+/* Fénix de fuego (skin en forma 20 y 40): las alas laten */
+.phoenix-form .ph-wing { transform-box: view-box; transform-origin: 50px 48px; animation: phWing 1.8s ease-in-out infinite; }
+@keyframes phWing { 50% { transform: rotate(-5deg) scale(1.04); } }
+@media (prefers-reduced-motion: reduce) { .phoenix-form .ph-wing { animation: none; } }
