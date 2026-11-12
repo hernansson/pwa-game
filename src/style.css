@@ -1161,7 +1161,7 @@ button.res { cursor: pointer; }
 .hs-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 .hs-scene > :not(.hs-bg) { position: relative; z-index: 1; }
 .hs-scene .hs-name { position: absolute; top: 12px; left: 0; right: 0; margin: 0; text-shadow: 0 2px 0 #000; }
-.hs-scene .hs-hero svg { max-height: none; height: min(44dvh, 340px); width: auto; filter: drop-shadow(0 10px 14px rgba(0,0,0,.6)); }
+.hs-scene .hs-hero svg { max-height: none; height: min(32dvh, 250px); width: auto; filter: drop-shadow(0 10px 14px rgba(0,0,0,.6)); }
 .hs-scene .hs-hero { display: flex; justify-content: center; margin-bottom: -4px; }
 .hs-scene .hs-slots { align-self: center; }
 .hs-scene .hs-slot { background: rgba(10,6,24,.72); backdrop-filter: blur(2px); }
@@ -1174,7 +1174,7 @@ button.res { cursor: pointer; }
 .hero-page + .note, .hero-page .note { display: none; }
 #sheet[data-tab="heroe"] .sheet-body { flex: 1; min-height: 0; }
 .hs-scene .hs-hero { min-width: 0; }
-.hs-scene .hs-hero svg { width: 100%; height: auto; max-height: min(44dvh, 340px); }
+.hs-scene .hs-hero svg { width: 80%; height: auto; max-height: min(32dvh, 250px); }
 .topbar .res .ico { flex: none; width: 18px; text-align: center; font-size: 15px; }
 @media (max-width: 380px) { .topbar #fullscreen { display: none; } .topbar .res .ico { width: 16px; font-size: 13px; } .topbar { gap: 4px; padding-left: 8px; padding-right: 8px; } }
 .set-fs { margin: 8px 0; }
@@ -1183,7 +1183,7 @@ button.res { cursor: pointer; }
 .hs-scene .hs-slots { grid-row: 1; z-index: 2; }
 .hs-scene .hs-slots.left { grid-column: 1; }
 .hs-scene .hs-slots.right { grid-column: 3; }
-.hs-scene .hs-hero svg { width: auto; max-width: 78%; height: min(42dvh, 330px); max-height: none; }
+.hs-scene .hs-hero svg { width: auto; max-width: 68%; height: min(33dvh, 260px); max-height: none; }
 .hs-scene { min-height: 210px; }
 /* Atajos del héroe: solo el ícono en un círculo con el color de la rareza */
 .hs-scene .hs-slots { gap: 14px; align-items: center; }
