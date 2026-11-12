@@ -1,3 +1,4 @@
+import { FIRE_BIRD, STAR_BIRD, featherWing, phoenixBird } from './phoenix';
 // Arte vectorial del prototipo. Todo es SVG en línea: liviano y nítido en cualquier pantalla.
 
 export interface Tier {
@@ -181,6 +182,13 @@ export interface HeroFight {
   bare?: boolean; // sin espada: para mostrar solo la skin (la armadura)
 }
 
+/** Alas de plumas de fénix en la espalda del caballero: chicas en la forma 5, grandes y levantadas en la 10. */
+function knightWings(e: number): string {
+  const big = e >= 2;
+  const w = featherWing({ len: big ? 50 : 36, tip: 234, low: 150, n: big ? 7 : 6, layers: big ? FIRE_BIRD.layers : FIRE_BIRD.layers.slice(1), stroke: '#3a0d05' });
+  return `<g class="kn-wings"><g transform="translate(62 47) scale(-.8 .8)"><g class="pb-wing">${w}</g></g><g transform="translate(42 47)"><g class="pb-wing">${w}</g></g></g>`;
+}
+
 /**
  * Caballero Fénix: un personaje propio. Yelmo dorado en punta con alas esculpidas a los costados, visera en T
  * con brillo de brasa y penacho de fuego; hombreras con púas de llama, peto con sol, capa con borde de fuego y alas.
@@ -210,8 +218,12 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M32.5 103 L47.5 103 M54.5 103 L72 103" stroke="${red}" stroke-width="2"/>
     </g>
     <g class="fx-body"><g transform="translate(0 8)">
-      ${e >= 2 ? `<path class="fx-fl f1" d="M42 76 Q26 88 8 102 Q20 99 24 103 Q22 96 30 94 Q30 100 36 100 Q36 92 46 84Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/><path class="fx-fl f2" d="M42 80 Q30 90 18 99 Q28 96 31 98 Q32 92 44 86Z" fill="#ffd34d"/>` : ''}
-      <g class="fx-wingwrap"><g transform="translate(46 52) scale(${wingScale}) translate(-46 -52)">${fenixWings()}</g></g>
+      ${e >= 2 ? `<g class="kn-tail">${[
+        ['M44 74 Q30 84 12 104 Q20 100 22 103 Q30 92 46 82Z', '#d42a0c'],
+        ['M44 76 Q34 90 26 106 Q32 102 34 104 Q38 92 47 82Z', '#ff6a1a'],
+        ['M43 76 Q26 82 6 92 Q14 92 16 95 Q30 86 45 81Z', '#ffaa2a'],
+      ].map(([d, f], i) => `<path class="fx-fl f${i + 1}" d="${d}" fill="${f}" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>`).join('')}</g>` : ''}
+      ${e >= 1 ? knightWings(e) : `<g class="fx-wingwrap"><g transform="translate(46 52) scale(${wingScale}) translate(-46 -52)">${fenixWings()}</g></g>`}
       <g class="fx-capewrap"><path d="M40 44 Q24 58 20 90 Q26 86 31 90 Q36 84 42 89 Q47 84 53 88 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
         <path class="fx-fl f2" d="M22 88 Q24 81 28 85 Q30 77 35 83 Q38 76 42 82 Q46 77 50 83 L53 87 Q47 83 42 88 Q36 83 31 89 Q26 85 22 88Z" fill="#ffd34d" opacity=".85"/>
         <path d="M40 48 Q28 62 26 86 Q30 84 33 87 Q36 68 46 50Z" fill="#000" opacity=".25"/></g>
@@ -221,8 +233,8 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M37 46 Q51 41 64 46 L62 73 Q51 77 39 73Z" fill="${red}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
       <path d="M43 49 Q52 45 60 49 L58.5 70 Q52 73 44.5 70Z" fill="${gold}" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
       <path d="M38.5 48 Q41 47 43 49 L44.5 70 Q42 71.5 39.5 72Z" fill="#000" opacity=".22"/>
-      ${e >= 2 ? `<g class="fx-sun"><circle cx="52.5" cy="58" r="7" fill="${red}" stroke="${o}" stroke-width="1.2"/><g transform="translate(52.5 58.5) scale(.36) translate(-32 -32)"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#ffd34d" stroke="${o}" stroke-width="2"/></g></g>` : `      <g class="fx-sun"><circle cx="52.5" cy="58" r="5" fill="#ff5a1f" stroke="\${o}" stroke-width="1.2"/>
-        \${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => \`<path d="M52.5 50.8 L53.7 53.2 L51.3 53.2Z" fill="#fff1a8" transform="rotate(\${a} 52.5 58)"/>\`).join('')}
+      ${e >= 2 ? `<g class="fx-sun"><circle cx="52.5" cy="58" r="7" fill="${red}" stroke="${o}" stroke-width="1.2"/><g transform="translate(52.5 58.5) scale(.36) translate(-32 -32)"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#ffd34d" stroke="${o}" stroke-width="2"/></g></g>` : `      <g class="fx-sun"><circle cx="52.5" cy="58" r="5" fill="#ff5a1f" stroke="${o}" stroke-width="1.2"/>
+        ${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path d="M52.5 50.8 L53.7 53.2 L51.3 53.2Z" fill="#fff1a8" transform="rotate(${a} 52.5 58)"/>`).join('')}
         <circle cx="52.5" cy="58" r="2.3" fill="#fff1a8"/></g>`}
       <path d="M45 49 Q48 46.5 52 46" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".5"/>
       ${e >= 2 ? '<path class="fx-vein" d="M44 52 L47 56 L45 61 L48 66 M60 52 L57.5 57 L59.5 62 L57 68 M40 60 L42.5 63 M62.5 62 L60.5 65" stroke="#ffd34d" stroke-width="1.4" fill="none" stroke-linecap="round"/>' : ''}
@@ -241,11 +253,11 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
           <path class="fx-fl f3" d="M59 -3 Q64 3 62 11 L55 10 Q54 3 59 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
           <path class="fx-fl f2" d="M52 -3 Q55 3 53.5 9 L50.5 9 Q49 3 52 -3Z" fill="#fff1a8"/>
         </g>
-        ${e >= 2 ? `<g class="fx-phead">
-          <path class="fx-fl f3" d="M50 8 Q36 -2 22 -4 Q32 2 36 8 Q24 6 14 12 Q28 12 40 14Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-          <path class="fx-fl f1" d="M52 6 Q42 -10 28 -16 Q38 -6 40 2 Q32 -4 22 -6 Q34 2 44 10Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-          <path class="fx-fl f2" d="M54 6 Q52 -12 42 -24 Q48 -10 47 0 Q44 -8 36 -14 Q42 -2 48 8Z" fill="#ffd34d" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-          <path class="fx-fl f3" d="M56 7 Q60 -8 56 -20 Q63 -8 61 6Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1" stroke-linejoin="round"/></g>` : ''}
+        ${e >= 2 ? `<g class="fx-phead">${[
+          ['M44 12 Q30 4 16 8 Q26 8 30 12 Q20 14 12 22 Q28 16 42 18Z', '#d42a0c'],
+          ['M46 9 Q36 -4 20 -6 Q30 -2 33 3 Q24 2 16 6 Q32 6 44 14Z', '#ff6a1a'],
+          ['M48 7 Q44 -8 32 -16 Q38 -6 38 0 Q32 -4 26 -4 Q38 2 46 11Z', '#ffd34d'],
+        ].map(([d, f], i) => `<path class="fx-fl f${i + 1}" d="${d}" fill="${f}" stroke="${o}" stroke-width="1.1" stroke-linejoin="round"/>`).join('')}</g>` : ''}
         <path d="M65 24 Q72 20 76 10 Q71 14 68 15 Q71 9 70 4 Q66 11 63 15Z" fill="#c98a1e" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
         <path class="fx-hw" d="M36 25 Q25 20 19 6 Q26 12 30 13 Q25 6 26 -2 Q32 8 36 13 Q34 6 37 1 Q39 12 41 18Z" fill="${gold}" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/>
         <path d="M33 13 Q30 8 26 9" stroke="${red}" stroke-width="1.3" fill="none"/>
@@ -259,6 +271,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
         <g fill="${red}"><circle cx="46" cy="40" r="1.1"/><circle cx="50" cy="43" r="1.1"/><circle cx="61" cy="43" r="1.1"/><circle cx="65" cy="39.5" r="1.1"/></g>
         ${e >= 4 ? `<path d="M41 11 L42 1 L46.5 7 L52 -4 L57.5 7 L62 1 L63 11 Q52 7 41 11Z" fill="#ffd700" stroke="${o}" stroke-width="1.3" stroke-linejoin="round"/>${gem(52, 3, 1.8, '#2ad8ff')}${gem(42.5, 6, 1.2, '#2ad8ff')}${gem(61.5, 6, 1.2, '#2ad8ff')}` : ''}
         <path d="M56 13.5 L59 17.5 L56 22.5 L53 17.5Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
+        ${e >= 2 ? `<path d="M66 26 Q76 25 81 32 Q82.5 36 79.5 38 Q78.5 34.5 75 34 Q71 34 67.5 35Z" fill="#ffb02e" stroke="${o}" stroke-width="1.5" stroke-linejoin="round"/><path d="M68 29.5 L78 31" stroke="${o}" stroke-width=".9" opacity=".6"/><path d="M41 27 Q50 23.5 68 26" stroke="${o}" stroke-width="1.6" fill="none"/>` : ''}
       </g></g>
       ${fight.shield ? '%%SHIELD%%' : ''}
       ${fight.bare ? bareArm('front', red, gold, o) : ''}
@@ -283,57 +296,43 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
 }
 
 /**
- * Forma 20 y 40 de la skin: ya no es un caballero, es un fénix de fuego de pie, con alas enormes abiertas,
- * cabeza con pico y penacho de llamas, cuerpo de fuego y cola. Sostiene igual la espada y el escudo.
+ * Forma 20 y 40 de la skin: el caballero ya es un fénix de verdad, majestuoso: alas enormes levantadas, cuello
+ * largo, cabeza chica con penacho, cola larga de fuego y patas con garras. En 40 es el fénix celestial: dos pares
+ * de alas, corona, halo y cola con estrellas. Sostiene igual la espada y el escudo.
  */
 function phoenixHero(e: number, weaponLevel: number, fight: HeroFight, back: string): string {
-  const o = '#7a1a05';
-  const wing = (k: string) => `<g class="ph-wing ${k}">
-      <path class="fx-fl f1" d="M48 50 Q32 44 22 30 Q14 18 12 0 Q17 8 21 10 Q17 -2 19 -12 Q24 0 28 4 Q27 -6 31 -12 Q33 2 36 8 Q36 0 40 -4 Q41 10 43 18 Q46 10 49 8 Q48 22 50 30 Q53 40 52 48Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/>
-      <path class="fx-fl f2" d="M48 47 Q35 41 27 29 Q21 20 20 8 Q24 14 27 15 Q25 6 27 -1 Q30 9 33 12 Q33 5 36 1 Q37 13 40 19 Q42 13 44 12 Q44 24 47 32 Q50 40 49 46Z" fill="#ff8a1f"/>
-      <path class="fx-fl f3" d="M47 44 Q38 38 33 29 Q29 22 29 15 Q33 21 36 22 Q35 15 37 11 Q39 20 42 25 Q44 33 47 39Z" fill="#ffd34d"/></g>`;
+  const pal = e >= 4 ? STAR_BIRD : FIRE_BIRD;
+  const o = pal.stroke;
+  const bird = phoenixBird({
+    ...pal, id: 'pbH' + e,
+    wing: e >= 4 ? { len: 42, tip: 236, low: 150, n: 8 } : { len: 42, tip: 242, low: 150, n: 7 },
+    wing2: e >= 4 ? { len: 46, tip: 264, low: 206, n: 5, layers: ['#1a3bd8', '#5a8bff', '#bff0ff'] } : undefined,
+    tail: e >= 4 ? { n: 7, len: 30, spread: 56 } : { n: 5, len: 27, spread: 40 },
+    crown: e >= 4 ? '#ffd700' : undefined,
+    halo: e >= 4 ? '#fff6c8' : undefined,
+  });
+  const leg = (x: number, dx: number) => `<path d="M${x} 78 L${x + dx * 0.4} 90 L${x + dx} 100" stroke="${o}" stroke-width="4.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M${x} 78 L${x + dx * 0.4} 90 L${x + dx} 100" stroke="${pal.beak}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M${x + dx} 100 l-4.5 3.4 M${x + dx} 100 l0.6 4 M${x + dx} 100 l4.6 3" stroke="${o}" stroke-width="2" stroke-linecap="round"/>`;
   const out = `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero phoenix-form evo-${e}" aria-hidden="true">
     ${back}
     ${e >= 4 ? `<g class="evo-rays big">${rays(54, 40, 70, 18, '#bff0ff')}</g>` : ''}
-    <defs><radialGradient id="evoAura${e}"><stop offset="0" stop-color="${EVO_COLORS[e]}" stop-opacity=".7"/><stop offset=".6" stop-color="${EVO_COLORS[e]}" stop-opacity=".25"/><stop offset="1" stop-color="${EVO_COLORS[e]}" stop-opacity="0"/></radialGradient></defs>
-    <ellipse class="evo-aura" cx="54" cy="56" rx="54" ry="58" fill="url(#evoAura${e})"/>
-    <ellipse cx="54" cy="104" rx="26" ry="4.5" fill="#000" opacity=".3"/>
+    <defs><radialGradient id="evoAura${e}"><stop offset="0" stop-color="${EVO_COLORS[e]}" stop-opacity=".6"/><stop offset=".6" stop-color="${EVO_COLORS[e]}" stop-opacity=".2"/><stop offset="1" stop-color="${EVO_COLORS[e]}" stop-opacity="0"/></radialGradient></defs>
+    <ellipse class="evo-aura" cx="54" cy="52" rx="56" ry="58" fill="url(#evoAura${e})"/>
+    <ellipse cx="54" cy="104" rx="24" ry="4" fill="#000" opacity=".3"/>
     <g class="fx-body">
-      <g transform="translate(108 0) scale(-1 1)"><g transform="translate(56 48) scale(.86) translate(-56 -48)">${wing('far')}</g></g>
-      ${wing('near')}
-      <path class="fx-fl f1" d="M46 74 Q30 86 14 104 Q24 100 28 104 Q28 96 34 96 Q34 102 40 103 Q40 94 50 84Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-      <path class="fx-fl f2" d="M46 78 Q34 88 22 101 Q30 98 33 100 Q34 93 48 84Z" fill="#ffd34d"/>
-      <path class="fx-fl f2" d="M47 80 Q45 92 42 102 L50 102 Q51 92 53 82Z M57 80 Q60 92 63 102 L71 102 Q66 92 63 80Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-      <path d="M40 102 L52 102 L51 105 L39 105Z M61 102 L73 102 Q75 103 74 105 L62 105Z" fill="#ffd700" stroke="${o}" stroke-width="1"/>
-      <path class="fx-fl f2" d="M42 74 L37 89 L43 85 L45 94 L49 86 L53 95 L56 86 L60 94 L62 85 L69 89 L64 74Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.3" stroke-linejoin="round"/>
-      <path class="fx-fl f1" d="M40 49 Q35 56 37 63 L33 65 L38 69 Q39 75 43 79 L41 83 L47 82 Q53 86 59 82 L65 83 L63 79 Q67 75 68 69 L73 65 L69 63 Q71 56 66 49 Q53 42 40 49Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
-      <path class="fx-fl f3" d="M45 53 Q42 60 44 66 L41 68 L45 70 Q47 76 53 78 Q59 76 61 70 L65 68 L62 66 Q64 60 61 53 Q53 49 45 53Z" fill="#ffd34d"/>
-      <path class="fx-fl f2" d="M50 56 Q48 64 50 72 Q53 75 56 72 Q58 64 56 56 Q53 54 50 56Z" fill="#fff6c8"/>
-      <circle class="fx-pulse" cx="53" cy="62" r="4.5" fill="#fff6c8" opacity=".9"/>
-      <g class="fx-head"><g transform="translate(58 46) scale(.82) translate(-58 -46)">
-        <path class="fx-fl f3" d="M54 22 Q42 12 30 12 Q40 16 42 20 Q32 20 24 26 Q38 26 48 28Z" fill="#ff5a1f" stroke="${o}" stroke-width="1" stroke-linejoin="round"/>
-        <path class="fx-fl f1" d="M55 18 Q47 4 34 0 Q44 8 45 14 Q38 10 30 10 Q42 16 50 24Z" fill="#ff8a1f" stroke="${o}" stroke-width="1" stroke-linejoin="round"/>
-        <path class="fx-fl f2" d="M57 16 Q56 2 48 -8 Q53 4 52 12 Q49 6 43 2 Q48 12 53 20Z" fill="#ffd34d" stroke="${o}" stroke-width="1" stroke-linejoin="round"/>
-        <path d="M48 50 Q45 38 50 28 Q55 18 64 18 Q70 19 72 24 L80 28 L73 31 Q71 36 64 38 Q58 40 58 50Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
-        <path class="fx-fl f3" d="M52 46 Q50 36 54 30 Q58 24 64 24 Q68 25 69 29 Q62 32 60 38 Q58 42 58 48Z" fill="#ffd34d"/>
-        <path d="M71 23.5 L81 28 L73 31.5 Q73 27 71 23.5Z" fill="#ffd700" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-        <path d="M73 28.4 L80 28.2" stroke="${o}" stroke-width=".8"/>
-        <path d="M61 24.5 L69 24.8 L66 28 Q63 28 61 24.5Z" fill="#fff6c8" stroke="${o}" stroke-width="1" stroke-linejoin="round" class="fx-eyes"/>
-        <path d="M60 22.6 L69.5 23.6" stroke="${o}" stroke-width="1.6" stroke-linecap="round"/>
-        ${e >= 4 ? `<path d="M52 16 L53 7 L57 12 L61 3 L64 12 L68 7 L68 17 Q60 13 52 16Z" fill="#ffd700" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>${gem(61, 9, 1.6, '#2ad8ff')}` : ''}
-      </g></g>
+      <g transform="translate(54 63) scale(1.26)">${bird}</g>
+      ${leg(50.5, -3)}${leg(57.5, 3.5)}
       ${fight.shield ? '%%SHIELD%%' : ''}
-      <path class="fx-fl f2" d="M60 48 Q66 40 74 40 Q70 44 72 46 Q76 42 82 43 Q76 48 72 52Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-      ${fight.bare ? `<path class="fx-fl f1" d="M62 50 Q70 56 70 66 Q66 62 63 62 Q64 58 60 54Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2"/>` : ''}
       <g class="hero-arm"${fight.bare ? ' display="none"' : ''}><g class="fx-armidle">
-        <path class="fx-fl f1" d="M60 50 Q66 50 68 56 L66 60 Q62 58 60 56Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
+        <path class="fx-fl f1" d="M57 50 Q66 49 69 56 L66 61 Q61 58 58 56Z" fill="${pal.layers[1]}" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
         %%BLADE%%
-        <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="#ffd700" stroke="${o}" stroke-width="1.8"/>
+        <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${pal.beak}" stroke="${o}" stroke-width="1.8"/>
         <path d="M65.5 58.5 L75.5 58.5" stroke="${o}" stroke-width="1.2"/>
       </g></g>
     </g>
-    ${star(14, 40, 3, '#fff', 1) + star(96, 26, 2.6, '#fff', 2) + star(90, 84, 2.4, '#fff', 3)}
-    ${e >= 4 ? `<g class="evo-orbit big"><circle cx="54" cy="0" r="2.2" fill="#d8f6ff"/><circle cx="104" cy="56" r="1.8" fill="#7fe0ff"/><circle cx="54" cy="110" r="2.2" fill="#d8f6ff"/><circle cx="4" cy="56" r="1.8" fill="#7fe0ff"/></g>` : ''}
+    ${star(12, 40, 3, '#fff', 1) + star(98, 22, 2.6, '#fff', 2) + star(94, 86, 2.4, '#fff', 3)}
+    ${e >= 4 ? `<g class="evo-orbit big"><circle cx="54" cy="0" r="2.2" fill="#d8f6ff"/><circle cx="106" cy="56" r="1.8" fill="#7fe0ff"/><circle cx="54" cy="110" r="2.2" fill="#d8f6ff"/><circle cx="2" cy="56" r="1.8" fill="#7fe0ff"/></g>` : ''}
   </svg>`;
   return evoPaint(out, e)
     .replace('%%SHIELD%%', fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : '')
@@ -549,6 +548,13 @@ function gem(x: number, y: number, r: number, f: string) {
   return `<circle cx="${x}" cy="${y}" r="${r}" fill="${f}" stroke="#0d0f16" stroke-width="1.2"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.35}" fill="#fff" opacity=".7"/>`;
 }
 
+/** Las puntas de la guarda de la Espada del Fénix se vuelven llamas: un poco en la forma 5, más en la 10. */
+function fireGuardTips(e: number): string {
+  const k = e >= 2 ? 1.15 : 0.8;
+  const tip = `<g transform="translate(16 40) scale(${k}) translate(-16 -40)"><path class="fx-fl f1" d="M19 41.5 Q12 43 8 38 Q12 39 13 37.5 Q9 35 9 30 Q13 34.5 16 34.5 Q14.5 31 16 27.5 Q18 33 21.5 36Z" fill="#ff6a1a" stroke="#c8230f" stroke-width=".6" stroke-linejoin="round"/><path class="fx-fl f3" d="M19 40.5 Q14.5 41 12 38.5 Q15 38.5 15.5 37 Q13.5 35 14 32.5 Q16.5 35.5 20 37Z" fill="#ffd34d"/></g>`;
+  return tip + `<g transform="translate(64 0) scale(-1 1)">${tip}</g>`;
+}
+
 const SWORDS: Icon[] = [
   // Espada recta
   (c, d, l, f) => `<g transform="rotate(-40 32 32)">
@@ -597,8 +603,9 @@ const SWORDS: Icon[] = [
     <path d="M32 5 L37.5 13.5 L37 40 L27 40 L26.5 13.5Z" fill="url(#fxBladeG)" ${e >= 2 ? 'fill-opacity=".45"' : ''} stroke="#3a0d05" stroke-width="2" stroke-linejoin="round"/>
     ${e >= 2 ? '<path class="fx-fl f3" d="M32 6 Q35.5 13 34.5 20 Q36.5 28 34.5 39 L29.5 39 Q27.5 28 29.5 20 Q28.5 13 32 6Z" fill="#fff1a8" opacity=".85"/>' : '<path d="M32 8 L34.6 14.5 L34.3 38.5 L32 38.5Z" fill="#fff" opacity=".7"/>'}
     <path class="fx-vein" d="M31.5 16 Q29.8 21 31.6 26 Q33.4 31 31.6 37" stroke="#fff6c8" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-    ${e >= 1 ? '<path class="fx-fl f2" d="M15 39 Q11 33 12 27 Q15 33 19 34 Q17 29 19 25 Q21 32 25 37Z M49 39 Q53 33 52 27 Q49 33 45 34 Q47 29 45 25 Q43 32 39 37Z" fill="#ff8a1f" opacity=".9"/>' : ''}
-    <path d="M15 39.5 Q19 33 25.5 38.5 L32 40.5 L38.5 38.5 Q45 33 49 39.5 Q45 46.5 38.5 44.5 L25.5 44.5 Q19 46.5 15 39.5Z" fill="#ffc83a" stroke="#3a0d05" stroke-width="1.4" stroke-linejoin="round"/>
+    ${e >= 1 ? `<defs><linearGradient id="fxGuardG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${e >= 2 ? '#ff3d0a' : '#ff6a1a'}"/><stop offset="${e >= 2 ? '.32' : '.2'}" stop-color="#ffab2e"/><stop offset="${e >= 2 ? '.42' : '.32'}" stop-color="#ffc83a"/><stop offset="${e >= 2 ? '.58' : '.68'}" stop-color="#ffc83a"/><stop offset="${e >= 2 ? '.68' : '.8'}" stop-color="#ffab2e"/><stop offset="1" stop-color="${e >= 2 ? '#ff3d0a' : '#ff6a1a'}"/></linearGradient></defs>` : ''}
+    ${e >= 1 ? fireGuardTips(e) : ''}
+    <path d="M15 39.5 Q19 33 25.5 38.5 L32 40.5 L38.5 38.5 Q45 33 49 39.5 Q45 46.5 38.5 44.5 L25.5 44.5 Q19 46.5 15 39.5Z" fill="${e >= 1 ? 'url(#fxGuardG)' : '#ffc83a'}" stroke="#3a0d05" stroke-width="1.4" stroke-linejoin="round"/>
     <path d="M18 39.5 Q21 36.5 25 39.5 M46 39.5 Q43 36.5 39 39.5" stroke="#fff1a8" stroke-width="1.2" fill="none"/>
     ${gem(32, 42.2, 3.3, '#ff3b1f')}
     <rect x="29.5" y="45" width="5" height="9" rx="1.5" fill="#5a1a0a" stroke="#3a0d05" stroke-width="1"/>
@@ -646,8 +653,8 @@ const SHIELDS: Icon[] = [
     <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="url(#fxShieldG)" stroke="#3a0d05" stroke-width="2.4" stroke-linejoin="round"/>
     <path d="M32 11 L48.5 16.5 Q49 38 32 52.5 Q15 38 15.5 16.5Z" fill="url(#fxShieldR)" stroke="#ffe27a" stroke-width="1.4"/>
     ${e >= 2 ? '<g class="fx-flames"><path class="fx-fl f1" d="M22 50 Q18 40 22 32 Q23 38 26 39 Q24 30 30 22 Q30 32 33 34 Q34 26 40 22 Q38 30 41 34 Q44 30 44 26 Q48 36 42 48 Q38 52 32 53 Q26 52 22 50Z" fill="#ff8a1f" opacity=".75"/></g>' : ''}
-    <g class="fx-bird"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="${e >= 2 ? '#fff6c8' : '#ffd34d'}" stroke="#5a1a0a" stroke-width="1.1" stroke-linejoin="round"/>
-      <path d="M32 24 Q33 28 32 33 Q31 28 32 24Z" fill="#fff6c8"/></g>
+    ${e >= 2 ? `<g transform="translate(32 34) scale(.6)">${phoenixBird({ layers: ['#ff8a1f', '#ffb02e', '#ffe27a'], stroke: '#5a1a0a', body: ['#ffb02e', '#fff6c8'], beak: '#fff1a8', eye: '#fff6c8', tail: { n: 3, len: 16, spread: 20 }, wing: { len: 30, tip: 240, low: 150, n: 6 }, id: 'pbS2' })}</g>` : `<g class="fx-bird"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#ffd34d" stroke="#5a1a0a" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 24 Q33 28 32 33 Q31 28 32 24Z" fill="#fff6c8"/></g>`}
     <path d="M18 17 Q24 13 31 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
     ${l >= 5 ? gem(32, 50, 2.6, f) : ''}`;
   },
@@ -720,11 +727,13 @@ const PIECE_DARK: Record<string, string> = {
 /** Espada de fuego puro (forma 20 y 40): la hoja, la guarda y el pomo son llamas; solo queda un núcleo de brasa. */
 function fireSword(e: number): string {
   const halo = e >= 4 ? '<g class="fx-fl f2"><path d="M32 -12 L35 -7 L32 -2 L29 -7Z" fill="#fff6c8"/><circle cx="32" cy="-7" r="6.5" fill="none" stroke="#fff1a8" stroke-width="1.1" opacity=".8"/></g>' : '';
-  return `<g transform="rotate(-40 32 32)">
+  // En la forma 20 la hoja de fuego es más fina (como la espada de antes); en la 40 se ensancha en llama celestial.
+  const thin = e >= 4 ? '' : ' transform="translate(32 0) scale(.62 1) translate(-32 0)"';
+  return `<g transform="rotate(-40 32 32)"><g${thin}>
     <path class="fx-fl f1" d="M32 -9 Q40 0 38 8 Q45 15 40.5 23 Q46 31 40 41 L24 41 Q18 31 23.5 23 Q19 15 26 8 Q24 0 32 -9Z" fill="#ff5a1f" stroke="#c8230f" stroke-width="1"/>
     <path class="fx-fl f2" d="M32 -5 Q38.5 3 37 9 Q42 15 38.5 23 Q42.5 31 38 40 L26 40 Q21.5 31 25.5 23 Q22 15 27 9 Q25.5 3 32 -5Z" fill="#ff8a1f"/>
     <path class="fx-fl f3" d="M32 3 Q35 9 34.2 13 Q36.8 19 35 26 Q36.8 33 34.6 40 L29.4 40 Q27.2 33 29 26 Q27.2 19 29.8 13 Q29 9 32 3Z" fill="#ffd34d"/>
-    <path class="fx-fl f1" d="M32 10 Q33.4 15 33 21 Q34 29 33 39 L31 39 Q30 29 31 21 Q30.6 15 32 10Z" fill="#fff6c8"/>
+    <path class="fx-fl f1" d="M32 10 Q33.4 15 33 21 Q34 29 33 39 L31 39 Q30 29 31 21 Q30.6 15 32 10Z" fill="#fff6c8"/></g>
     <path class="fx-fl f2" d="M32 41 Q24 33 11 35 Q17 38 16 41 Q10 42 8 46 Q18 44 24 46 L40 46 Q46 44 56 46 Q54 42 48 41 Q47 38 53 35 Q40 33 32 41Z" fill="#ff8a1f"/>
     <path class="fx-fl f3" d="M32 42 Q26 38.5 20 39.5 Q23 41.5 22 43 L42 43 Q41 41.5 44 39.5 Q38 38.5 32 42Z" fill="#ffb02e"/>
     <circle cx="32" cy="43.5" r="3.4" fill="#fff6c8"/><circle class="fx-pulse" cx="32" cy="43.5" r="5.5" fill="#ffd34d" opacity=".5"/>
@@ -734,21 +743,40 @@ function fireSword(e: number): string {
     <g class="fx-embers"><circle class="fx-em e1" cx="25" cy="22" r="1.6" fill="#fff1a8"/><circle class="fx-em e2" cx="39" cy="14" r="1.3" fill="#ffd34d"/><circle class="fx-em e3" cx="27" cy="6" r="1.2" fill="#fff1a8"/><circle class="fx-em e4" cx="38" cy="30" r="1.3" fill="#ffd34d"/></g>
     ${halo}</g>`;
 }
-/** Escudo de fuego puro (forma 20 y 40): un fénix de llamas con las alas abiertas que forma el escudo. */
+/** Escudo dorado del Fénix (el metal), en una caja de 64. `face` es lo que va en el centro. */
+function fenixShieldMetal(face: string, crystal = false): string {
+  const rim = crystal ? '#ffd700' : 'url(#fxShieldG)';
+  const fill = crystal ? 'url(#pbCrystal)' : 'url(#fxShieldR)';
+  return `${crystal ? '<defs><linearGradient id="pbCrystal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".5" stop-color="#8fd8ff" stop-opacity=".85"/><stop offset="1" stop-color="#2a5bff" stop-opacity=".9"/></linearGradient></defs>' : ''}
+    <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="${rim}" stroke="${crystal ? '#0b1450' : '#3a0d05'}" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M32 11 L48.5 16.5 Q49 38 32 52.5 Q15 38 15.5 16.5Z" fill="${fill}" stroke="${crystal ? '#ffffff' : '#ffe27a'}" stroke-width="1.4"/>
+    ${face}
+    <path d="M18 17 Q24 13 31 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>`;
+}
+
+/**
+ * Formas altas de la Égida: en 20 un fénix de fuego de verdad abre las alas detrás del escudo (que se achica y queda
+ * como su pecho, con un sol encendido); en 40 el fénix celestial tiene dos pares de alas, corona, halo y cola larga,
+ * y el escudo se vuelve de cristal con una estrella.
+ */
 function fireShield(e: number): string {
-  const wing = (fill: string, cls: string, k: number) => `<g transform="translate(32 40) scale(${k}) translate(-32 -40)"><path class="fx-fl ${cls}" d="M31 48 Q15 47 8 34 Q3 25 3 11 Q7 17 10 18 Q7 9 9 0 Q13 10 16 13 Q15 4 18 -2 Q20 10 23 16 Q23 8 26 5 Q27 18 30 26Z" fill="${fill}"/></g>`;
-  const both = (fill: string, cls: string, k: number) => wing(fill, cls, k) + `<g transform="translate(64 0) scale(-1 1)">${wing(fill, cls, k)}</g>`;
-  const halo = e >= 4 ? '<circle cx="32" cy="10" r="12" fill="none" stroke="#fff1a8" stroke-width="1.2" opacity=".8" class="fx-pulse"/>' : '';
-  return `<circle class="fx-pulse" cx="32" cy="32" r="30" fill="#ff7a1a" opacity=".35"/>${halo}
-    ${both('#ff5a1f', 'f1', 1.04)}${both('#ff8a1f', 'f2', 0.86)}${both('#ffd34d', 'f3', 0.62)}
-    <path class="fx-fl f2" d="M27 48 Q22 58 26 66 Q29 59 32 67 Q35 59 38 66 Q42 58 37 48Z" fill="#ff8a1f"/>
-    <path class="fx-fl f3" d="M29 50 Q27 57 29 62 Q31 57 32 63 Q33 57 35 62 Q37 57 35 50Z" fill="#ffd34d"/>
-    <path class="fx-fl f1" d="M32 14 Q39 22 37 34 Q35.5 44 32 52 Q28.5 44 27 34 Q25 22 32 14Z" fill="#ffb02e"/>
-    <path d="M32 22 Q35 28 34 36 Q33 42 32 46 Q31 42 30 36 Q29 28 32 22Z" fill="#fff6c8"/>
-    <path class="fx-fl f3" d="M31 8 Q25 0 18 -1 Q24 3 25 7Z M32 6 Q30 -3 24 -7 Q30 -1 29.5 4Z M33 6 Q34 -2 31 -8 Q36 -2 35.5 5Z" fill="#ff8a1f"/>
-    <path d="M28.5 18 Q27.5 10 32 6.5 Q36 4.5 39 7.5 L45 9 L39.5 11 Q37.5 13.5 35.5 18Z" fill="#ffb02e" stroke="#c8230f" stroke-width=".8" stroke-linejoin="round"/>
-    <path d="M39 7.5 L45 9 L39.5 11Z" fill="#fff1a8"/>
-    <path d="M33 8.8 L37.2 9.4" stroke="#fff6c8" stroke-width="1.6" stroke-linecap="round"/>`;
+  if (e >= 4) {
+    const bird = phoenixBird({
+      ...STAR_BIRD, tail: { n: 7, len: 27, spread: 52 }, id: 'pbS4',
+      wing: { len: 40, tip: 240, low: 150, n: 7 },
+      wing2: { len: 42, tip: 264, low: 205, n: 5, layers: ['#1a3bd8', '#5a8bff', '#bff0ff'] },
+      crown: '#ffd700', halo: '#fff6c8', noBody: true,
+    });
+    const starFace = `<path d="M32 18 L35.2 28 L45.5 28.5 L37.3 34.8 L40.4 45 L32 39 L23.6 45 L26.7 34.8 L18.5 28.5 L28.8 28Z" fill="#ffffff" stroke="#ffd700" stroke-width="1.4" stroke-linejoin="round"/><circle class="fx-pulse" cx="32" cy="32" r="5" fill="#fff6c8"/>`;
+    return `<defs><radialGradient id="pbGlow4"><stop offset="0" stop-color="#7fe0ff" stop-opacity=".7"/><stop offset="1" stop-color="#3ab8ff" stop-opacity="0"/></radialGradient></defs><circle class="fx-pulse" cx="32" cy="28" r="34" fill="url(#pbGlow4)"/>
+      <g transform="translate(32 31) scale(.94)">${bird}</g>
+      <g transform="translate(32 41) scale(.58) translate(-32 -32)">${fenixShieldMetal(starFace, true)}</g>`;
+  }
+  const bird = phoenixBird({ ...FIRE_BIRD, tail: { n: 5, len: 22, spread: 34 }, id: 'pbS3', wing: { len: 40, tip: 242, low: 150, n: 7 }, noBody: true });
+  const sun = `<circle class="fx-pulse" cx="32" cy="32" r="9" fill="#ffd34d" opacity=".6"/><circle cx="32" cy="32" r="6" fill="#fff1a8"/>`;
+  return `<defs><radialGradient id="pbGlow3"><stop offset="0" stop-color="#ff7a1a" stop-opacity=".6"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient></defs><circle class="fx-pulse" cx="32" cy="30" r="32" fill="url(#pbGlow3)"/>
+    <g transform="translate(32 33)">${bird}</g>
+    <g transform="translate(32 42) scale(.6) translate(-32 -32)">${fenixShieldMetal(sun)}</g>`;
 }
 // ---------- Evolución de las legendarias (formas en nivel 5, 10, 20 y 40) ----------
 export const EVO_COLORS = ['#ff8a1f', '#ff8a1f', '#ffd34d', '#ff2a5a', '#3ab8ff'];
@@ -783,7 +811,7 @@ const PALETTES: Record<number, Record<string, string>> = {
 function evoPaint(svg: string, e: number): string {
   const p = PALETTES[e];
   if (!p) return svg;
-  return svg.replace(/#[0-9a-fA-F]{6}\b/g, (m) => p[m.toLowerCase()] ?? m).replace(/(fxBladeG|fxShieldG|fxShieldR)/g, `$1e${e}`);
+  return svg.replace(/#[0-9a-fA-F]{6}\b/g, (m) => p[m.toLowerCase()] ?? m).replace(/(fxBladeG|fxShieldG|fxShieldR|fxGuardG)/g, `$1e${e}`);
 }
 function star(x: number, y: number, r: number, fill: string, k: number): string {
   return `<path class="evo-tw t${k}" d="M${x} ${y - r} L${x + r * 0.28} ${y - r * 0.28} L${x + r} ${y} L${x + r * 0.28} ${y + r * 0.28} L${x} ${y + r} L${x - r * 0.28} ${y + r * 0.28} L${x - r} ${y} L${x - r * 0.28} ${y - r * 0.28}Z" fill="${fill}"/>`;
