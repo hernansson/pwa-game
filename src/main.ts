@@ -214,8 +214,6 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <div class="combo" id="combo"></div>
       <div class="boost-label" id="boost-label"></div>
-      <div class="charge-hud" id="charge-hud" hidden><b>⚠️ ¡ATAQUE FUERTE!</b><small>Junta 🛡️ un escudo para bloquearlo o ⚔️⚔️ dos espadas para cortarlo</small><div class="cg-bar"><i id="cg-bar"></i></div></div>
-      <button class="spec-btn" id="spec-btn" hidden aria-label="Golpe especial"><span class="sb-ic">⚔️</span><small>ESPECIAL</small></button>
       <div class="fury-hud" id="fury-hud" hidden><b>🔥 FURIA DEL FÉNIX</b><span id="fury-t">8.0</span><div class="fury-bar"><i id="fury-bar"></i></div></div>
       <div class="combo-hud" id="combo-hud" hidden><div class="ch-row"><small>COMBO</small><b id="ch-n">x2</b><span id="ch-name"></span></div><div class="ch-bar"><i id="ch-bar"></i></div></div>
     </div>
@@ -223,6 +221,12 @@ document.querySelector('#app')!.innerHTML = `
 
   <section class="lower" id="lower" hidden>
     <div class="forge" id="forge" hidden>
+      <div class="board-hud" id="board-hud">
+        <div class="bh-side hero"><span class="bh-ico">❤️</span><div class="bh-bar"><i class="bf" id="bh-hp"></i><i class="bs" id="bh-sh"></i></div></div>
+        <div class="bh-side foe"><div class="bh-col"><div class="bh-bar foe"><i class="bf" id="bh-ehp"></i></div><div class="bh-atk"><i id="bh-atk"></i></div></div><span class="bh-ico">👹</span></div>
+        <button class="spec-btn" id="spec-btn" aria-label="Golpe especial"><span class="sb-ic">⚔️</span><small>ESPECIAL</small></button>
+        <div class="charge-hud" id="charge-hud" hidden><b>⚠️ ¡ATAQUE FUERTE!</b><small>🛡️ Un escudo lo bloquea · ⚔️ dos espadas lo cortan</small><div class="cg-bar"><i id="cg-bar"></i></div></div>
+      </div>
       <div class="pboard" id="board">
         <div class="pieces" id="pieces"></div>
       </div>
@@ -888,9 +892,16 @@ function renderScreen() {
   $('#hero').classList.toggle('poisoned', !!run.poison && !run.result);
   // Golpe especial: se llena juntando; cuando está lleno brilla y se puede tocar.
   const sb = $('#spec-btn');
-  const sp = run.special ?? 0;
-  if (sb.hidden === !run.result) sb.hidden = !!run.result;
+  const sp = run.result ? 0 : (run.special ?? 0);
   sb.style.setProperty('--p', String(sp));
+  // Franja arriba del tablero: tu vida, la del monstruo y cuándo pega, para no tener que mirar arriba.
+  const hpMaxB = maxHp(game.s);
+  $('#bh-hp').style.width = Math.max(0, run.heroHp / hpMaxB) * 100 + '%';
+  $('#bh-sh').style.width = Math.min(1, run.shield / hpMaxB) * 100 + '%';
+  $('#bh-ehp').style.width = (game.respawning || run.result === 'win' ? 0 : Math.max(0, run.enemyHp / enemyHp(run.level, boss)) * 100) + '%';
+  $('#bh-atk').style.width = atk.style.width;
+  $('#board-hud').classList.toggle('soon', !ch && run.stun <= 0 && run.enemyTimer < 1);
+  $('#board').classList.toggle('low-hp', !run.result && run.heroHp / hpMaxB < 0.3);
   sb.classList.toggle('ready', sp >= 1);
   atk.parentElement!.classList.toggle('stunned', run.stun > 0);
   atk.parentElement!.classList.toggle('soon', run.stun <= 0 && run.enemyTimer < 1);
@@ -990,6 +1001,17 @@ function renderScreen() {
     r.innerHTML = html;
     r.dataset.k = html;
   }
+}
+
+/** Texto que salta en la franja de arriba del tablero. */
+function boardPop(text: string, cls: string) {
+  const hud = $('#board-hud');
+  if (hud.querySelectorAll('.bh-pop').length > 3) hud.querySelector('.bh-pop')?.remove();
+  const el = document.createElement('span');
+  el.className = 'bh-pop ' + cls;
+  el.textContent = text;
+  hud.appendChild(el);
+  setTimeout(() => el.remove(), 900);
 }
 
 /** Golpe especial: destello, un tajo gigante que cruza la pantalla y el número enorme. */
@@ -1234,6 +1256,9 @@ function wireGame() {
       if (e.dmg > 0) {
         restartAnim($('#hero'), 'hit');
         floatText('-' + fmt(e.dmg), 'ouch', 24, 34);
+        // También en el tablero, que es donde estás mirando.
+        restartAnim($('#board'), 'hurt-flash');
+        boardPop('-' + fmt(e.dmg), 'ouch');
       }
       if (e.blocked > 0) floatText(`🛡️ ${fmt(e.blocked)}`, 'shield', 30, 22);
     } else if (e.type === 'kill') {
@@ -1248,6 +1273,7 @@ function wireGame() {
       restartAnim($('#enemy'), 'charge-in');
       navigator.vibrate?.([20, 40, 20]);
     } else if (e.type === 'charge-end') {
+      boardPop(e.how === 'blocked' ? '🛡️ ¡Bloqueado!' : e.how === 'interrupted' ? '⚔️ ¡Cortado!' : '💥 ¡Golpe fuerte!', 'word ' + e.how);
       if (e.how === 'blocked') floatText('🛡️ ¡BLOQUEADO!', 'big-word block', 50, 30);
       else if (e.how === 'interrupted') {
         floatText('⚔️ ¡CORTADO!', 'big-word cut', 62, 26);
@@ -3092,6 +3118,30 @@ async function doInstall() {
 if ('serviceWorker' in navigator && import.meta.env.PROD && import.meta.env.MODE !== 'single') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// ---------- Aviso de versión nueva ----------
+// Cada tanto se fija si se publicó otra versión; si la hay, aparece un cartel para actualizar.
+declare const __BUILD__: string;
+function checkVersion() {
+  if (!import.meta.env.PROD || import.meta.env.MODE === 'single' || document.querySelector('.update-bar')) return;
+  fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v: { build?: string } | null) => {
+      if (!v?.build || v.build === __BUILD__ || document.querySelector('.update-bar')) return;
+      const bar = document.createElement('div');
+      bar.className = 'update-bar';
+      bar.innerHTML = `<span>✨ Hay una versión nueva del juego</span><button>Actualizar</button>`;
+      bar.querySelector('button')!.addEventListener('click', () => {
+        if (game.s.run && !game.s.run.result && !confirm('Vas a salir de la pelea. ¿Actualizar igual?')) return;
+        location.reload();
+      });
+      document.body.appendChild(bar);
+    })
+    .catch(() => {});
+}
+setInterval(checkVersion, 60_000);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && checkVersion());
+setTimeout(checkVersion, 5000);
 
 // ---------- Ciclo principal ----------
 

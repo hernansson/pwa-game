@@ -1336,10 +1336,10 @@ button.res { cursor: pointer; }
 #app.in-run .stage { height: 26dvh; min-height: 172px; max-height: 240px; }
 #app.in-run .lower { padding-top: 8px; }
 .forge { container-type: size; }
-.pboard { width: min(100cqw, 420px, calc((100cqh - 2px) * var(--cols) / var(--rows))); }
+.pboard { width: min(100cqw, 420px, calc((100cqh - 54px) * var(--cols) / var(--rows))); }
 .forge .hint { margin: 6px 0 0; font-size: 12px; }
-.forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 46px) * var(--cols) / var(--rows))); }
-@media (max-height: 640px) { .forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 2px) * var(--cols) / var(--rows))); } }
+.forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 98px) * var(--cols) / var(--rows))); }
+@media (max-height: 640px) { .forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 54px) * var(--cols) / var(--rows))); } }
 /* ---- Formas de las legendarias ---- */
 .evo-ring, .evo-rays, .evo-orbit { transform-box: fill-box; transform-origin: center; }
 .evo-ring { animation: lgSpin 8s linear infinite; }
@@ -1719,3 +1719,50 @@ button.res { cursor: pointer; }
 /* Truco del jefe en la ficha del nivel */
 .li-trick { font-size: 10.5px; color: #ffd9c0; margin-top: 3px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .li-trick b { color: #fff; }
+
+/* Aviso de versión nueva */
+.update-bar { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 24px);
+  padding: 8px 8px 8px 14px; border-radius: 999px; background: linear-gradient(90deg, #3a2a7a, #22184e); border: 1px solid #8b6bff; box-shadow: 0 6px 20px rgba(0,0,0,.5), 0 0 16px rgba(139,107,255,.5); font-size: 13px; font-weight: 800; animation: ubIn .4s ease-out; }
+.update-bar button { border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 900; background: linear-gradient(180deg, #ffd35a, #f08a1a); color: #2a1300; box-shadow: 0 3px 0 #8a4a00; }
+@keyframes ubIn { from { transform: translate(-50%, -30px); opacity: 0; } }
+
+/* ---------- Franja arriba del tablero ---------- */
+.board-hud { position: relative; display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 8px; width: min(100%, 380px); margin: 0 auto 6px; height: 46px; }
+.bh-side { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.bh-side.foe { justify-content: flex-end; }
+.bh-col { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bh-ico { font-size: 15px; filter: drop-shadow(0 1px 0 #000); }
+.bh-bar { position: relative; flex: 1; height: 11px; border-radius: 6px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.12); overflow: hidden; }
+.bh-bar i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .15s linear; }
+.bh-bar .bf { background: linear-gradient(180deg, #6dff8a, #22b04a); }
+.bh-bar .bs { background: rgba(110,180,255,.7); height: 45%; top: auto; }
+.bh-bar.foe .bf { left: auto; right: 0; background: linear-gradient(180deg, #ff7a6a, #d8301a); }
+.bh-atk { height: 4px; border-radius: 2px; background: rgba(0,0,0,.45); overflow: hidden; }
+.bh-atk i { display: block; height: 100%; margin-left: auto; background: #ffb02e; }
+.board-hud.soon .bh-atk i { background: #ff3a2a; box-shadow: 0 0 6px #ff3a2a; }
+.board-hud.soon .bh-side.foe .bh-ico { animation: cgShake .12s linear infinite; }
+#board.low-hp { box-shadow: 0 0 0 2px #ff3a2a, 0 0 18px rgba(255,40,30,.6); animation: lowHp 1s ease-in-out infinite; border-radius: 16px; }
+@keyframes lowHp { 50% { box-shadow: 0 0 0 2px #ff3a2a, 0 0 4px rgba(255,40,30,.3); } }
+#board.hurt-flash { animation: hurtFlash .35s ease-out; }
+@keyframes hurtFlash { 0% { box-shadow: inset 0 0 0 999px rgba(255,30,30,.28), 0 0 24px #ff2a1a; } 100% { box-shadow: none; } }
+#board.charging { box-shadow: 0 0 0 3px #ff3a2a, 0 0 22px rgba(255,40,30,.8); border-radius: 16px; animation: cgFrame .4s ease-in-out infinite alternate; }
+@keyframes cgFrame { to { box-shadow: 0 0 0 3px #ffb02e, 0 0 30px rgba(255,80,30,.95); } }
+.bh-pop { position: absolute; left: 50%; top: 2px; transform: translateX(-50%); z-index: 9; pointer-events: none; font-size: 16px; font-weight: 1000; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 6px #000; animation: bhPop .9s ease-out forwards; }
+.bh-pop.ouch { left: 20%; color: #ff6a5a; }
+.bh-pop.word { font-size: 18px; }
+.bh-pop.blocked { color: #8fd0ff; } .bh-pop.interrupted { color: #ffe066; } .bh-pop.hit { color: #ff5a4a; }
+@keyframes bhPop { from { transform: translate(-50%, 6px) scale(.7); opacity: 0; } 20% { transform: translate(-50%, 0) scale(1.1); opacity: 1; } to { transform: translate(-50%, -16px); opacity: 0; } }
+
+/* El aviso de ataque fuerte tapa la franja (justo arriba del tablero). */
+.board-hud .charge-hud { top: -4px; left: 0; right: 54px; width: auto; transform: none; padding: 3px 8px 5px; animation: cgPulse .5s ease-in-out infinite alternate; }
+.board-hud .charge-hud b { font-size: 14px; }
+.board-hud .charge-hud small { margin: 0 0 3px; }
+
+/* Botón del especial en el centro de la franja */
+.board-hud .spec-btn { position: relative; left: auto; bottom: auto; transform: none; width: 46px; height: 46px; }
+.board-hud .spec-btn.ready { animation: sbReady2 .7s ease-in-out infinite alternate; }
+@keyframes sbReady2 { from { transform: scale(1); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 10px #ffb02e; } to { transform: scale(1.12); box-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 26px #ffd34d; } }
+.board-hud .spec-btn.nope { animation: sbNope2 .3s; }
+@keyframes sbNope2 { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.board-hud .spec-btn small { font-size: 6.5px; }
+.bh-col .bh-bar { flex: none; }
