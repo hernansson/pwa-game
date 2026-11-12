@@ -300,6 +300,17 @@ async function runStart(env: Env, user: User, level: number) {
   return out;
 }
 
+/** Misiones del día: suma lo que avanzó en una pelea (el combo cuenta el mejor). */
+function addDailyProgress(g: Game, snap: GameState, after: GameState) {
+  const dl = g.rollDay();
+  const ad = after.daily;
+  if (ad.day !== dl.day) return;
+  for (const k of Object.keys(ad.prog)) {
+    const base = snap.daily.day === ad.day ? (snap.daily.prog[k] ?? 0) : 0;
+    dl.prog[k] = k === 'combo' ? Math.max(dl.prog[k] ?? 0, ad.prog[k]) : (dl.prog[k] ?? 0) + Math.max(0, ad.prog[k] - base);
+  }
+}
+
 async function runFinish(env: Env, user: User, runId: string, log: unknown) {
   const run = await env.DB.prepare('SELECT level, seed, snapshot, started, done FROM runs WHERE id = ? AND sub = ?')
     .bind(runId, user.sub)
@@ -318,15 +329,7 @@ async function runFinish(env: Env, user: User, runId: string, log: unknown) {
   if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
   const after = out.state;
   return mutate(env, user, (s, g) => {
-    // Misiones del día: se suma el progreso de la pelea (el combo cuenta el mejor).
-    const dl = g.rollDay();
-    const ad = after.daily;
-    if (ad.day === dl.day) {
-      for (const k of Object.keys(ad.prog)) {
-        const base = snap.daily.day === ad.day ? (snap.daily.prog[k] ?? 0) : 0;
-        dl.prog[k] = k === 'combo' ? Math.max(dl.prog[k] ?? 0, ad.prog[k]) : (dl.prog[k] ?? 0) + Math.max(0, ad.prog[k] - base);
-      }
-    }
+    addDailyProgress(g, snap, after);
     // Se suma lo que dio la pelea (no se pisa el progreso: entre medio pudo comprar cosas).
     s.gold += after.gold - snap.gold;
     s.gems += after.gems - snap.gems;
@@ -445,7 +448,8 @@ async function duelFinish(env: Env, user: User, runId: string, log: unknown) {
     .first<{ code: string; snapshot: string; started: number; done: number; level: number; seed: number }>();
   if (!e || e.done) throw new HttpError(404, 'run_not_found');
   if (!Array.isArray(log) || log.length > 5000) throw new HttpError(400, 'bad_log');
-  const out = replayRun(migrate(JSON.parse(e.snapshot)), e.level, e.seed, log as number[][], true);
+  const snap = migrate(JSON.parse(e.snapshot));
+  const out = replayRun(snap, e.level, e.seed, log as number[][], true);
   if (!out.ok) throw new HttpError(422, 'replay_' + out.error);
   const elapsed = (Date.now() - e.started) / 1000;
   if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
@@ -455,7 +459,8 @@ async function duelFinish(env: Env, user: User, runId: string, log: unknown) {
     .bind(damage, out.report.maxCombo, runId)
     .run();
   if (claim.meta.changes !== 1) throw new HttpError(404, 'run_not_found');
-  const base = await readUser(env, user);
+  // Lo que juntó en el reto también cuenta para las misiones del día.
+  const base = await mutate(env, user, (_s, g) => addDailyProgress(g, snap, out.state));
   return { ...base, result: { damage, info: await duelInfo(env, user, e.code) } };
 }
 
@@ -546,7 +551,8 @@ async function wbFinish(env: Env, user: User, runId: string, log: unknown) {
   if (!e || e.done) throw new HttpError(404, 'run_not_found');
   if (!Array.isArray(log) || log.length > 5000) throw new HttpError(400, 'bad_log');
   if (Date.now() - e.started > RUN_TTL) throw new HttpError(410, 'run_expired');
-  const out = replayRun(migrate(JSON.parse(e.snapshot)), WORLD_BOSS.level, e.seed, log as number[][], true);
+  const snap = migrate(JSON.parse(e.snapshot));
+  const out = replayRun(snap, WORLD_BOSS.level, e.seed, log as number[][], true);
   if (!out.ok) throw new HttpError(422, 'replay_' + out.error);
   const elapsed = (Date.now() - e.started) / 1000;
   if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
@@ -555,7 +561,7 @@ async function wbFinish(env: Env, user: User, runId: string, log: unknown) {
     .bind(damage, out.report.maxCombo, runId)
     .run();
   if (claim.meta.changes !== 1) throw new HttpError(404, 'run_not_found');
-  const base = await readUser(env, user);
+  const base = await mutate(env, user, (_s, g) => addDailyProgress(g, snap, out.state));
   return { ...base, result: { damage, info: await wbInfo(env, user) } };
 }
 

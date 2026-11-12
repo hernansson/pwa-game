@@ -176,6 +176,7 @@ document.querySelector('#app')!.innerHTML = `
       <div class="rail left">
         <button class="rail-btn" data-open="cofres"><span class="ri">🎁</span><small id="rail-chest">Cofres</small><i class="dot" data-dot="cofres" hidden></i></button>
         <button class="rail-btn" data-open="liga"><span class="ri">🏆</span><small id="rail-league">Liga</small></button>
+        <button class="rail-btn missions" id="rail-missions" data-open="misiones"><span class="ri">🎯</span><small>Misiones</small><b class="rm-n" id="rail-missions-n" hidden></b></button>
       </div>
       <div class="stage-card" id="stage-card"></div>
       <div class="rail right">
@@ -608,6 +609,7 @@ function finishDuel(local: ClearReport) {
   const show = (html: string) => setTimeout(() => showModal(html, true), Math.max(0, 1100 - (Date.now() - t0)));
   act<{ damage: number; info: DuelInfo }>('duel_finish', { runId: id, log: game.log }).then(
     (a) => {
+      applyServer(a.state);
       const d = a.result.info;
       const first = d.rank === 1 && d.entries.filter((e) => e.done).length > 1;
       show(`<div class="result duel-result ${first ? 'win' : ''}">
@@ -700,7 +702,7 @@ function wbLiveHtml(d: WbInfo): string {
     : '';
   return `${claim}
     <div class="wb-me"><div><small>Tu daño de hoy</small><b>💥 ${fmt(d.total)}</b></div><div><small>Puesto</small><b>${d.rank ? '#' + d.rank : '—'}</b><small>de ${d.players}</small></div><div><small>Intentos</small><span class="wb-dots">${dots}</span></div></div>
-    <div class="wb-btns">${left ? `<button class="primary big" data-wb-play>⚔️ Atacar · quedan ${left}</button>` : `<button class="big" disabled>Sin intentos · vuelve mañana</button>`}<button data-wb-rank>🏅 Ranking</button></div>`;
+    <div class="wb-btns">${left ? `<button class="wb-attack" data-wb-play><span class="wa-ic">⚔️</span><span class="wa-txt"><b>¡ATACAR!</b><small>${left === 1 ? 'Último intento' : `Quedan ${left} intentos`}</small></span><i class="wa-shine"></i></button>` : `<button class="wb-attack off" disabled><span class="wa-ic">⏳</span><span class="wa-txt"><b>Sin intentos</b><small>Vuelve mañana</small></span></button>`}<button class="wb-rank" data-wb-rank><span>🏅</span><small>Ranking</small></button></div>`;
 }
 
 function loadWorldBoss() {
@@ -776,6 +778,7 @@ function finishWorldBoss(local: ClearReport) {
   const show = (html: string) => setTimeout(() => showModal(html, true), Math.max(0, 1100 - (Date.now() - t0)));
   act<{ damage: number; info: WbInfo }>('wb_finish', { runId: run.runId, log: game.log }).then(
     (a) => {
+      applyServer(a.state);
       const d = a.result.info;
       wbLast = d;
       const left = Math.max(0, d.tries - d.used);
@@ -1517,7 +1520,7 @@ window.addEventListener('pointercancel', endDrag);
 
 // ---------- Paneles ----------
 
-type Tab = 'heroe' | 'arsenal' | 'cofres' | 'liga' | 'eventos' | 'vip';
+type Tab = 'heroe' | 'arsenal' | 'cofres' | 'liga' | 'eventos' | 'vip' | 'misiones';
 let openTab: Tab | null = null;
 
 const TAB_TITLES: Record<Tab, [string, string]> = {
@@ -1526,6 +1529,7 @@ const TAB_TITLES: Record<Tab, [string, string]> = {
   cofres: ['Tienda', 'Cofres, oro y gemas'],
   liga: ['Liga semanal', 'Compite contra otros 29 héroes'],
   eventos: ['Eventos', 'Retos con amigos y lo que viene'],
+  misiones: ['Misiones', 'Premio diario y misiones que dan gemas'],
   vip: ['Zona VIP', 'Ventajas para los que van en serio'],
 };
 
@@ -1629,7 +1633,7 @@ function claimDaily(what: string) {
   };
   if (online()) {
     const p = what === 'login' ? act<{ gems: number }>('daily_login') : act<{ gems: number }>('mission_claim', { id: what });
-    p.then((a) => (applyServer(a.state), done(a.result.gems)), (e) => toast(errorText(e)));
+    p.then((a) => (applyServer(a.state), done(a.result.gems)), (e) => (toast(errorText(e)), resync()));
     return;
   }
   const g = what === 'login' ? game.claimLogin() : game.claimMission(what);
@@ -1656,8 +1660,11 @@ function renderDots() {
     heroe: UPGRADES.some((u) => game.canBuy(u.id)),
     arsenal: ARMS.some((a) => armReady(a)),
     cofres: game.freeChestIn() === 0,
-    eventos: game.dailyReady() > 0,
   };
+  const ready = game.dailyReady();
+  $('#rail-missions-n').hidden = !ready;
+  $('#rail-missions-n').textContent = String(ready);
+  $('#rail-missions').classList.toggle('ready', ready > 0);
   document.querySelectorAll<HTMLElement>('[data-dot]').forEach((d) => (d.hidden = !dots[d.dataset.dot!]));
   $('#vip-btn').hidden = !!s.run;
 }
@@ -2537,9 +2544,12 @@ function renderSheet(full: boolean) {
   if (!full) return;
   if (openTab === 'arsenal') return renderArsenal();
   if (openTab === 'vip') return renderVip();
+  if (openTab === 'misiones') {
+    body.innerHTML = dailyBox();
+    return;
+  }
   if (openTab === 'eventos') {
     body.innerHTML = `
-      ${dailyBox()}
       ${duelBox()}
       ${worldBossBox()}
       <div class="event raid">

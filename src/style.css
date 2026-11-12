@@ -1621,3 +1621,28 @@ button.res { cursor: pointer; }
 @keyframes moAura { 50% { transform: scale(1.08); opacity: .7; } }
 .sc-art .evo-lock { font-size: 34px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
 .sc-art .evo-lock small { font-size: 11px; font-weight: 900; color: #fff; background: rgba(0,0,0,.7); border-radius: 999px; padding: 2px 6px; margin-top: 2px; white-space: nowrap; }
+
+/* Botón flotante de misiones */
+.rail-btn.missions .ri { background: linear-gradient(180deg, #3a2a7a, #22184e); }
+.rail-btn.missions.ready .ri { background: linear-gradient(180deg, #ffd35a, #f08a1a); border-color: #a3670b; animation: rmBounce 1.8s ease-in-out infinite; box-shadow: 0 3px 0 #8a4a00, 0 0 14px rgba(255,190,60,.7); }
+@keyframes rmBounce { 0%, 60%, 100% { transform: none; } 70% { transform: translateY(-5px) rotate(-6deg); } 80% { transform: translateY(0) rotate(5deg); } 90% { transform: rotate(-3deg); } }
+.rm-n { position: absolute; top: -5px; right: -2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 900; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+
+/* Botón de atacar al jefe mundial */
+.wb-btns { grid-template-columns: 1fr 70px; gap: 8px; align-items: stretch; }
+.wb-attack { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 10px; border: 2px solid #ffd35a; border-radius: 16px; padding: 10px 14px;
+  background: linear-gradient(180deg, #ff7a2a 0%, #e8381a 55%, #b81f10 100%); color: #fff; box-shadow: 0 5px 0 #6a0f06, 0 0 18px rgba(255,90,30,.55), inset 0 2px 0 rgba(255,255,255,.35); animation: waPulse 1.6s ease-in-out infinite; }
+.wb-attack:active { transform: translateY(3px); box-shadow: 0 2px 0 #6a0f06, 0 0 12px rgba(255,90,30,.5), inset 0 2px 0 rgba(255,255,255,.35); }
+.wa-ic { font-size: 28px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.4)); animation: waSword 1.6s ease-in-out infinite; }
+.wa-txt { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.wa-txt b { font-size: 22px; font-weight: 1000; letter-spacing: 1px; text-shadow: 0 2px 0 #6a0f06, 0 0 10px rgba(255,220,120,.5); }
+.wa-txt small { font-size: 11px; font-weight: 800; opacity: .95; }
+.wa-shine { position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent); transform: skewX(-20deg); animation: waShine 2.4s ease-in-out infinite; pointer-events: none; }
+@keyframes waShine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+@keyframes waPulse { 50% { box-shadow: 0 5px 0 #6a0f06, 0 0 28px rgba(255,120,40,.85), inset 0 2px 0 rgba(255,255,255,.35); } }
+@keyframes waSword { 50% { transform: rotate(-12deg) scale(1.1); } }
+.wb-attack.off { background: linear-gradient(180deg, #4a3a5a, #2a2038); border-color: #5a4a6a; box-shadow: 0 4px 0 #15101e; animation: none; color: #cfc4e0; }
+.wb-attack.off .wa-ic { animation: none; }
+.wb-rank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid #ffb02e66; border-radius: 16px; background: rgba(0,0,0,.3); color: #fff; padding: 6px 4px; box-shadow: 0 4px 0 rgba(0,0,0,.4); }
+.wb-rank span { font-size: 22px; }
+.wb-rank small { font-size: 10px; font-weight: 800; }
