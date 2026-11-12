@@ -123,21 +123,26 @@ export function skinById(id: string): Skin {
 
 export function helmSvg(s: Skin): string {
   if (s.helm === 'kabuto') {
-    return `<path d="M36 30 Q50 12 64 30 L64 40 L36 40Z" fill="${s.helmColor ?? s.armor}" stroke="#14080c" stroke-width="2"/>
+    return `<g transform="translate(50 30) scale(1.22) translate(-50 -30)"><path d="M36 30 Q50 12 64 30 L64 40 L36 40Z" fill="${s.helmColor ?? s.armor}" stroke="#14080c" stroke-width="2"/>
       <path d="M38 28 Q30 10 24 8 Q34 18 40 26Z M62 28 Q70 10 76 8 Q66 18 60 26Z" fill="${s.trim}" stroke="#14080c" stroke-width="1.5"/>
       <rect x="40" y="33" width="20" height="6" rx="2" fill="${s.visor}"/>
-      <circle cx="50" cy="24" r="3" fill="${s.trim}"/>`;
+      <circle cx="50" cy="24" r="3" fill="${s.trim}"/></g>`;
   }
   if (s.helm === 'cyber') {
-    return `<path d="M35 38 L37 24 Q50 14 63 24 L65 38Z" fill="${s.helmColor ?? s.armor}" stroke="#05060c" stroke-width="2"/>
+    return `<g transform="translate(50 30) scale(1.22) translate(-50 -30)"><path d="M35 38 L37 24 Q50 14 63 24 L65 38Z" fill="${s.helmColor ?? s.armor}" stroke="#05060c" stroke-width="2"/>
       <rect x="38" y="29" width="24" height="5" rx="2.5" fill="${s.visor}" class="neon"/>
       <path d="M60 22 L72 14" stroke="${s.trim}" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="72" cy="14" r="2.2" fill="${s.cape}"/>`;
+      <circle cx="72" cy="14" r="2.2" fill="${s.cape}"/></g>`;
   }
-  return `<path d="M36 40 L36 28 Q50 14 64 28 L64 40Z" fill="${s.helmColor ?? s.armor}" stroke="#1a1d26" stroke-width="2"/>
-    <rect x="41" y="30" width="18" height="4" rx="1.5" fill="${s.visor}"/>
-    <path d="M50 16 Q58 4 66 10 Q58 10 52 18Z" fill="${s.cape}" stroke="#1a1d26" stroke-width="1.2"/>
-    <rect x="48.5" y="18" width="3" height="20" fill="${s.trim}" opacity=".9"/>`;
+  // Yelmo de caballero: casco grande y redondeado, cresta, visera con ojos que brillan y penacho.
+  return `<path d="M50 4 Q62 -2 74 6 Q66 6 60 10 Q70 10 76 18 Q64 14 56 16Z" fill="${s.cape}" stroke="#141826" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M33 42 L33 27 Q33 11 50 11 Q67 11 67 27 L67 42 Q50 47 33 42Z" fill="${s.helmColor ?? s.armor}" stroke="#141826" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M37 26 Q38 15 49 14" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".45"/>
+    <path d="M60 15 Q66 20 66 30 L66 41 Q62 43 58 43Z" fill="${s.armorDark}" opacity=".45"/>
+    <path d="M48.5 11.5 L51.5 11.5 L51.5 44 L48.5 44Z" fill="${s.trim}" stroke="#141826" stroke-width="1"/>
+    <path d="M36 27 L64 27 L64 34 Q50 37 36 34Z" fill="${s.visor}" stroke="#141826" stroke-width="1.6"/>
+    <path d="M40 30.5 L46 30.5 M54 30.5 L60 30.5" stroke="#9fe8ff" stroke-width="2.2" stroke-linecap="round" class="hero-eyes"/>
+    <g fill="#141826" opacity=".55"><circle cx="42" cy="39" r="1"/><circle cx="46" cy="40" r="1"/><circle cx="54" cy="40" r="1"/><circle cx="58" cy="39" r="1"/></g>`;
 }
 
 export interface HeroFight {
@@ -162,23 +167,39 @@ export function heroSvg(skin: Skin, weaponLevel: number, fight: HeroFight = {}):
   const glow = g
     ? `<ellipse cx="50" cy="62" rx="${30 + g * 2.5}" ry="${38 + g * 2.5}" fill="${pieceFrame(g)}" opacity="${Math.min(0.55, 0.12 + g * 0.045)}" class="aura potion-glow"/>`
     : '';
+  const o = '#141826';
   return `<svg viewBox="0 0 120 110" class="hero-svg" aria-hidden="true">
     ${glow}${aura}
-    <ellipse cx="50" cy="104" rx="26" ry="5" fill="#000" opacity=".25"/>
-    <path d="M38 42 Q22 70 26 98 L48 92 L46 44Z" fill="${skin.cape}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/>
-    <rect x="40" y="78" width="9" height="22" rx="3" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
-    <rect x="52" y="78" width="9" height="22" rx="3" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
-    <rect x="38" y="97" width="12" height="6" rx="2" fill="${skin.trim}"/>
-    <rect x="51" y="97" width="12" height="6" rx="2" fill="${skin.trim}"/>
-    <path d="M36 44 L64 44 L66 80 L34 80Z" fill="${skin.armor}" stroke="#0d0f16" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M42 50 L58 50 L56 70 L44 70Z" fill="${skin.armorDark}" opacity=".7"/>
-    <rect x="34" y="72" width="32" height="5" fill="${skin.trim}"/>
+    <ellipse cx="50" cy="104" rx="28" ry="5" fill="#000" opacity=".3"/>
+    <path d="M40 44 Q20 60 18 100 Q26 95 32 100 Q38 94 45 99 Q50 94 54 98 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M40 48 Q26 64 25 94 Q30 92 33 95 Q36 70 46 50Z" fill="#000" opacity=".22"/>
+    <path d="M41 78 L48 78 L47 96 L40 96Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M53 78 L60 78 L62 96 L55 96Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="44.5" cy="86" r="3.6" fill="${skin.armor}" stroke="${o}" stroke-width="1.6"/>
+    <circle cx="57.5" cy="86" r="3.6" fill="${skin.armor}" stroke="${o}" stroke-width="1.6"/>
+    <path d="M37 95 L49 95 L50 103 L35 103 Q35 98 37 95Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M53 95 L64 95 Q67 98 67 103 L53 103Z" fill="${skin.armorDark}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M37 95 L49 95 L49 97.5 L37 97.5Z M53 95 L64 95 L64.5 97.5 L53 97.5Z" fill="${skin.trim}"/>
+    <path d="M35 47 Q50 40 65 47 L63 76 Q50 80 37 76Z" fill="${skin.armor}" stroke="${o}" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M56 45 Q62 46 65 47 L63 76 Q59 77.5 55 78Z" fill="${skin.armorDark}" opacity=".5"/>
+    <path d="M39 50 Q42 46 48 45" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".45"/>
+    <path d="M50 52 L56 55 L55 63 L50 67 L45 63 L44 55Z" fill="${skin.trim}" stroke="${o}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M50 55 L53 56.5 L52.5 61 L50 63 Z" fill="#fff" opacity=".35"/>
+    <path d="M36 71 L64 71 L64 76 L36 76Z" fill="#4a3424" stroke="${o}" stroke-width="1.6"/>
+    <rect x="46.5" y="70" width="7" height="7" rx="1.5" fill="${skin.trim}" stroke="${o}" stroke-width="1.4"/>
+    <path d="M43 76 L57 76 L56 89 L50 92 L44 89Z" fill="${skin.cape}" stroke="${o}" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M44 79 L56 79" stroke="${skin.trim}" stroke-width="1.6"/>
+    <path d="M29 50 Q30 40 40 40 Q45 42 45 48 Q37 46 31 54Z" fill="${skin.armor}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M31 53 Q37 46 45 48" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     ${helmSvg(skin)}
     ${fight.shield ? heroShield(fight.shield, fight.shieldShape ?? 0) : ''}
+    <path d="M56 47 Q58 39 66 40 Q73 42 72 51 Q66 46 58 50Z" fill="${skin.armor}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M58 50 Q66 46 72 51" stroke="${skin.trim}" stroke-width="2" fill="none"/>
     <g class="hero-arm">
-      <circle cx="64" cy="54" r="7" fill="${skin.armorDark}" stroke="#0d0f16" stroke-width="2"/>
+      <circle cx="64" cy="55" r="6.5" fill="${skin.armorDark}" stroke="${o}" stroke-width="2"/>
       <g transform="translate(41 25) scale(.62)">${famIcon('espada', fight.swordShape ?? 0, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g>
-      <circle cx="70" cy="58" r="5" fill="${skin.armor}" stroke="#0d0f16" stroke-width="2"/>
+      <rect x="65" y="54" width="10" height="9" rx="3" fill="${skin.armor}" stroke="${o}" stroke-width="2"/>
+      <path d="M66 57 L74 57" stroke="${skin.trim}" stroke-width="1.6"/>
     </g>
   </svg>`;
 }

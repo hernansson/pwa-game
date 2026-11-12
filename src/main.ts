@@ -1321,15 +1321,11 @@ function renderHeroSheet() {
     </div>`;
   const slot = (f: ArmFam) => {
     const d = armById(s.arms[f])!;
-    const st = s.arsenal[d.id];
-    const goal = shardGoal(d.id);
-    const ready = armReady(d);
-    return `<button class="hs-slot ${ready ? 'ready' : ''}" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}">
-      <span class="t-icon">${armIcon(d)}</span><small>Nv ${st.lvl}</small>
-      <span class="hs-bar"><i style="width:${Math.min(100, (st.shards / goal) * 100)}%"></i></span><em>${st.shards}/${goal}</em>
-      ${ready ? '<i class="dot"></i>' : ''}
+    return `<button class="hs-slot ${armReady(d) ? 'ready' : ''}" data-goto-arm="${f}" style="--rar:${RARITY_COLORS[d.rarity]}" aria-label="${d.name}">
+      <span class="t-icon">${armIcon(d)}</span>${armReady(d) ? '<i class="dot"></i>' : ''}
     </button>`;
   };
+
   $('#sheet-body').innerHTML = `
     <div class="hero-page">
       <div class="hs-scene" style="--rar:${RARITY_COLORS[skin.rarity]}">

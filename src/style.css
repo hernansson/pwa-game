@@ -1185,3 +1185,11 @@ button.res { cursor: pointer; }
 .hs-scene .hs-slots.right { grid-column: 3; }
 .hs-scene .hs-hero svg { width: auto; max-width: 78%; height: min(42dvh, 330px); max-height: none; }
 .hs-scene { min-height: 210px; }
+/* Atajos del héroe: solo el ícono en un círculo con el color de la rareza */
+.hs-scene .hs-slots { gap: 14px; align-items: center; }
+.hs-scene .hs-slot { width: 54px; height: 54px; padding: 0; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--rar); background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--rar) 35%, #1a1236), #0d0820 75%); box-shadow: 0 0 0 3px rgba(0,0,0,.35), 0 0 14px color-mix(in srgb, var(--rar) 45%, transparent), inset 0 2px 0 rgba(255,255,255,.12); transition: transform .15s; }
+.hs-scene .hs-slot:active { transform: scale(.92); }
+.hs-scene .hs-slot .t-icon { width: 38px; }
+.hs-scene .hs-slot .t-icon > *:not(svg) { display: none; }
+.hs-scene .hs-slot.ready { border-color: var(--rar); box-shadow: 0 0 0 3px rgba(0,0,0,.35), 0 0 16px rgba(70,224,138,.6); }
+.hs-scene .hs-slot .dot { top: 0; right: 0; }
