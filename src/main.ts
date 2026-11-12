@@ -873,7 +873,7 @@ function showResult(r: ClearReport) {
       <div class="stat-row"><span>Mejor combo</span><b>x${r.maxCombo}</b></div>
       <div class="stat-row"><span>Puntos de liga</span><b>+${fmt(r.points)}</b></div>
       ${r.gems ? `<div class="stat-row"><span>Primera victoria</span><b>+${r.gems} 💠</b></div>` : ''}
-      <div class="btns"><button data-leave>Inicio</button><button data-next="${r.level + 1}" class="primary">Siguiente ⚡${ENERGY_COST}</button></div></div>`,
+      <div class="btns"><button data-leave class="primary">Continuar</button></div></div>`,
       true,
     );
   } else {
