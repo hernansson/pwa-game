@@ -200,6 +200,18 @@ async function act(env: Env, user: User, b: Record<string, unknown>) {
         if (gold == null) throw new HttpError(400, 'cannot_buy');
         return { gold };
       });
+    case 'daily_login':
+      return mutate(env, user, (_s, g) => {
+        const gems = g.claimLogin();
+        if (gems == null) throw new HttpError(400, 'already_claimed');
+        return { gems };
+      });
+    case 'mission_claim':
+      return mutate(env, user, (_s, g) => {
+        const gems = g.claimMission(str('id'));
+        if (gems == null) throw new HttpError(400, 'not_ready');
+        return { gems };
+      });
     case 'gems_pack':
       throw new HttpError(402, 'needs_payment'); // gemas con dinero real: cuando haya cobros
     case 'refill':
@@ -297,7 +309,16 @@ async function runFinish(env: Env, user: User, runId: string, log: unknown) {
   const elapsed = (Date.now() - run.started) / 1000;
   if (out.steps * Game.STEP > elapsed + 5) throw new HttpError(422, 'too_fast');
   const after = out.state;
-  return mutate(env, user, (s) => {
+  return mutate(env, user, (s, g) => {
+    // Misiones del día: se suma el progreso de la pelea (el combo cuenta el mejor).
+    const dl = g.rollDay();
+    const ad = after.daily;
+    if (ad.day === dl.day) {
+      for (const k of Object.keys(ad.prog)) {
+        const base = snap.daily.day === ad.day ? (snap.daily.prog[k] ?? 0) : 0;
+        dl.prog[k] = k === 'combo' ? Math.max(dl.prog[k] ?? 0, ad.prog[k]) : (dl.prog[k] ?? 0) + Math.max(0, ad.prog[k] - base);
+      }
+    }
     // Se suma lo que dio la pelea (no se pisa el progreso: entre medio pudo comprar cosas).
     s.gold += after.gold - snap.gold;
     s.gems += after.gems - snap.gems;

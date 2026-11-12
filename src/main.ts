@@ -19,8 +19,12 @@ import {
   GOLD_PACKS,
   chestPrice,
   goldPackAmount,
+  DAILY_BONUS,
+  DAILY_MISSIONS,
+  LOGIN_GEMS,
+  dayNumber,
 } from './balance';
-import { EVO_COLORS, Skin, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
+import { EVO_COLORS, Skin, previewEvo, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
@@ -219,7 +223,7 @@ document.querySelector('#app')!.innerHTML = `
     <button data-tab="heroe"><span>🧝</span>Héroe<i class="dot" data-dot="heroe" hidden></i></button>
     <button data-tab="combate" class="center"><span>⚔️</span>Combate</button>
     <button data-tab="arsenal"><span>🛡️</span>Equipo<i class="dot" data-dot="arsenal" hidden></i></button>
-    <button data-tab="eventos"><span>🐉</span>Eventos</button>
+    <button data-tab="eventos"><span>🐉</span>Eventos<i class="dot" data-dot="eventos" hidden></i></button>
   </nav>
 
   <div class="sheet" id="sheet" hidden>
@@ -1330,6 +1334,69 @@ $('#sheet').addEventListener('click', (ev) => {
 $('#vip-btn').addEventListener('click', () => (openTab === 'vip' ? closeSheet() : openSheet('vip')));
 $('#settings').addEventListener('click', showSettings);
 
+// ---------- Diarias: premio por entrar y misiones que dan gemas ----------
+
+function dailyBox(): string {
+  const dl = game.rollDay();
+  const ready = game.loginReady();
+  const step = game.loginStep();
+  const days = LOGIN_GEMS.map((g, i) => {
+    const got = ready ? i < step : i <= step;
+    const today = ready && i === step;
+    return `<div class="dl-day ${got ? 'got' : ''} ${today ? 'today' : ''} ${i === 6 ? 'big' : ''}"><small>Día ${i + 1}</small><b>${got ? '✓' : `💠${g}`}</b></div>`;
+  }).join('');
+  const msLeft = (dayNumber() + 1) * 86400_000 + 3 * 3600_000 - Date.now();
+  const missions = DAILY_MISSIONS.map((m) => {
+    const p = Math.min(m.goal, dl.prog[m.stat] ?? 0);
+    const claimed = dl.claimed.includes(m.id);
+    const done = p >= m.goal;
+    return `<div class="dl-mis ${claimed ? 'claimed' : done ? 'done' : ''}">
+      <span class="dm-ic">${m.icon}</span>
+      <div class="dm-body"><b>${m.text}</b><div class="dm-bar"><i style="width:${(p / m.goal) * 100}%"></i><span>${fmt(p)}/${fmt(m.goal)}</span></div></div>
+      ${claimed ? '<em class="dm-ok">✓</em>' : `<button data-mission="${m.id}" ${done ? '' : 'disabled'}>💠 ${m.gems}</button>`}
+    </div>`;
+  }).join('');
+  const allClaimed = DAILY_MISSIONS.every((m) => dl.claimed.includes(m.id));
+  const bonusGot = dl.claimed.includes('bonus');
+  return `<div class="daily">
+    <div class="dl-head"><b>📅 Premio diario</b><small>${dl.streak && !ready ? `Racha de ${dl.streak} ${dl.streak === 1 ? 'día' : 'días'}` : 'Entra todos los días'}</small></div>
+    <div class="dl-days">${days}</div>
+    ${ready ? `<button class="dl-claim" data-daily-login>Cobrar 💠 ${LOGIN_GEMS[step]}</button>` : '<p class="dl-wait">Ya cobraste hoy. Mañana te espera el siguiente.</p>'}
+    <div class="dl-head"><b>🎯 Misiones de hoy</b><small>Se renuevan en ${timeText(msLeft)}</small></div>
+    ${missions}
+    <div class="dl-mis bonus ${bonusGot ? 'claimed' : allClaimed ? 'done' : ''}"><span class="dm-ic">🏆</span><div class="dm-body"><b>Completa todas las misiones</b><small>${DAILY_MISSIONS.filter((m) => dl.claimed.includes(m.id)).length}/${DAILY_MISSIONS.length} cobradas</small></div>
+      ${bonusGot ? '<em class="dm-ok">✓</em>' : `<button data-mission="bonus" ${allClaimed ? '' : 'disabled'}>💠 ${DAILY_BONUS}</button>`}</div>
+  </div>`;
+}
+
+function claimDaily(what: string) {
+  const done = (gems: number) => {
+    gemBurst(gems);
+    refreshSheet();
+    renderDots();
+  };
+  if (online()) {
+    const p = what === 'login' ? act<{ gems: number }>('daily_login') : act<{ gems: number }>('mission_claim', { id: what });
+    p.then((a) => (applyServer(a.state), done(a.result.gems)), (e) => toast(errorText(e)));
+    return;
+  }
+  const g = what === 'login' ? game.claimLogin() : game.claimMission(what);
+  if (g == null) return;
+  save(game.s);
+  done(g);
+}
+
+/** Gemas que saltan hacia el contador de arriba. */
+function gemBurst(gems: number) {
+  const box = document.createElement('div');
+  box.className = 'gem-burst';
+  box.innerHTML = `<b>+${gems} 💠</b>` + Array.from({ length: 10 }, (_, i) => `<i style="--a:${i * 36}deg;--d:${50 + (i % 3) * 20}px">💠</i>`).join('');
+  document.body.appendChild(box);
+  restartAnim($('#gems-btn'), 'pop');
+  navigator.vibrate?.([20, 30, 40]);
+  setTimeout(() => box.remove(), 1300);
+}
+
 /** Puntos de aviso en las pestañas: algo listo para subir o un cofre gratis. */
 function renderDots() {
   const s = game.s;
@@ -1337,6 +1404,7 @@ function renderDots() {
     heroe: UPGRADES.some((u) => game.canBuy(u.id)),
     arsenal: ARMS.some((a) => armReady(a)),
     cofres: game.freeChestIn() === 0,
+    eventos: game.dailyReady() > 0,
   };
   document.querySelectorAll<HTMLElement>('[data-dot]').forEach((d) => (d.hidden = !dots[d.dataset.dot!]));
   $('#vip-btn').hidden = !!s.run;
@@ -1985,16 +2053,26 @@ function renderArsenal() {
   const def = armById(armSel[fam] ?? game.s.arms[fam]) ?? list[0];
   const st = game.s.arsenal[def.id];
   const locked = st.lvl === 0;
+  if (evoKey !== def.id) {
+    evoKey = def.id;
+    evoPreview = null;
+  }
   const chest = CHESTS.find((c) => c.id === FAM_CHEST[fam])!;
   $('#sheet-body').innerHTML = `
     ${segHtml}
     <div class="showcase" style="--rar:${RARITY_COLORS[def.rarity]}">
-      <div class="sc-art ${locked ? 'locked' : def.fam === 'skin' ? 'skinv r-' + def.rarity : def.rarity === 'legendaria' ? 'legend ' + def.fam : ''}">${armShowcase(def, !locked)}${locked ? '<span class="lock">🔒</span>' : ''}</div>
+      ${(() => {
+        // Vista previa de una forma más alta: se ve como si ya la tuvieras.
+        const prev = def.rarity === 'legendaria' && evoPreview != null && evoPreview !== evoStage(st.lvl) ? evoPreview : null;
+        const shut = locked && prev == null;
+        const cls = shut ? 'locked' : def.fam === 'skin' ? 'skinv r-' + def.rarity : def.rarity === 'legendaria' ? 'legend ' + def.fam : '';
+        return `<div class="sc-art ${cls}">${previewEvo(prev, () => armShowcase(def, !shut))}${shut ? '<span class="lock">🔒</span>' : ''}${prev != null ? `<span class="evo-tag" style="--ec:${EVO_COLORS[prev]}">👁 Vista previa · nivel ${prev ? EVO_LEVELS[prev - 1] : 1}</span>` : ''}</div>`;
+      })()}
       <div class="sc-info">
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
         <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · ${armStatText(def, st.lvl)}`}<br><span>${levelGainText(fam)} por nivel${RARITY_LEVEL_BONUS[def.rarity] ? ` · arranca como una básica nivel ${1 + RARITY_LEVEL_BONUS[def.rarity]}` : ''}</span></p>
-        ${def.rarity === 'legendaria' && !locked ? evoPips(st.lvl) : ''}
+        ${def.rarity === 'legendaria' ? evoPips(st.lvl) : ''}
         <ul class="skills mini">${armSkills(def, false)}</ul>
       </div>
     </div>
@@ -2009,12 +2087,18 @@ function renderArsenal() {
     <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
 }
 
+/** Forma que se está mirando en la vitrina (null = la actual). */
+let evoPreview: number | null = null;
+let evoKey = '';
+
 /** Las 5 formas de una legendaria: en cuál está y en qué nivel cambia. */
 function evoPips(lvl: number): string {
   const e = evoStage(lvl);
   const next = EVO_LEVELS[e];
-  return `<div class="evo-pips" style="--ec:${EVO_COLORS[e]}"><div>${EVO_NAMES.map((_, i) => `<i class="${i <= e ? 'on' : ''} ${i === e ? 'cur' : ''}"></i>`).join('')}</div>
-    <small><b>${EVO_NAMES[e]}</b> · ${next ? `cambia en nivel ${next}` : 'forma final'}</small></div>`;
+  const sel = evoPreview ?? e;
+  return `<div class="evo-pips" style="--ec:${EVO_COLORS[sel]}"><div>${EVO_NAMES.map((_, i) => `<button data-evo-preview="${i}" class="${i <= e ? 'on' : ''} ${i === e ? 'cur' : ''} ${i === sel ? 'sel' : ''}" style="--pc:${EVO_COLORS[i]}" aria-label="${EVO_NAMES[i]}"></button>`).join('')}</div>
+    <small>${sel !== e ? `<b>${EVO_NAMES[sel]}</b> · en nivel ${sel ? EVO_LEVELS[sel - 1] : 1}` : `<b>${EVO_NAMES[e]}</b> · ${next ? `cambia en nivel ${next}` : 'forma final'}`}</small>
+    ${e < 4 ? '<em>Toca una barrita para ver cada forma</em>' : ''}</div>`;
 }
 
 /** Desbloquear, subir o usar una variante. Devuelve true si el clic era de esto. */
@@ -2152,6 +2236,7 @@ function renderSheet(full: boolean) {
   if (openTab === 'vip') return renderVip();
   if (openTab === 'eventos') {
     body.innerHTML = `
+      ${dailyBox()}
       ${duelBox()}
       <div class="event world-boss">
         <div class="ev-art">${enemySvg(21, true)}</div>
@@ -2171,6 +2256,15 @@ function renderSheet(full: boolean) {
 
 $('#sheet-body').addEventListener('click', (ev) => {
   const t = ev.target as HTMLElement;
+  if (t.closest('[data-daily-login]')) return claimDaily('login');
+  const evoBtn = t.closest('[data-evo-preview]') as HTMLElement | null;
+  if (evoBtn) {
+    const i = Number(evoBtn.dataset.evoPreview);
+    evoPreview = evoPreview === i ? null : i;
+    return renderArsenal();
+  }
+  const mis = t.closest('[data-mission]') as HTMLElement | null;
+  if (mis) return claimDaily(mis.dataset.mission!);
   const up = t.closest('[data-up]') as HTMLElement | null;
   if (up) {
     if (game.buy(up.dataset.up as UpgradeId)) {
@@ -2658,6 +2752,10 @@ if (!game.s.playerName && !online()) {
 }
 requestAnimationFrame(frame);
 duelFromLink();
+// Al entrar, si el premio del día está listo, se muestran las diarias (una vez por sesión).
+setTimeout(() => {
+  if (game.s.playerName && !game.s.run && !openTab && game.loginReady() && $('#modal').hidden) openSheet('eventos');
+}, online() ? 2500 : 900);
 setNavActive('combate');
 // Solo fuera de la versión publicada: acceso para pruebas automáticas.
 if (!PROD) Object.defineProperty(window, '__game', { get: () => game });

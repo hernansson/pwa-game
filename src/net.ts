@@ -154,6 +154,8 @@ export function errorText(e: unknown): string {
     duel_expired: 'Ese reto ya terminó.',
     duel_already_played: 'Ya jugaste este reto: hay un solo intento.',
     too_many_duels: 'Creaste muchos retos hoy. Prueba mañana.',
+    already_claimed: 'Ya cobraste el premio de hoy.',
+    not_ready: 'Todavía no está lista.',
   };
   if (m[code]) return m[code];
   if (code.startsWith('replay_')) return 'El servidor no pudo validar esa pelea.';

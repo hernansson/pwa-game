@@ -189,7 +189,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
   const o = '#3a0d05';
   const gold = skin.armor;
   const red = skin.armorDark;
-  const e = evoSource('skin');
+  const e = evoOf('skin');
   const c = EVO_COLORS[e];
   const wingScale = [1, 1, 1.08, 1.2, 1.36][e];
   // Proporción chibi (cabeza grande, piernas cortas), girado a tres cuartos mirando a la derecha y en guardia:
@@ -641,6 +641,18 @@ let evoSource: (fam: string) => number = () => 0;
 export function setEvoSource(fn: (fam: string) => number) {
   evoSource = fn;
 }
+let evoOverride: number | null = null;
+/** Dibuja con una forma elegida (vista previa de cómo se verá en niveles más altos). */
+export function previewEvo<T>(e: number | null, fn: () => T): T {
+  const old = evoOverride;
+  evoOverride = e;
+  try {
+    return fn();
+  } finally {
+    evoOverride = old;
+  }
+}
+const evoOf = (fam: string) => evoOverride ?? evoSource(fam);
 const PALETTES: Record<number, Record<string, string>> = {
   // Llama dorada: el fuego se vuelve más claro y caliente.
   2: { '#ff6a1a': '#ff9a1a', '#ff5a1f': '#ff7a1a', '#ff8a1f': '#ffb22e', '#ffc23a': '#ffe680', '#ffd34d': '#fff1a8', '#c8230f': '#e0560f', '#ff7a1a': '#ffa02a' },
@@ -701,7 +713,7 @@ export function famIcon(fam: string, shape: number, lvl: number, base: string, l
   const icons = ICONS[fam] ?? SWORDS;
   const svg = icons[Math.max(0, Math.min(icons.length - 1, shape))](pieceColor(fam, lvl, base), PIECE_DARK[fam] ?? '#222', lvl, f);
   if (shape === 3 && (fam === 'espada' || fam === 'escudo')) {
-    const e = evoSource(fam);
+    const e = evoOf(fam);
     if (e > 0) return layers ? evoIcon(svg, e) : evoPaint(svg, e);
   }
   return svg;

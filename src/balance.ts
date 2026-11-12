@@ -215,3 +215,35 @@ export function goldPackAmount(pack: number, level: number): number {
   const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
   return Math.round(raw / mag) * mag; // números redondos
 }
+
+// ---------- Gemas jugando: premio diario y misiones diarias ----------
+// Un jugador constante junta ~80 💠 por día (más las de primeras victorias): unas 2.400 por mes,
+// que alcanzan para ~45 cofres de skins. Así la legendaria se consigue jugando en 1 o 2 meses,
+// y pagar solo la acelera.
+
+/** Día de juego: cambia a las 00:00 de Argentina (UTC-3). */
+export function dayNumber(now = Date.now()): number {
+  return Math.floor((now - 3 * 3600_000) / 86400_000);
+}
+
+/** Premio por entrar cada día; el séptimo día seguido es el grande y después vuelve a empezar. */
+export const LOGIN_GEMS = [10, 10, 15, 15, 20, 20, 60];
+
+export type MissionStat = 'clears' | 'merges' | 'combo' | 'kills' | 'chests';
+export interface Mission {
+  id: string;
+  stat: MissionStat;
+  goal: number;
+  gems: number;
+  text: string;
+  icon: string;
+}
+export const DAILY_MISSIONS: Mission[] = [
+  { id: 'clears', stat: 'clears', goal: 3, gems: 10, text: 'Supera 3 niveles', icon: '🏁' },
+  { id: 'kills', stat: 'kills', goal: 25, gems: 10, text: 'Vence 25 enemigos', icon: '💀' },
+  { id: 'merges', stat: 'merges', goal: 150, gems: 10, text: 'Junta 150 piezas', icon: '🧩' },
+  { id: 'combo', stat: 'combo', goal: 10, gems: 10, text: 'Llega a un combo x10', icon: '🔥' },
+  { id: 'chests', stat: 'chests', goal: 1, gems: 5, text: 'Abre un cofre (el gratis vale)', icon: '🎁' },
+];
+/** Extra por completar todas las misiones del día. */
+export const DAILY_BONUS = 20;

@@ -64,6 +64,8 @@ export interface GameState {
     lastResult: { week: number; rank: number; moved: -1 | 0 | 1; gems: number } | null;
   };
   stats: { kills: number; merges: number; clears: number; fails: number };
+  /** Misiones del día y racha de entradas. */
+  daily: { day: number; streak: number; loginDay: number; prog: Record<string, number>; claimed: string[] };
   lastSeen: number;
   events: { t: number; e: string }[];
 }
@@ -102,6 +104,7 @@ export function newState(): GameState {
     pulls: {},
     league: { week: currentWeek(), points: 0, division: 0, joinedAt: Date.now(), lastResult: null },
     stats: { kills: 0, merges: 0, clears: 0, fails: 0 },
+    daily: { day: 0, streak: 0, loginDay: -10, prog: {}, claimed: [] },
     lastSeen: Date.now(),
     events: [],
   };
@@ -134,6 +137,9 @@ export function migrate(raw: unknown): GameState {
   for (const k of ['velocidad', 'forja', 'lluvia', 'calidad', 'calma', 'codicia']) delete (s.upgrades as Record<string, number>)[k];
   s.league = { ...base.league, ...(old.league ?? {}) };
   s.stats = { ...base.stats, ...(old.stats ?? {}) };
+  s.daily = { ...base.daily, ...(old.daily ?? {}) };
+  s.daily.prog = { ...(s.daily.prog ?? {}) };
+  s.daily.claimed = Array.isArray(s.daily.claimed) ? s.daily.claimed : [];
   if (typeof s.unlocked !== 'number') s.unlocked = 1;
   if (!s.stars || typeof s.stars !== 'object') s.stars = {};
   if (typeof s.energy !== 'number') {

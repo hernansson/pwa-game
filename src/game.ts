@@ -36,7 +36,7 @@ import {
   upgradeDef,
 } from './state';
 import { CHESTS, FENIX_SET, FREE_CHEST_HOURS, MAX_ARM_LEVEL, Mods, PITY, armById, pityPick, rollShards, unlockShards, upgradeGold, upgradeShards } from './arsenal';
-import { ENERGY_MAX, GOLD_PACKS, LEVELS_PER_WORLD, PASS, REFILL_GEMS, chestPrice, goldPackAmount } from './balance';
+import { DAILY_BONUS, DAILY_MISSIONS, ENERGY_MAX, LOGIN_GEMS, Mission, MissionStat, dayNumber, GOLD_PACKS, LEVELS_PER_WORLD, PASS, REFILL_GEMS, chestPrice, goldPackAmount } from './balance';
 
 export interface ClearReport {
   level: number;
@@ -257,10 +257,12 @@ export class Game {
 
   private applyMerge(run: Run, ev: MergeEvent) {
     this.s.stats.merges++;
+    this.bump('merges');
     run.merges++;
     run.combo = run.comboTimer > 0 ? run.combo + 1 : 1;
     run.comboTimer = comboTime(this.s) + this.mods.combo;
     run.maxCombo = Math.max(run.maxCombo, run.combo);
+    this.bump('combo', run.combo, true);
     const v = pieceValue(ev.lvl, ev.size) * (ev.burst ? 3 : 1);
     const m = this.mods;
     const crit = this.rand() < critChance(this.s);
@@ -370,6 +372,7 @@ export class Game {
     run.gold += gold;
     this.s.gold += gold;
     this.s.stats.kills++;
+    this.bump('kills');
     this.emit({ type: 'kill', gold, boss });
 
     if (boss) {
@@ -422,6 +425,7 @@ export class Game {
       points = leaguePointsForClear(run.level, stars);
       this.s.league.points += points;
       this.s.stats.clears++;
+      this.bump('clears');
       track(this.s, `clear:${run.level}:${stars}:${run.maxCombo}`);
     } else {
       this.s.stats.fails++;
@@ -431,6 +435,73 @@ export class Game {
       type: 'end',
       report: { level: run.level, win, stars, gold: run.gold, gems, points, maxCombo: run.maxCombo, firstClear, shards },
     });
+  }
+
+  // ---------- Misiones diarias y premio por entrar ----------
+
+  /** Si cambió el día, las misiones vuelven a cero. */
+  rollDay(now = Date.now()) {
+    const d = dayNumber(now);
+    const dl = this.s.daily;
+    if (dl.day !== d) {
+      dl.day = d;
+      dl.prog = {};
+      dl.claimed = [];
+    }
+    return dl;
+  }
+
+  /** Suma progreso a las misiones (el combo cuenta el mejor del día). */
+  bump(stat: MissionStat, n = 1, best = false) {
+    const p = this.rollDay().prog;
+    p[stat] = best ? Math.max(p[stat] ?? 0, n) : (p[stat] ?? 0) + n;
+  }
+
+  /** Qué día de la racha toca hoy (0 a 6). Si ayer no entraste, vuelve al primero. */
+  loginStep(now = Date.now()): number {
+    const dl = this.s.daily;
+    const d = dayNumber(now);
+    if (dl.loginDay === d) return (dl.streak - 1 + 7) % 7;
+    return dl.loginDay === d - 1 ? dl.streak % 7 : 0;
+  }
+  loginReady(now = Date.now()): boolean {
+    return this.s.daily.loginDay !== dayNumber(now);
+  }
+  claimLogin(now = Date.now()): number | null {
+    if (!this.loginReady(now)) return null;
+    const step = this.loginStep(now);
+    const gems = LOGIN_GEMS[step];
+    this.s.gems += gems;
+    this.s.daily.streak = step + 1;
+    this.s.daily.loginDay = dayNumber(now);
+    track(this.s, `login:${step + 1}`);
+    return gems;
+  }
+
+  missionDone(m: Mission): boolean {
+    return (this.rollDay().prog[m.stat] ?? 0) >= m.goal;
+  }
+  claimMission(id: string): number | null {
+    const dl = this.rollDay();
+    if (id === 'bonus') {
+      if (dl.claimed.includes('bonus') || !DAILY_MISSIONS.every((m) => dl.claimed.includes(m.id))) return null;
+      dl.claimed.push('bonus');
+      this.s.gems += DAILY_BONUS;
+      return DAILY_BONUS;
+    }
+    const m = DAILY_MISSIONS.find((x) => x.id === id);
+    if (!m || dl.claimed.includes(id) || !this.missionDone(m)) return null;
+    dl.claimed.push(id);
+    this.s.gems += m.gems;
+    track(this.s, `mission:${id}`);
+    return m.gems;
+  }
+  /** Cuántos premios diarios hay para cobrar. */
+  dailyReady(now = Date.now()): number {
+    const dl = this.rollDay(now);
+    const ms = DAILY_MISSIONS.filter((m) => !dl.claimed.includes(m.id) && this.missionDone(m)).length;
+    const bonus = !dl.claimed.includes('bonus') && DAILY_MISSIONS.every((m) => dl.claimed.includes(m.id)) ? 1 : 0;
+    return ms + bonus + (this.loginReady(now) ? 1 : 0);
   }
 
   /** Milisegundos que faltan para el cofre gratis (0 si ya está listo). */
@@ -453,6 +524,7 @@ export class Game {
       if (this.s.gems < price) return null;
       this.s.gems -= price;
     }
+    this.bump('chests', count);
     const got: Record<string, number> = {};
     const pity: { id: string; big: boolean }[] = [];
     const add = (k: string, n: number) => (got[k] = (got[k] ?? 0) + n);
