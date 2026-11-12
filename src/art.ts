@@ -1,4 +1,3 @@
-import { FIRE_BIRD, STAR_BIRD, featherWing, phoenixBird } from './phoenix';
 // Arte vectorial del prototipo. Todo es SVG en línea: liviano y nítido en cualquier pantalla.
 
 export interface Tier {
@@ -182,11 +181,12 @@ export interface HeroFight {
   bare?: boolean; // sin espada: para mostrar solo la skin (la armadura)
 }
 
-/** Alas de plumas de fénix en la espalda del caballero: chicas en la forma 5, grandes y levantadas en la 10. */
-function knightWings(e: number): string {
-  const big = e >= 2;
-  const w = featherWing({ len: big ? 50 : 36, tip: 234, low: 150, n: big ? 7 : 6, layers: big ? FIRE_BIRD.layers : FIRE_BIRD.layers.slice(1), stroke: '#3a0d05' });
-  return `<g class="kn-wings"><g transform="translate(62 47) scale(-.8 .8)"><g class="pb-wing">${w}</g></g><g transform="translate(42 47)"><g class="pb-wing">${w}</g></g></g>`;
+/** Silueta de fuego detrás del caballero (forma 20 y 40): llamas que suben desde el piso alrededor del cuerpo. */
+function flameAura(c1: string, c2: string, c3: string): string {
+  const outer = 'M14 104 Q8 84 14 66 Q10 74 6 70 Q10 56 18 48 Q14 50 12 44 Q20 40 26 42 Q22 30 30 18 Q30 28 34 30 Q34 14 44 2 Q44 14 48 16 Q52 4 62 -4 Q60 10 64 16 Q68 8 76 6 Q72 18 74 26 Q80 22 86 24 Q80 34 82 42 Q88 42 92 46 Q84 54 86 64 Q92 62 96 66 Q88 80 92 104Z';
+  return `<g class="kn-aura" transform="translate(52 0) scale(.82 1) translate(-52 0)"><path class="fx-fl f1" d="${outer}" fill="${c1}" opacity=".42"/>
+    <g transform="translate(52 104) scale(.8) translate(-52 -104)"><path class="fx-fl f2" d="${outer}" fill="${c2}" opacity=".45"/></g>
+    <g transform="translate(52 104) scale(.6 .55) translate(-52 -104)"><path class="fx-fl f3" d="${outer}" fill="${c3}" opacity=".4"/></g></g>`;
 }
 
 /**
@@ -199,15 +199,15 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
   const red = skin.armorDark;
   const e = evoOf('skin');
   const c = EVO_COLORS[e];
-  if (e >= 3) return phoenixHero(e, weaponLevel, fight, back);
-  const wingScale = [1, 1, 1.08, 1.2, 1.36][e];
+  const wingScale = [1, 1.1, 1.25, 1.45, 1.6][e];
   // Proporción chibi (cabeza grande, piernas cortas), girado a tres cuartos mirando a la derecha y en guardia:
   // el cuerpo respira, la cabeza acompaña, la espada se balancea y el escudo sube y baja mientras espera pelear.
   const out = `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero evo-${e}" aria-hidden="true">
     ${back}
     ${e >= 4 ? `<g class="evo-rays big">${rays(52, 46, 70, 18, '#bff0ff')}</g>` : ''}
     ${e >= 1 ? `<defs><radialGradient id="evoAura${e}"><stop offset="0" stop-color="${c}" stop-opacity="${0.35 + e * 0.1}"/><stop offset=".6" stop-color="${c}" stop-opacity="${0.12 + e * 0.05}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><ellipse class="evo-aura" cx="52" cy="60" rx="${36 + e * 4}" ry="${44 + e * 4}" fill="url(#evoAura${e})"/>` : ''}
-    ${e >= 4 ? spiritPhoenix() : ''}
+    ${e >= 3 ? flameAura('#ff5a1f', '#ff8a1f', '#ffd34d') : ''}
+    ${e >= 4 ? `<g class="kn-halo"><circle cx="52" cy="26" r="30" fill="none" stroke="#fff6c8" stroke-width="1.6" opacity=".85"/><circle cx="52" cy="26" r="34" fill="none" stroke="#bff0ff" stroke-width=".8" stroke-dasharray="2 4"/></g>` : ''}
     <ellipse cx="51" cy="104" rx="31" ry="5" fill="#000" opacity=".3"/>
     <g class="fx-legs">
       <path d="M43 85 L49.5 85 L46.5 97 L39.5 97Z" fill="#7a2414" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
@@ -218,12 +218,8 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M32.5 103 L47.5 103 M54.5 103 L72 103" stroke="${red}" stroke-width="2"/>
     </g>
     <g class="fx-body"><g transform="translate(0 8)">
-      ${e >= 2 ? `<g class="kn-tail">${[
-        ['M44 74 Q30 84 12 104 Q20 100 22 103 Q30 92 46 82Z', '#d42a0c'],
-        ['M44 76 Q34 90 26 106 Q32 102 34 104 Q38 92 47 82Z', '#ff6a1a'],
-        ['M43 76 Q26 82 6 92 Q14 92 16 95 Q30 86 45 81Z', '#ffaa2a'],
-      ].map(([d, f], i) => `<path class="fx-fl f${i + 1}" d="${d}" fill="${f}" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>`).join('')}</g>` : ''}
-      ${e >= 1 ? knightWings(e) : `<g class="fx-wingwrap"><g transform="translate(46 52) scale(${wingScale}) translate(-46 -52)">${fenixWings()}</g></g>`}
+      ${e >= 2 ? `<path class="fx-fl f1" d="M42 76 Q26 88 8 102 Q20 99 24 103 Q22 96 30 94 Q30 100 36 100 Q36 92 46 84Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/><path class="fx-fl f2" d="M42 80 Q30 90 18 99 Q28 96 31 98 Q32 92 44 86Z" fill="#ffd34d"/>` : ''}
+      ${e >= 4 ? `<g class="fx-wingwrap" opacity=".75"><g transform="translate(46 50) rotate(22) scale(1.35) translate(-46 -52)">${fenixWings()}</g></g>` : ''}<g class="fx-wingwrap"><g transform="translate(46 52) scale(${wingScale}) translate(-46 -52)">${fenixWings()}</g></g>
       <g class="fx-capewrap"><path d="M40 44 Q24 58 20 90 Q26 86 31 90 Q36 84 42 89 Q47 84 53 88 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
         <path class="fx-fl f2" d="M22 88 Q24 81 28 85 Q30 77 35 83 Q38 76 42 82 Q46 77 50 83 L53 87 Q47 83 42 88 Q36 83 31 89 Q26 85 22 88Z" fill="#ffd34d" opacity=".85"/>
         <path d="M40 48 Q28 62 26 86 Q30 84 33 87 Q36 68 46 50Z" fill="#000" opacity=".25"/></g>
@@ -293,57 +289,6 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
   return evoPaint(out, e)
     .replace('%%SHIELD%%', fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : '')
     .replace('%%BLADE%%', fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel));
-}
-
-/**
- * Forma 20 y 40 de la skin: el caballero ya es un fénix de verdad, majestuoso: alas enormes levantadas, cuello
- * largo, cabeza chica con penacho, cola larga de fuego y patas con garras. En 40 es el fénix celestial: dos pares
- * de alas, corona, halo y cola con estrellas. Sostiene igual la espada y el escudo.
- */
-function phoenixHero(e: number, weaponLevel: number, fight: HeroFight, back: string): string {
-  const pal = e >= 4 ? STAR_BIRD : FIRE_BIRD;
-  const o = pal.stroke;
-  const bird = phoenixBird({
-    ...pal, id: 'pbH' + e,
-    wing: e >= 4 ? { len: 42, tip: 236, low: 150, n: 8 } : { len: 42, tip: 242, low: 150, n: 7 },
-    wing2: e >= 4 ? { len: 46, tip: 264, low: 206, n: 5, layers: ['#1a3bd8', '#5a8bff', '#bff0ff'] } : undefined,
-    tail: e >= 4 ? { n: 7, len: 30, spread: 56 } : { n: 5, len: 27, spread: 40 },
-    crown: e >= 4 ? '#ffd700' : undefined,
-    halo: e >= 4 ? '#fff6c8' : undefined,
-  });
-  const leg = (x: number, dx: number) => `<path d="M${x} 78 L${x + dx * 0.4} 90 L${x + dx} 100" stroke="${o}" stroke-width="4.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M${x} 78 L${x + dx * 0.4} 90 L${x + dx} 100" stroke="${pal.beak}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M${x + dx} 100 l-4.5 3.4 M${x + dx} 100 l0.6 4 M${x + dx} 100 l4.6 3" stroke="${o}" stroke-width="2" stroke-linecap="round"/>`;
-  const out = `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero phoenix-form evo-${e}" aria-hidden="true">
-    ${back}
-    ${e >= 4 ? `<g class="evo-rays big">${rays(54, 40, 70, 18, '#bff0ff')}</g>` : ''}
-    <defs><radialGradient id="evoAura${e}"><stop offset="0" stop-color="${EVO_COLORS[e]}" stop-opacity=".6"/><stop offset=".6" stop-color="${EVO_COLORS[e]}" stop-opacity=".2"/><stop offset="1" stop-color="${EVO_COLORS[e]}" stop-opacity="0"/></radialGradient></defs>
-    <ellipse class="evo-aura" cx="54" cy="52" rx="56" ry="58" fill="url(#evoAura${e})"/>
-    <ellipse cx="54" cy="104" rx="24" ry="4" fill="#000" opacity=".3"/>
-    <g class="fx-body">
-      <g transform="translate(54 63) scale(1.26)">${bird}</g>
-      ${leg(50.5, -3)}${leg(57.5, 3.5)}
-      ${fight.shield ? '%%SHIELD%%' : ''}
-      <g class="hero-arm"${fight.bare ? ' display="none"' : ''}><g class="fx-armidle">
-        <path class="fx-fl f1" d="M57 50 Q66 49 69 56 L66 61 Q61 58 58 56Z" fill="${pal.layers[1]}" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
-        %%BLADE%%
-        <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${pal.beak}" stroke="${o}" stroke-width="1.8"/>
-        <path d="M65.5 58.5 L75.5 58.5" stroke="${o}" stroke-width="1.2"/>
-      </g></g>
-    </g>
-    ${star(12, 40, 3, '#fff', 1) + star(98, 22, 2.6, '#fff', 2) + star(94, 86, 2.4, '#fff', 3)}
-    ${e >= 4 ? `<g class="evo-orbit big"><circle cx="54" cy="0" r="2.2" fill="#d8f6ff"/><circle cx="106" cy="56" r="1.8" fill="#7fe0ff"/><circle cx="54" cy="110" r="2.2" fill="#d8f6ff"/><circle cx="2" cy="56" r="1.8" fill="#7fe0ff"/></g>` : ''}
-  </svg>`;
-  return evoPaint(out, e)
-    .replace('%%SHIELD%%', fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : '')
-    .replace('%%BLADE%%', fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel));
-}
-
-/** Forma final: el espíritu del fénix, enorme y translúcido, abre las alas detrás del caballero. */
-function spiritPhoenix(): string {
-  const wing = (m: string) => `<path transform="${m}" d="M52 44 Q36 22 6 14 Q18 24 16 30 Q4 30 -4 40 Q12 40 14 46 Q2 52 -2 62 Q18 56 30 60 Q40 52 52 54Z" fill="#7fe0ff" opacity=".5" stroke="#e8fbff" stroke-width="1.2"/>`;
-  return `<g class="evo-spirit">${wing('')}${wing('translate(104 0) scale(-1 1)')}
-    <path d="M52 30 Q56 36 55 42 L49 42 Q48 36 52 30Z" fill="#d8f6ff" opacity=".5"/></g>`;
 }
 
 /** Brazos sueltos a los costados, para mostrar la skin sola (sin espada ni escudo). */
@@ -653,8 +598,8 @@ const SHIELDS: Icon[] = [
     <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="url(#fxShieldG)" stroke="#3a0d05" stroke-width="2.4" stroke-linejoin="round"/>
     <path d="M32 11 L48.5 16.5 Q49 38 32 52.5 Q15 38 15.5 16.5Z" fill="url(#fxShieldR)" stroke="#ffe27a" stroke-width="1.4"/>
     ${e >= 2 ? '<g class="fx-flames"><path class="fx-fl f1" d="M22 50 Q18 40 22 32 Q23 38 26 39 Q24 30 30 22 Q30 32 33 34 Q34 26 40 22 Q38 30 41 34 Q44 30 44 26 Q48 36 42 48 Q38 52 32 53 Q26 52 22 50Z" fill="#ff8a1f" opacity=".75"/></g>' : ''}
-    ${e >= 2 ? `<g transform="translate(32 34) scale(.6)">${phoenixBird({ layers: ['#ff8a1f', '#ffb02e', '#ffe27a'], stroke: '#5a1a0a', body: ['#ffb02e', '#fff6c8'], beak: '#fff1a8', eye: '#fff6c8', tail: { n: 3, len: 16, spread: 20 }, wing: { len: 30, tip: 240, low: 150, n: 6 }, id: 'pbS2' })}</g>` : `<g class="fx-bird"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#ffd34d" stroke="#5a1a0a" stroke-width="1.1" stroke-linejoin="round"/>
-      <path d="M32 24 Q33 28 32 33 Q31 28 32 24Z" fill="#fff6c8"/></g>`}
+    <g class="fx-bird"><path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="${e >= 2 ? '#fff6c8' : '#ffd34d'}" stroke="#5a1a0a" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 24 Q33 28 32 33 Q31 28 32 24Z" fill="#fff6c8"/></g>
     <path d="M18 17 Q24 13 31 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>
     ${l >= 5 ? gem(32, 50, 2.6, f) : ''}`;
   },
@@ -743,40 +688,36 @@ function fireSword(e: number): string {
     <g class="fx-embers"><circle class="fx-em e1" cx="25" cy="22" r="1.6" fill="#fff1a8"/><circle class="fx-em e2" cx="39" cy="14" r="1.3" fill="#ffd34d"/><circle class="fx-em e3" cx="27" cy="6" r="1.2" fill="#fff1a8"/><circle class="fx-em e4" cx="38" cy="30" r="1.3" fill="#ffd34d"/></g>
     ${halo}</g>`;
 }
-/** Escudo dorado del Fénix (el metal), en una caja de 64. `face` es lo que va en el centro. */
-function fenixShieldMetal(face: string, crystal = false): string {
-  const rim = crystal ? '#ffd700' : 'url(#fxShieldG)';
-  const fill = crystal ? 'url(#pbCrystal)' : 'url(#fxShieldR)';
-  return `${crystal ? '<defs><linearGradient id="pbCrystal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".5" stop-color="#8fd8ff" stop-opacity=".85"/><stop offset="1" stop-color="#2a5bff" stop-opacity=".9"/></linearGradient></defs>' : ''}
-    <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="${rim}" stroke="${crystal ? '#0b1450' : '#3a0d05'}" stroke-width="2.4" stroke-linejoin="round"/>
-    <path d="M32 11 L48.5 16.5 Q49 38 32 52.5 Q15 38 15.5 16.5Z" fill="${fill}" stroke="${crystal ? '#ffffff' : '#ffe27a'}" stroke-width="1.4"/>
-    ${face}
-    <path d="M18 17 Q24 13 31 12" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".55"/>`;
-}
-
 /**
- * Formas altas de la Égida: en 20 un fénix de fuego de verdad abre las alas detrás del escudo (que se achica y queda
- * como su pecho, con un sol encendido); en 40 el fénix celestial tiene dos pares de alas, corona, halo y cola larga,
- * y el escudo se vuelve de cristal con una estrella.
+ * Formas altas de la Égida: un escudo hecho de fuego. Llamas en capas siguen la forma del escudo y suben por arriba,
+ * con un núcleo de metal fundido y el fénix del emblema en el centro. En 40 el fuego es celestial (azul y blanco),
+ * más alto, con un marco de filigrana dorada, corona de llamas y una estrella.
  */
 function fireShield(e: number): string {
-  if (e >= 4) {
-    const bird = phoenixBird({
-      ...STAR_BIRD, tail: { n: 7, len: 27, spread: 52 }, id: 'pbS4',
-      wing: { len: 40, tip: 240, low: 150, n: 7 },
-      wing2: { len: 42, tip: 264, low: 205, n: 5, layers: ['#1a3bd8', '#5a8bff', '#bff0ff'] },
-      crown: '#ffd700', halo: '#fff6c8', noBody: true,
-    });
-    const starFace = `<path d="M32 18 L35.2 28 L45.5 28.5 L37.3 34.8 L40.4 45 L32 39 L23.6 45 L26.7 34.8 L18.5 28.5 L28.8 28Z" fill="#ffffff" stroke="#ffd700" stroke-width="1.4" stroke-linejoin="round"/><circle class="fx-pulse" cx="32" cy="32" r="5" fill="#fff6c8"/>`;
-    return `<defs><radialGradient id="pbGlow4"><stop offset="0" stop-color="#7fe0ff" stop-opacity=".7"/><stop offset="1" stop-color="#3ab8ff" stop-opacity="0"/></radialGradient></defs><circle class="fx-pulse" cx="32" cy="28" r="34" fill="url(#pbGlow4)"/>
-      <g transform="translate(32 31) scale(.94)">${bird}</g>
-      <g transform="translate(32 41) scale(.58) translate(-32 -32)">${fenixShieldMetal(starFace, true)}</g>`;
-  }
-  const bird = phoenixBird({ ...FIRE_BIRD, tail: { n: 5, len: 22, spread: 34 }, id: 'pbS3', wing: { len: 40, tip: 242, low: 150, n: 7 }, noBody: true });
-  const sun = `<circle class="fx-pulse" cx="32" cy="32" r="9" fill="#ffd34d" opacity=".6"/><circle cx="32" cy="32" r="6" fill="#fff1a8"/>`;
-  return `<defs><radialGradient id="pbGlow3"><stop offset="0" stop-color="#ff7a1a" stop-opacity=".6"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient></defs><circle class="fx-pulse" cx="32" cy="30" r="32" fill="url(#pbGlow3)"/>
-    <g transform="translate(32 33)">${bird}</g>
-    <g transform="translate(32 42) scale(.6) translate(-32 -32)">${fenixShieldMetal(sun)}</g>`;
+  const sky = e >= 4;
+  const [c1, c2, c3, c4] = sky ? ['#2a5bff', '#3ab8ff', '#9ff0ff', '#ffffff'] : ['#e8340f', '#ff7a1a', '#ffb02e', '#fff1a8'];
+  const outer = 'M32 -4 Q36 2 35 6 Q40 0 44 -2 Q42 4 43 8 Q49 4 54 4 Q50 9 52 12 Q58 10 60 14 Q55 18 56 22 Q60 24 59 28 Q55 30 55 34 Q58 40 54 44 Q50 46 48 48 Q46 56 32 66 Q18 56 16 48 Q14 46 10 44 Q6 40 9 34 Q9 30 5 28 Q4 24 8 22 Q9 18 4 14 Q6 10 12 12 Q14 9 10 4 Q15 4 21 8 Q22 4 20 -2 Q24 0 29 6 Q28 2 32 -4Z';
+  const layer = (k: number, fill: string, cls: string, extra = '') => `<g transform="translate(32 36) scale(${k}) translate(-32 -36)"><path class="fx-fl ${cls}" d="${outer}" fill="${fill}" ${extra}/></g>`;
+  const core = `<defs><radialGradient id="fxMolten${e}" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="${c4}"/><stop offset=".45" stop-color="${c3}"/><stop offset="1" stop-color="${c2}"/></radialGradient></defs>
+    <g transform="translate(32 34) scale(.66) translate(-32 -34)">
+      <path d="M32 6 L53 13 Q54 40 32 58 Q10 40 11 13Z" fill="url(#fxMolten${e})" stroke="${sky ? '#ffd700' : '#ffe27a'}" stroke-width="${sky ? 3 : 2.2}" stroke-linejoin="round"/>
+      ${sky
+        ? `<path d="M32 17 L35.5 28 L47 28.5 L38 35.4 L41.2 46.5 L32 40 L22.8 46.5 L26 35.4 L17 28.5 L28.5 28Z" fill="#fff" stroke="#ffd700" stroke-width="1.6" stroke-linejoin="round"/>`
+        : `<path d="M32 19 Q35 23 34.2 27.5 Q40 21 47 21.5 Q42 28.5 36.5 31.5 Q39 37 32 46 Q25 37 27.5 31.5 Q22 28.5 17 21.5 Q24 21 29.8 27.5 Q29 23 32 19Z" fill="#fff6c8" stroke="#c8230f" stroke-width="1.2" stroke-linejoin="round"/>`}
+    </g>`;
+  const frame = sky
+    ? `<path d="M32 3 L56 11 Q57 42 32 62 Q7 42 8 11Z" fill="none" stroke="#ffd700" stroke-width="1.6" stroke-linejoin="round"/>
+       <path d="M32 3 L56 11 Q57 42 32 62 Q7 42 8 11Z" fill="none" stroke="#fff6c8" stroke-width=".6" stroke-dasharray="1.5 2.5"/>
+       ${[[8, 11], [56, 11], [32, 62], [32, 3]].map(([x, y]) => `<path d="M${x} ${y - 2.6} L${x + 1.8} ${y} L${x} ${y + 2.6} L${x - 1.8} ${y}Z" fill="#ffd700" stroke="#0b1450" stroke-width=".5"/>`).join('')}
+       <g class="fx-fl f2"><path d="M32 -10 Q35 -4 34 0 Q38 -6 42 -7 Q39 -1 40 3 L24 3 Q25 -1 22 -7 Q26 -6 30 0 Q29 -4 32 -10Z" fill="#e8fbff" stroke="#3ab8ff" stroke-width=".6"/></g>`
+    : '';
+  return `<defs><radialGradient id="fxShGlow${e}"><stop offset="0" stop-color="${c2}" stop-opacity=".7"/><stop offset="1" stop-color="${c2}" stop-opacity="0"/></radialGradient></defs>
+    <circle class="fx-pulse" cx="32" cy="32" r="${sky ? 36 : 32}" fill="url(#fxShGlow${e})"/>
+    ${layer(sky ? 1.12 : 1, c1, 'f1', `stroke="${sky ? '#0b1450' : '#7a1a05'}" stroke-width=".8" stroke-linejoin="round"`)}
+    ${layer(sky ? 0.95 : 0.86, c2, 'f2')}
+    ${layer(sky ? 0.8 : 0.72, c3, 'f3')}
+    ${frame}${core}
+    <g class="fx-embers"><circle class="fx-em e1" cx="14" cy="20" r="1.4" fill="${c4}"/><circle class="fx-em e2" cx="50" cy="16" r="1.2" fill="${c3}"/><circle class="fx-em e3" cx="22" cy="6" r="1.1" fill="${c4}"/><circle class="fx-em e4" cx="44" cy="4" r="1.2" fill="${c3}"/></g>`;
 }
 // ---------- Evolución de las legendarias (formas en nivel 5, 10, 20 y 40) ----------
 export const EVO_COLORS = ['#ff8a1f', '#ff8a1f', '#ffd34d', '#ff2a5a', '#3ab8ff'];
