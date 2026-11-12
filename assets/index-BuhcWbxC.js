@@ -41,7 +41,7 @@
     </g>
     <g class="fx-body"><g transform="translate(0 8)">
       ${l>=2?`<path class="fx-fl f1" d="M42 76 Q26 88 8 102 Q20 99 24 103 Q22 96 30 94 Q30 100 36 100 Q36 92 46 84Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.4" stroke-linejoin="round"/><path class="fx-fl f2" d="M42 80 Q30 90 18 99 Q28 96 31 98 Q32 92 44 86Z" fill="#ffd34d"/>`:""}
-      ${l>=4?`<g class="fx-wingwrap" opacity=".75"><g transform="translate(46 50) rotate(22) scale(1.35) translate(-46 -52)">${Fs()}</g></g>`:""}<g class="fx-wingwrap"><g transform="translate(46 52) scale(${u}) translate(-46 -52)">${Fs()}</g></g>
+      ${l>=4?`<g class="fx-wingwrap" opacity=".75"><g transform="translate(46 50) rotate(20) scale(1.2) translate(-46 -52)">${Fs()}</g></g>`:""}<g class="fx-wingwrap"><g transform="translate(46 52) scale(${u}) translate(-46 -52)">${Fs()}</g></g>
       <g class="fx-capewrap"><path d="M40 44 Q24 58 20 90 Q26 86 31 90 Q36 84 42 89 Q47 84 53 88 L56 46Z" fill="${e.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
         <path class="fx-fl f2" d="M22 88 Q24 81 28 85 Q30 77 35 83 Q38 76 42 82 Q46 77 50 83 L53 87 Q47 83 42 88 Q36 83 31 89 Q26 85 22 88Z" fill="#ffd34d" opacity=".85"/>
         <path d="M40 48 Q28 62 26 86 Q30 84 33 87 Q36 68 46 50Z" fill="#000" opacity=".25"/></g>
