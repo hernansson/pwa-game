@@ -1690,6 +1690,7 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
   let hits = 0;
   let phase: 'chest' | 'cards' | 'done' = 'chest';
   let shown = 0;
+  let revealed = false; // la carta de arriba ya está dada vuelta: el próximo toque o deslizamiento la saca
   const vib = (p: number | number[]) => navigator.vibrate?.(p);
   const sparks = (n: number, color: string) =>
     Array.from({ length: n }, (_, i) => `<i style="--a:${(i * 360) / n}deg;--d:${120 + (i % 4) * 35}px;--t:${(i % 5) * 0.04}s;background:${color};box-shadow:0 0 12px ${color}"></i>`).join('');
@@ -1753,9 +1754,22 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
       vib([50, 50, 120]);
     } else vib(20);
     shown++;
-    // La carta anterior se corre para dejar ver la siguiente.
-    if (shown > 1) (cardsEl.children[shown - 2] as HTMLElement).classList.add('gone');
-    countEl.textContent = shown < cards.length ? `${cards.length - shown} más · toca para seguir` : 'Toca para ver el resumen';
+    revealed = true;
+    countEl.textContent = shown < cards.length ? `${cards.length - shown} más · toca o desliza para seguir` : 'Toca para ver el resumen';
+  };
+
+  // Saca la carta ya vista y deja arriba la siguiente, todavía tapada, para descubrirla.
+  const dismiss = () => {
+    (cardsEl.children[shown - 1] as HTMLElement).classList.add('gone');
+    (cardsEl.children[shown] as HTMLElement).classList.add('up');
+    revealed = false;
+    countEl.textContent = `${cards.length - shown} más · desliza o toca para darla vuelta`;
+    vib(10);
+  };
+  const advance = () => {
+    if (!revealed) flip();
+    else if (shown < cards.length) dismiss();
+    else summary();
   };
 
   const summary = () => {
@@ -1792,11 +1806,11 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
   let drag: { x: number; y: number; card: HTMLElement; moved: boolean } | null = null;
   let dragged = false;
   cardsEl.addEventListener('pointerdown', (ev) => {
-    if (phase !== 'cards' || shown >= cards.length) return;
-    const card = cardsEl.children[shown] as HTMLElement;
+    if (phase !== 'cards') return;
+    const card = cardsEl.children[revealed ? shown - 1 : shown] as HTMLElement;
     if (!card || !(ev.target as HTMLElement).closest('.co-card')) return;
     drag = { x: ev.clientX, y: ev.clientY, card, moved: false };
-    card.style.setProperty('--rarc', RARITY_COLORS[cards[shown].def.rarity]);
+    if (!revealed) card.style.setProperty('--rarc', RARITY_COLORS[cards[shown].def.rarity]);
     card.classList.add('dragging');
     cardsEl.setPointerCapture(ev.pointerId);
   });
@@ -1806,6 +1820,11 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
     const dy = ev.clientY - drag.y;
     const dist = Math.hypot(dx, dy);
     if (dist > 6) drag.moved = true;
+    if (revealed) {
+      // La carta ya vista se arrastra boca arriba para sacarla.
+      drag.card.style.transform = `translate(${dx * 0.8}px, ${dy * 0.5}px) rotateY(180deg) rotate(${-dx / 14}deg) scale(1.04)`;
+      return;
+    }
     const peek = Math.min(1, dist / 110);
     drag.card.style.setProperty('--peek', String(peek));
     drag.card.style.transform = `translate(${dx * 0.7}px, ${dy * 0.5}px) rotate(${dx / 14}deg)`;
@@ -1825,7 +1844,7 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
     delete d.card.dataset.buzz;
     if (d.moved) {
       dragged = true;
-      if (dist > 70) flip();
+      if (dist > 70) advance();
     }
   };
   cardsEl.addEventListener('pointerup', endDrag);
@@ -1862,7 +1881,7 @@ function chestShow(id: string, name: string, res: ChestResult, before: Record<st
       return;
     }
     if (phase === 'chest' && hits < 3) hit();
-    else if (phase === 'cards') shown < cards.length ? flip() : summary();
+    else if (phase === 'cards') advance();
   });
   track(game.s, `chest_show:${id}:${best}`);
 }

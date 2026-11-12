@@ -1361,3 +1361,7 @@ button.res { cursor: pointer; }
 .evo-test { align-items: center; flex-wrap: wrap; } .evo-test small { width: 100%; font-size: 12px; color: var(--muted); } .evo-test button { flex: 1; min-width: 0; padding: 8px 2px; }
 @media (prefers-reduced-motion: reduce) { .evo-ring, .evo-rays, .evo-orbit, .evo-glow, .evo-aura, .evo-tw, .evo-spirit { animation: none; } }
 .sc-art.legend.espada svg.lg-art { width: 116%; height: 116%; margin: -8%; } .sc-info { position: relative; z-index: 1; }
+/* La carta que queda arriba después de sacar la anterior */
+.co-card.up { transform: none; }
+.co-card.up.flipped { transform: rotateY(180deg) scale(1.04); }
+.co-card.up.gone, .co-card.flipped.gone { transform: rotateY(180deg) translate(140%, -10px) rotate(-12deg) scale(.6); opacity: 0; pointer-events: none; }
