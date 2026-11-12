@@ -244,7 +244,7 @@ async function act(env: Env, user: User, b: Record<string, unknown>) {
       return mutate(env, user, (_s, g) => (g.activatePass(), { ok: true }));
     case 'admin_fenix':
       admin();
-      return mutate(env, user, (_s, g) => ({ ok: g.unlockFenix() }));
+      return mutate(env, user, (_s, g) => ({ ok: g.unlockFenix(Number(b.lvl) || 0) }));
     case 'admin_reset':
       admin();
       return mutate(env, user, (s) => {

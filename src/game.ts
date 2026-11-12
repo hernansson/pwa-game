@@ -476,11 +476,13 @@ export class Game {
   }
 
   /** Prueba de administrador: desbloquea y equipa el set del Fénix (cuando haya cobros, será la compra). */
-  unlockFenix(): boolean {
+  /** Prueba de administrador: da el set del Fénix (y lo pone en `lvl`, para ver cada forma). */
+  unlockFenix(lvl = 0): boolean {
     if (this.s.run) return false;
     for (const id of FENIX_SET) {
       const st = this.s.arsenal[id];
-      if (st && !st.lvl) st.lvl = 1;
+      if (st && lvl > 0) st.lvl = Math.max(1, Math.min(MAX_ARM_LEVEL, Math.floor(lvl)));
+      else if (st && !st.lvl) st.lvl = 1;
       this.equipArm(id);
     }
     track(this.s, 'fenix_test');

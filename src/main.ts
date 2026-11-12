@@ -20,7 +20,7 @@ import {
   chestPrice,
   goldPackAmount,
 } from './balance';
-import { Skin, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
+import { EVO_COLORS, Skin, setEvoSource, enemyName, enemySvg, famIcon, heroSvg, levelEnemy, levelEnemyName, levelEnemySvg, pieceFrame, pieceSvg, skinById } from './art';
 import { BASE_COLS, BASE_ROWS, Cell, FAMILY_INFO, Family, colsOf, rowsOf } from './board';
 import { ChestResult, ClearReport, DUEL_SECONDS, Game, MergeResult } from './game';
 import { RARITY_COLORS } from './items';
@@ -36,7 +36,7 @@ import {
   timeLeftInWeek,
 } from './league';
 import { esc, fmt } from './format';
-import { ARMS, ArmDef, ArmFam, CHESTS, FENIX_SET, MAX_ARM_LEVEL, pityLeft, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
+import { ARMS, EVO_LEVELS, EVO_NAMES, evoStage, ArmDef, ArmFam, CHESTS, FENIX_SET, MAX_ARM_LEVEL, pityLeft, RARITY_LEVEL_BONUS, armById, armStatText, levelGainText, unlockShards, upgradeGold, upgradeShards } from './arsenal';
 import {
   armShape,
   exportCode,
@@ -61,6 +61,9 @@ import { act, errorText, fetchState, loginWithGoogle, logout, me, mountGoogleBut
 import { seeded } from './rng';
 
 let game = new Game(load());
+// Las legendarias cambian de forma según su nivel; el dibujo pregunta acá en qué forma está cada una.
+const FENIX_BY_FAM: Record<string, string> = { espada: 'fenix_espada', escudo: 'fenix_escudo', skin: 'fenix' };
+setEvoSource((fam) => evoStage(game.s.arsenal[FENIX_BY_FAM[fam]]?.lvl ?? 0));
 
 // ---------- Servidor ----------
 // Con sesión iniciada, el servidor es el dueño del progreso: cada acción se hace también allá y lo que
@@ -1972,6 +1975,7 @@ function renderArsenal() {
         <small class="rar">${def.rarity.toUpperCase()}</small>
         <h3>${def.name}</h3>
         <p class="sc-lvl">${locked ? 'Bloqueada' : `Nivel ${st.lvl} · ${armStatText(def, st.lvl)}`}<br><span>${levelGainText(fam)} por nivel${RARITY_LEVEL_BONUS[def.rarity] ? ` · arranca como una básica nivel ${1 + RARITY_LEVEL_BONUS[def.rarity]}` : ''}</span></p>
+        ${def.rarity === 'legendaria' && !locked ? evoPips(st.lvl) : ''}
         <ul class="skills mini">${armSkills(def, false)}</ul>
       </div>
     </div>
@@ -1984,6 +1988,14 @@ function renderArsenal() {
       return `<div class="cat ${premium ? 'premium' : ''}"><small>${title}</small><div class="tiles">${tiles}</div></div>`;
     }).join('')}
     <p class="note">Consigue fragmentos superando niveles o abriendo cofres. La variante en uso define cómo se ven sus piezas en el tablero.</p>`;
+}
+
+/** Las 5 formas de una legendaria: en cuál está y en qué nivel cambia. */
+function evoPips(lvl: number): string {
+  const e = evoStage(lvl);
+  const next = EVO_LEVELS[e];
+  return `<div class="evo-pips" style="--ec:${EVO_COLORS[e]}"><div>${EVO_NAMES.map((_, i) => `<i class="${i <= e ? 'on' : ''} ${i === e ? 'cur' : ''}"></i>`).join('')}</div>
+    <small><b>${EVO_NAMES[e]}</b> · ${next ? `cambia en nivel ${next}` : 'forma final'}</small></div>`;
 }
 
 /** Desbloquear, subir o usar una variante. Devuelve true si el clic era de esto. */
@@ -2266,6 +2278,7 @@ function showSettings() {
     ${testTools() ? `<div class="set-box test"><b>Herramientas de administrador</b><p>${online() ? 'Solo tu cuenta las ve. Los cambios se hacen en el servidor.' : 'Solo fuera de la página publicada, para probar.'}</p>
       <div class="btns"><button data-test-gems>+1.000 💠</button><button data-test-gold>+50.000 🪙</button></div>
       <div class="btns"><button data-test-fenix>🔥 Desbloquear set del Fénix</button></div>
+      <div class="btns evo-test"><small>Forma del Fénix:</small>${[1, 5, 10, 20, 40].map((l) => `<button data-test-fenix="${l}">Nv ${l}</button>`).join('')}</div>
       <div class="btns"><button data-test-board="rows">${game.s.board.rows ? 'Quitar' : 'Poner'} +1 fila</button><button data-test-board="cols">${game.s.board.cols ? 'Quitar' : 'Poner'} +1 columna</button></div></div>` : ''}
     ${!online() || me()?.admin ? `<details class="danger"><summary>Zona peligrosa</summary><button data-reset>Borrar todo el progreso</button></details>` : ''}
   </div>`);
@@ -2301,6 +2314,7 @@ $('#modal').addEventListener('click', (ev) => {
   } else if (t.closest('[data-logout]')) {
     doLogout();
   } else if (t.closest('[data-test-fenix]')) {
+    const flvl = Number((t.closest('[data-test-fenix]') as HTMLElement).dataset.testFenix) || 0;
     const done = () => {
       hideModal();
       armTab = 'skin';
@@ -2308,8 +2322,8 @@ $('#modal').addEventListener('click', (ev) => {
       openSheet('heroe');
       toast('🔥 Set del Fénix equipado');
     };
-    if (online()) act('admin_fenix').then((a) => (applyServer(a.state), done()), (e) => toast(errorText(e)));
-    else if (game.unlockFenix()) {
+    if (online()) act('admin_fenix', { lvl: flvl }).then((a) => (applyServer(a.state), done()), (e) => toast(errorText(e)));
+    else if (game.unlockFenix(flvl)) {
       save(game.s);
       done();
     } else toast('Termina la pelea primero');

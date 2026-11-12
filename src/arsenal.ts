@@ -213,6 +213,13 @@ export function armById(id: string | undefined): ArmDef | undefined {
   return ARMS.find((a) => a.id === id);
 }
 
+/** Las legendarias cambian de forma al llegar a los niveles con habilidad: 5, 10, 20 y 40 (forma final). */
+export const EVO_LEVELS = [5, 10, 20, 40];
+export const EVO_NAMES = ['Brasa', 'Llama viva', 'Llama dorada', 'Fénix carmesí', 'Fénix celestial'];
+export function evoStage(lvl: number): number {
+  return EVO_LEVELS.filter((l) => lvl >= l).length;
+}
+
 /** Fragmentos para desbloquear según la rareza. */
 export function unlockShards(r: Rarity): number {
   return { común: 10, rara: 20, épica: 40, legendaria: 80 }[r];
@@ -256,16 +263,16 @@ export function armMods(def: ArmDef, lvl: number, into: Mods = { ...NO_MODS }): 
 /** Peso de cada rareza al repartir fragmentos. */
 export const SHARD_WEIGHT: Record<Rarity, number> = { común: 50, rara: 35, épica: 15, legendaria: 5 };
 
-/** Reparte `total` fragmentos entre 2 o 3 variantes al azar de esas familias. */
+/** Reparte `total` fragmentos en 2 o 3 partes; cada parte va a una variante sorteada por rareza. */
 export function rollShards(total: number, fams: ArmFam[] = ['espada', 'escudo', 'rayo'], rand = Math.random): Record<string, number> {
   const out: Record<string, number> = {};
   const pool = ARMS.filter((a) => fams.includes(a.fam));
   const parts = total >= 12 ? 3 : 2;
   let left = total;
   for (let i = 0; i < parts; i++) {
-    // Cada parte va a una variante distinta mientras haya de dónde elegir.
-    const avail = pool.filter((d) => !(d.id in out));
-    const from = avail.length ? avail : pool;
+    // Cada parte se sortea por peso de rareza (puede repetir variante): así las raras salen menos
+    // aunque la familia tenga pocas variantes.
+    const from = pool;
     let r = rand() * from.reduce((a, d) => a + SHARD_WEIGHT[d.rarity], 0);
     let pick = from[0];
     for (const d of from) {

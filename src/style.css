@@ -1340,3 +1340,24 @@ button.res { cursor: pointer; }
 .forge .hint { margin: 6px 0 0; font-size: 12px; }
 .forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 46px) * var(--cols) / var(--rows))); }
 @media (max-height: 640px) { .forge:has(.hint:not([hidden])) .pboard { width: min(100cqw, 420px, calc((100cqh - 2px) * var(--cols) / var(--rows))); } }
+/* ---- Formas de las legendarias ---- */
+.evo-ring, .evo-rays, .evo-orbit { transform-box: fill-box; transform-origin: center; }
+.evo-ring { animation: lgSpin 8s linear infinite; }
+.evo-rays { animation: lgSpin 16s linear infinite; opacity: .55; }
+.evo-orbit { animation: lgSpin 3.2s linear infinite; }
+.evo-glow, .evo-aura { transform-box: fill-box; transform-origin: center; animation: evoPulse 1.6s ease-in-out infinite; }
+@keyframes evoPulse { 50% { transform: scale(1.08); opacity: .5; } }
+.evo-tw { transform-box: fill-box; transform-origin: center; animation: skTwinkle 1.6s ease-in-out infinite; }
+.evo-tw.t2 { animation-delay: -.55s; } .evo-tw.t3 { animation-delay: -1.1s; }
+.evo-spirit { transform-box: fill-box; transform-origin: 50% 70%; animation: evoSpirit 2.2s ease-in-out infinite; }
+@keyframes evoSpirit { 0%, 100% { transform: scaleX(1); opacity: .9; } 50% { transform: scaleX(1.08) translateY(-2px); opacity: 1; } }
+.evo-pips { margin: 2px 0 8px; }
+.evo-pips div { display: flex; gap: 5px; margin-bottom: 3px; }
+.evo-pips i { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); }
+.evo-pips i.on { background: var(--ec); box-shadow: 0 0 6px var(--ec); }
+.evo-pips i.cur { animation: evoPip 1.2s ease-in-out infinite; }
+@keyframes evoPip { 50% { filter: brightness(1.5); } }
+.evo-pips small { font-size: 11px; color: var(--muted); } .evo-pips b { color: var(--ec); }
+.evo-test { align-items: center; flex-wrap: wrap; } .evo-test small { width: 100%; font-size: 12px; color: var(--muted); } .evo-test button { flex: 1; min-width: 0; padding: 8px 2px; }
+@media (prefers-reduced-motion: reduce) { .evo-ring, .evo-rays, .evo-orbit, .evo-glow, .evo-aura, .evo-tw, .evo-spirit { animation: none; } }
+.sc-art.legend.espada svg.lg-art { width: 116%; height: 116%; margin: -8%; } .sc-info { position: relative; z-index: 1; }

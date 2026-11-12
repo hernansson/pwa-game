@@ -189,10 +189,16 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
   const o = '#3a0d05';
   const gold = skin.armor;
   const red = skin.armorDark;
+  const e = evoSource('skin');
+  const c = EVO_COLORS[e];
+  const wingScale = [1, 1, 1.08, 1.2, 1.36][e];
   // Proporción chibi (cabeza grande, piernas cortas), girado a tres cuartos mirando a la derecha y en guardia:
   // el cuerpo respira, la cabeza acompaña, la espada se balancea y el escudo sube y baja mientras espera pelear.
-  return `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero" aria-hidden="true">
+  const out = `<svg viewBox="0 0 120 110" class="hero-svg fenix-hero evo-${e}" aria-hidden="true">
     ${back}
+    ${e >= 4 ? `<g class="evo-rays big">${rays(52, 46, 70, 18, '#bff0ff')}</g>` : ''}
+    ${e >= 1 ? `<defs><radialGradient id="evoAura${e}"><stop offset="0" stop-color="${c}" stop-opacity="${0.35 + e * 0.1}"/><stop offset=".6" stop-color="${c}" stop-opacity="${0.12 + e * 0.05}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><ellipse class="evo-aura" cx="52" cy="60" rx="${36 + e * 4}" ry="${44 + e * 4}" fill="url(#evoAura${e})"/>` : ''}
+    ${e >= 4 ? spiritPhoenix() : ''}
     <ellipse cx="51" cy="104" rx="31" ry="5" fill="#000" opacity=".3"/>
     <g class="fx-legs">
       <path d="M43 85 L49.5 85 L46.5 97 L39.5 97Z" fill="#7a2414" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
@@ -203,7 +209,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M32.5 103 L47.5 103 M54.5 103 L72 103" stroke="${red}" stroke-width="2"/>
     </g>
     <g class="fx-body"><g transform="translate(0 8)">
-      <g class="fx-wingwrap">${fenixWings()}</g>
+      <g class="fx-wingwrap"><g transform="translate(46 52) scale(${wingScale}) translate(-46 -52)">${fenixWings()}</g></g>
       <g class="fx-capewrap"><path d="M40 44 Q24 58 20 90 Q26 86 31 90 Q36 84 42 89 Q47 84 53 88 L56 46Z" fill="${skin.cape}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
         <path class="fx-fl f2" d="M22 88 Q24 81 28 85 Q30 77 35 83 Q38 76 42 82 Q46 77 50 83 L53 87 Q47 83 42 88 Q36 83 31 89 Q26 85 22 88Z" fill="#ffd34d" opacity=".85"/>
         <path d="M40 48 Q28 62 26 86 Q30 84 33 87 Q36 68 46 50Z" fill="#000" opacity=".25"/></g>
@@ -224,6 +230,7 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M28 51 Q29 40 40 39 Q46 41 46 48 Q37 46 31 55Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
       <path d="M30.5 54 Q37 46 46 48" stroke="${red}" stroke-width="2.2" fill="none"/>
       <g class="fx-head"><g transform="translate(52 45) scale(1.17) translate(-52 -45)">
+        ${e >= 3 ? runeRing(52, 26, 24, c) : ''}
         <g class="fx-crest">
           <path class="fx-fl f1" d="M52 -10 Q61 0 57 10 L47 10 Q43 0 52 -10Z" fill="#ff5a1f" stroke="${o}" stroke-width="1.1"/>
           <path class="fx-fl f2" d="M45 -3 Q50 3 49 10 L42 11 Q40 3 45 -3Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.1"/>
@@ -241,9 +248,10 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
         <path d="M53.6 33 L58 33 L57.5 43.5 L54.2 43.5Z" fill="${skin.visor}" stroke="${o}" stroke-width="1.3"/>
         <path class="fx-eyes" d="M44.5 30.5 L50 30.5 M59.5 30.3 L66 30.2 M55.8 34.5 L55.8 42" stroke="#ffb02e" stroke-width="2.2" stroke-linecap="round"/>
         <g fill="${red}"><circle cx="46" cy="40" r="1.1"/><circle cx="50" cy="43" r="1.1"/><circle cx="61" cy="43" r="1.1"/><circle cx="65" cy="39.5" r="1.1"/></g>
+        ${e >= 4 ? `<path d="M41 11 L42 1 L46.5 7 L52 -4 L57.5 7 L62 1 L63 11 Q52 7 41 11Z" fill="#ffd700" stroke="${o}" stroke-width="1.3" stroke-linejoin="round"/>${gem(52, 3, 1.8, '#2ad8ff')}${gem(42.5, 6, 1.2, '#2ad8ff')}${gem(61.5, 6, 1.2, '#2ad8ff')}` : ''}
         <path d="M56 13.5 L59 17.5 L56 22.5 L53 17.5Z" fill="#ff3b1f" stroke="${o}" stroke-width="1"/>
       </g></g>
-      ${fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : ''}
+      ${fight.shield ? '%%SHIELD%%' : ''}
       ${fight.bare ? bareArm('front', red, gold, o) : ''}
       <path d="M62 43 Q64 34 72 32 Q70 38 72 41 Q75 36 80 35 Q76 41 74 46Z" fill="#ff8a1f" stroke="${o}" stroke-width="1.2" stroke-linejoin="round"/>
       <path d="M56 47 Q58 38 67 39 Q74 41 73 51 Q66 46 58 50Z" fill="${gold}" stroke="${o}" stroke-width="2" stroke-linejoin="round"/>
@@ -251,12 +259,24 @@ function fenixHero(skin: Skin, weaponLevel: number, fight: HeroFight, back: stri
       <path d="M60 43 Q63 40.5 68 41" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".5"/>
       <g class="hero-arm"${fight.bare ? ' display="none"' : ''}><g class="fx-armidle">
         <circle cx="64" cy="55" r="6" fill="${red}" stroke="${o}" stroke-width="2"/>
-        ${fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel)}
+        %%BLADE%%
         <rect x="65.5" y="54.5" width="10" height="8.5" rx="3.5" fill="${gold}" stroke="${o}" stroke-width="2"/>
         <path d="M65.5 58.5 L75.5 58.5" stroke="${red}" stroke-width="1.4"/>
       </g></g>
     </g></g>
+    ${e >= 2 ? star(14, 40, 3, '#fff', 1) + star(88, 30, 2.6, c, 2) + star(84, 80, 2.4, '#fff', 3) + star(18, 82, 2.2, c, 2) : ''}
+    ${e >= 4 ? `<g class="evo-orbit big"><circle cx="52" cy="6" r="2.2" fill="#d8f6ff"/><circle cx="96" cy="58" r="1.8" fill="#7fe0ff"/><circle cx="52" cy="110" r="2.2" fill="#d8f6ff"/><circle cx="8" cy="58" r="1.8" fill="#7fe0ff"/></g>` : ''}
   </svg>`;
+  return evoPaint(out, e)
+    .replace('%%SHIELD%%', fight.shield ? `<g class="fx-shidle">${heroShield(fight.shield, fight.shieldShape ?? 0)}</g>` : '')
+    .replace('%%BLADE%%', fight.bare ? '' : heroBlade(fight.swordShape ?? 0, weaponLevel));
+}
+
+/** Forma final: el espíritu del fénix, enorme y translúcido, abre las alas detrás del caballero. */
+function spiritPhoenix(): string {
+  const wing = (m: string) => `<path transform="${m}" d="M52 44 Q36 22 6 14 Q18 24 16 30 Q4 30 -4 40 Q12 40 14 46 Q2 52 -2 62 Q18 56 30 60 Q40 52 52 54Z" fill="#7fe0ff" opacity=".5" stroke="#e8fbff" stroke-width="1.2"/>`;
+  return `<g class="evo-spirit">${wing('')}${wing('translate(104 0) scale(-1 1)')}
+    <path d="M52 30 Q56 36 55 42 L49 42 Q48 36 52 30Z" fill="#d8f6ff" opacity=".5"/></g>`;
 }
 
 /** Brazos sueltos a los costados, para mostrar la skin sola (sin espada ni escudo). */
@@ -269,7 +289,7 @@ function bareArm(side: 'back' | 'front', dark: string, light: string, o: string)
 /** La espada en la mano: más grande que antes, y la legendaria todavía más. El envoltorio permite crecerla en combate. */
 function heroBlade(shape: number, weaponLevel: number): string {
   const sc = shape === 3 ? 1.02 : 0.88;
-  return `<g class="hero-blade"><g transform="translate(70.5 58.5) rotate(68) scale(${sc}) translate(-43.25 -45.4)">${famIcon('espada', shape, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd')}</g></g>`;
+  return `<g class="hero-blade"><g transform="translate(70.5 58.5) rotate(68) scale(${sc}) translate(-43.25 -45.4)">${famIcon('espada', shape, Math.max(1, Math.min(10, weaponLevel)), '#c9d3dd', false)}</g></g>`;
 }
 
 /** Alas de fuego del Caballero Fénix: aletean despacio y sueltan brasas. */
@@ -285,7 +305,7 @@ function fenixWings(): string {
 /** Escudo en el brazo de atrás: el mismo dibujo que la pieza del tablero. */
 function heroShield(lvl: number, shape: number): string {
   const sc = 0.62 + Math.min(lvl, 10) * 0.02;
-  return `<g transform="translate(30 62) scale(${sc}) translate(-32 -32)" class="hero-shield">${famIcon('escudo', shape, lvl, '#5c9bff')}</g>`;
+  return `<g transform="translate(30 62) scale(${sc}) translate(-32 -32)" class="hero-shield">${famIcon('escudo', shape, lvl, '#5c9bff', false)}</g>`;
 }
 
 /** Héroe mirando a la derecha, con el arma en la mano. En combate muestra escudo y brillo. */
@@ -613,10 +633,78 @@ const PIECE_DARK: Record<string, string> = {
 };
 
 /** Solo el dibujo (sin marco), en una caja de 64×64. Sirve para el tablero y para el héroe. */
-export function famIcon(fam: string, shape: number, lvl: number, base: string): string {
+
+// ---------- Evolución de las legendarias (formas en nivel 5, 10, 20 y 40) ----------
+export const EVO_COLORS = ['#ff8a1f', '#ff8a1f', '#ffd34d', '#ff2a5a', '#3ab8ff'];
+let evoSource: (fam: string) => number = () => 0;
+/** main.ts dice en qué forma está cada pieza legendaria (según su nivel). */
+export function setEvoSource(fn: (fam: string) => number) {
+  evoSource = fn;
+}
+const PALETTES: Record<number, Record<string, string>> = {
+  // Llama dorada: el fuego se vuelve más claro y caliente.
+  2: { '#ff6a1a': '#ff9a1a', '#ff5a1f': '#ff7a1a', '#ff8a1f': '#ffb22e', '#ffc23a': '#ffe680', '#ffd34d': '#fff1a8', '#c8230f': '#e0560f', '#ff7a1a': '#ffa02a' },
+  // Fénix carmesí: fuego rojo rubí y armadura con detalles granate.
+  3: { '#ff5a1f': '#ff2a4a', '#ff6a1a': '#ff3a5a', '#ff8a1f': '#ff5a3a', '#ffc23a': '#ffd0a0', '#ffd34d': '#ffe6a8', '#c8230f': '#9a0f3a', '#a3301b': '#6a0a30',
+    '#ff5a2a': '#ff2a5a', '#8e0f0a': '#5a0828', '#7a2414': '#5a0a26', '#ff7a1a': '#ff3a5a', '#ffab2e': '#ff7a6a' },
+  // Fénix celestial (forma final): fuego azul eterno, detalles azul noche y oro.
+  4: { '#ff5a1f': '#3a7bff', '#ff6a1a': '#4a9bff', '#ff8a1f': '#3ab8ff', '#ffb02e': '#7fe0ff', '#ffc23a': '#bff0ff', '#ffd34d': '#d8f6ff', '#c8230f': '#2a3fd8',
+    '#ff7a1a': '#4aa8ff', '#a3301b': '#27308f', '#ff5a2a': '#3a6bff', '#8e0f0a': '#141a5a', '#ff3b1f': '#2ad8ff', '#7a2414': '#1e2370', '#ffab2e': '#8fd8ff',
+    '#5a1a0a': '#141a4a', '#3a0d05': '#0b0e30', '#fff1a8': '#e8fbff', '#ff3a1f': '#2ad8ff', '#efb02c': '#eef2ff', '#c98a1e': '#a9b8ee', '#ffc83a': '#ffd700' },
+};
+function evoPaint(svg: string, e: number): string {
+  const p = PALETTES[e];
+  if (!p) return svg;
+  return svg.replace(/#[0-9a-fA-F]{6}\b/g, (m) => p[m.toLowerCase()] ?? m).replace(/(fxBladeG|fxShieldG|fxShieldR)/g, `$1e${e}`);
+}
+function star(x: number, y: number, r: number, fill: string, k: number): string {
+  return `<path class="evo-tw t${k}" d="M${x} ${y - r} L${x + r * 0.28} ${y - r * 0.28} L${x + r} ${y} L${x + r * 0.28} ${y + r * 0.28} L${x} ${y + r} L${x - r * 0.28} ${y + r * 0.28} L${x - r} ${y} L${x - r * 0.28} ${y - r * 0.28}Z" fill="${fill}"/>`;
+}
+function rays(cx: number, cy: number, r: number, n: number, fill: string): string {
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const w = Math.PI / n / 2.2;
+    const p = (ang: number, rr: number) => `${(cx + Math.cos(ang) * rr).toFixed(1)} ${(cy + Math.sin(ang) * rr).toFixed(1)}`;
+    d += `M${cx} ${cy} L${p(a - w, r)} L${p(a + w, r)}Z `;
+  }
+  const id = 'evoRay' + Math.round(r);
+  return `<defs><radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${r}"><stop offset="0" stop-color="${fill}" stop-opacity=".95"/><stop offset="1" stop-color="${fill}" stop-opacity="0"/></radialGradient></defs><path d="${d}" fill="url(#${id})"/>`;
+}
+function runeRing(cx: number, cy: number, r: number, c: string): string {
+  const gems = [0, 60, 120, 180, 240, 300]
+    .map((a) => {
+      const x = cx + r * Math.cos((a * Math.PI) / 180);
+      const y = cy + r * Math.sin((a * Math.PI) / 180);
+      return `<path d="M${x.toFixed(1)} ${(y - 2.2).toFixed(1)} L${(x + 1.6).toFixed(1)} ${y.toFixed(1)} L${x.toFixed(1)} ${(y + 2.2).toFixed(1)} L${(x - 1.6).toFixed(1)} ${y.toFixed(1)}Z" fill="${c}"/>`;
+    })
+    .join('');
+  return `<g class="evo-ring"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="1.4" stroke-dasharray="2 4" stroke-linecap="round"/>${gems}</g>`;
+}
+/** Capas que se agregan al arma o escudo legendario según su forma. */
+function evoIcon(svg: string, e: number): string {
+  const c = EVO_COLORS[e];
+  const back = [
+    `<defs><radialGradient id="evoGlow${e}"><stop offset="0" stop-color="${c}" stop-opacity="${0.45 + e * 0.1}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle class="evo-glow" cx="32" cy="32" r="${22 + e * 1.5}" fill="url(#evoGlow${e})"/>`,
+    e >= 4 ? `<g class="evo-rays">${rays(32, 32, 36, 14, '#bff0ff')}</g>` : '',
+    e >= 3 ? runeRing(32, 32, 26.5, c) : '',
+  ].join('');
+  const front = [
+    e >= 2 ? star(12, 14, 3.2, '#fff', 1) + star(53, 50, 2.6, '#fff', 2) + star(52, 12, 2.2, c, 3) : '',
+    e >= 4 ? `<g class="evo-orbit"><circle cx="32" cy="2" r="1.9" fill="#d8f6ff"/><circle cx="62" cy="32" r="1.5" fill="#7fe0ff"/><circle cx="32" cy="62" r="1.9" fill="#d8f6ff"/><circle cx="2" cy="32" r="1.5" fill="#7fe0ff"/></g>` : '',
+  ].join('');
+  return `<g class="evo evo-${e}">${back}${evoPaint(svg, e)}${front}</g>`;
+}
+
+export function famIcon(fam: string, shape: number, lvl: number, base: string, layers = true): string {
   const f = pieceFrame(lvl);
   const icons = ICONS[fam] ?? SWORDS;
-  return icons[Math.max(0, Math.min(icons.length - 1, shape))](pieceColor(fam, lvl, base), PIECE_DARK[fam] ?? '#222', lvl, f);
+  const svg = icons[Math.max(0, Math.min(icons.length - 1, shape))](pieceColor(fam, lvl, base), PIECE_DARK[fam] ?? '#222', lvl, f);
+  if (shape === 3 && (fam === 'espada' || fam === 'escudo')) {
+    const e = evoSource(fam);
+    if (e > 0) return layers ? evoIcon(svg, e) : evoPaint(svg, e);
+  }
+  return svg;
 }
 
 export function pieceFrame(lvl: number): string {
