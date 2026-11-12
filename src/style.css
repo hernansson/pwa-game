@@ -1480,12 +1480,16 @@ button.res { cursor: pointer; }
 .fury-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff2a0a, #ff8a1f, #fff1a8); background-size: 200% 100%; animation: furyFlow .6s linear infinite; }
 @keyframes furyFlow { to { background-position: -200% 0; } }
 .fury-hud.hurry span { color: #ff4d4d; animation: blink .4s infinite; }
-#app.fury .stage { box-shadow: inset 0 0 50px rgba(255,90,20,.75), 0 0 22px rgba(255,110,30,.6); animation: furyStage 1.2s ease-in-out infinite alternate; }
-@keyframes furyStage { to { box-shadow: inset 0 0 80px rgba(255,140,30,.9), 0 0 32px rgba(255,80,20,.8); } }
+#app.fury .stage { box-shadow: 0 0 26px rgba(255,100,25,.7); }
+#app.fury .stage::before { content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none; box-shadow: inset 0 0 70px rgba(255,110,25,.85); animation: furyStage 1.2s ease-in-out infinite alternate; will-change: opacity; }
+@keyframes furyStage { from { opacity: .55; } to { opacity: 1; } }
 #app.fury .hero .hero-svg { filter: drop-shadow(0 0 6px #ffb02e) drop-shadow(0 0 16px #ff3d0a) brightness(1.15); }
 #app.fury .hero-hp .hp-fill { background: linear-gradient(90deg, #ff2a0a, #ffd34d, #ff2a0a); background-size: 200% 100%; animation: furyFlow .5s linear infinite; width: 100% !important; }
 #app.fury .hero-hp .hp-fill.low { animation: furyFlow .5s linear infinite; }
 #app.fury .pboard { box-shadow: 0 0 0 2px #ff7a1a, 0 0 24px #ff5a1f, inset 0 0 30px rgba(255,90,20,.35); }
-#app.fury .pc svg { filter: drop-shadow(0 0 4px rgba(255,120,30,.9)); }
 .pboard.fury-wave { animation: furyWave .6s ease-out; }
 @keyframes furyWave { 0% { filter: brightness(2.2) saturate(1.6); transform: scale(1.03); } 100% { filter: none; transform: none; } }
+
+/* Rendimiento: las piezas del tablero no animan sus dibujos por dentro (las legendarias tienen muchas llamas
+   animadas y con 20 o 30 piezas a la vez el tablero se trababa). Solo queda el destello de nivel alto. */
+.pc svg *:not(.spark) { animation: none !important; }
